@@ -1,0 +1,26 @@
+# Bytecode / cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Virtual environments
+.venv/
+.env/
+.idea/
+
+# macOS artifacts
+.DS_Store
+
+# Generated data/results
+data/yf/
+results/
+results_*/
+outputs/
+logs/
+
+# Notebooks checkpoints
+.ipynb_checkpoints/
+
+# Local configs
+*.local.json
+
