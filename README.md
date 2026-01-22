@@ -1,75 +1,139 @@
-# Plataforma Integrada de Simulacoes
+# Stochastic Process Analyzer (SPA) — Energia
 
-Base unica para pipelines financeiros quanticos, operadores GA/Lie e visualizacoes interativas. Tudo foi organizado seguindo os blocos pedidos para que seja facil descobrir onde ficam scripts, dados, modelos e paines.
+SPA e um produto demo tecnico para analisar series temporais reais (tempo + metrica)
+como processos estocasticos efetivos em tempo discreto. Nesta fase, o foco e energia
+com uma vertical slice minima (sem drift/difusao).
 
 ## Estrutura
-- `scripts/` – CLIs e utilitarios rapidos. `scripts/estudos/` guarda experimentos mais pesados (stress tests, comparacao de metricas, benchmarks).
-- `visualizacao/` – dashboards Streamlit/Dash sob `visualizacao/dashboards/`, notas em `visualizacao/docs/` e apps dedicados (ex.: `visualizacao/streamlit/simulador_qubits_algebras.py`).
-- `modelos/` – todo o codigo de modelos. `modelos/core/src/` contem os modulos `data_pipeline`, `walks`, etc.; `modelos/gaq/` concentra Geometric Algebra; `modelos/tests/` cobre ingestion/quality/hybrid forecast.
-- `dados/` – `dados/brutos/` guarda CSVs, NPYs e scripts auxiliares (como `financial_loader.py`), `dados/configs/` concentra os JSONs das pipelines e `dados/benchmarks/` armazena artefatos exportados pelos estudos.
-- `agent/` – espaco reservado para integrar workflows GPT/LLM (por enquanto apenas README).
-- `requirements.txt` – dependencias principais da plataforma.
-- `.streamlit/config.toml` – tema escuro padrao para todos os paines Streamlit.
 
-A raiz tambem possui `sitecustomize.py`, que injeta automaticamente `modelos/` e `modelos/core/` no `sys.path`. Assim, os imports `import src...` e `import gaq...` continuam funcionando mesmo apos a reorganizacao.
+- `spa/` pipeline minimo (leitura, preprocessamento, features, diagnosticos, relatorio).
+- `scripts/fetch_datasets.py` downloader de CSVs publicos do ONS.
+- `data/raw/` dados brutos baixados.
+- `data/processed/` dados processados e exemplos.
+- `examples/energy_demo.py` demo sintetica.
+- `tests/test_smoke.py` teste simples de ponta a ponta.
 
-## Fluxo rapido
-- **Pipeline financeiro completo**  
-  `python scripts/run_pipeline.py --config dados/configs/data_pipeline_finance.json`
+## Baixar dados do ONS
 
-- **Previsao diaria (arquivo CSV local ou Yahoo Finance)**  
-  `python scripts/run_daily_forecast.py --config dados/configs/live_forecast_template.json`
+Exemplo (curva de carga horaria 2024):
 
-- **Descoberta de grafos**  
-  `python scripts/run_graph_discovery_finance.py`
+```bash
+python scripts/fetch_datasets.py --source ONS --dataset ons_curva_carga_horaria --year 2024
+```
 
-- **Dashboards**  
-  `streamlit run visualizacao/dashboards/app/asset_forecast_dashboard.py` ou `python -m visualizacao.dashboards.app.quantum_explorer`.
+O CSV sera salvo em `data/raw/ONS/ons_curva_carga_horaria/`.
 
-- **Simulacoes GA/Lie**  
-  `streamlit run visualizacao/streamlit/simulador_qubits_algebras.py`
+## Rodar o SPA em CSV real
 
-- **Testes**  
-  `pytest modelos/tests modelos/gaq/tests`
+Alguns CSVs do ONS possuem multiplos registros por timestamp (ex: por subsistema).
+Use `--source ONS` com `--ons-mode` para normalizar a serie 1D antes das features.
 
-- **Estudos/benchmarks**  
-  `python scripts/estudos/stress_pipeline.py --domains all`  
-  `python scripts/estudos/project_walk_embeddings.py --n 4 --step 40`
+Modo `sum` agrega por timestamp (carga total). Modo `select` filtra um subsistema
+com `--ons-filter`.
 
-## Dados e higiene
-- Todos os CSV/NPY vivem em `dados/brutos/`. Subpastas importantes:
-  - `dados/brutos/yf/` – dumps do Yahoo Finance baixados via `scripts/download_from_yf.py`.
-  - `dados/brutos/metrics/` – saidas de `scripts/run_metric_*.py`.
-  - `dados/brutos/financial_loader.py` – helper unico para baixar/normalizar precos.
-- Resultados de benchmarks dos estudos estao em `dados/benchmarks/`.
-- `results/` segue reservado para saídas volumosas (forecasts, figuras, logs). Armazene ali e mova para `results/archive/` quando necessario.
-- Limpeza rapida:
-  ```powershell
-  Get-ChildItem -Recurse -Directory -Filter '__pycache__' | Remove-Item -Recurse -Force
-  Get-ChildItem -Recurse -Filter '*.pyc' -File | Remove-Item -Force
-  Get-ChildItem -Recurse -Filter '.DS_Store' -File | Remove-Item -Force
-  ```
+Exemplo real (CARGA_ENERGIA_2025.csv, soma por timestamp):
 
-## Modelos e GAQ
-- O nucleo python continua identico, apenas realocado para `modelos/core/src/`. Os scripts que dependem de `src.*` ja usam `sitecustomize`/`PYTHONPATH` ajustado.
-- `modelos/gaq/` manteve a mesma arvore (analysis, core, walks, tests, examples). `pyproject.toml` agora procura pacotes dentro de `modelos/`, entao `python -m pytest modelos/gaq/tests` funciona direto.
-- Para instalar dependencias de desenvolvimento: `pip install -r requirements.txt` (adiciona numpy, pandas, scipy, streamlit, plotly, networkx, sklearn, requests, yfinance, clifford).
+```bash
+python -m spa.run \
+  --source ONS \
+  --input data/raw/ONS/ons_carga_diaria/CARGA_ENERGIA_2025.csv \
+  --time-col din_instante \
+  --value-col val_cargaenergiamwmed \
+  --ons-mode sum \
+  --outdir results/ons_2025
+```
 
-## Visualizacao
-- Dashboards Streamlit/Dash residem em `visualizacao/dashboards/app/`.
-- As figuras estaticas (por ex. `geom_distribution_uniform.png`) ficam em `visualizacao/docs/assets/` junto com os markdowns.
-- `.streamlit/config.toml` unifica cores, de modo que qualquer `streamlit run ...` herda o mesmo tema.
+Exemplo real (selecionar subsistema SE/CO):
 
-## Scripts de estudos
-- `scripts/estudos/` concentra:
-  - `stress_pipeline.py` – orquestra rodadas completas em dominios finance/health/logistics/physics.
-  - `metrics_comparison.py`, `make_report.py`, `run_benchmarks.py` – constroem tabelas e PDFs.
-  - `evaluate_walk_metrics.py` e `project_walk_embeddings.py` agora escrevem em `dados/benchmarks/metrics_output` e `dados/benchmarks/embed_output`.
+```bash
+python -m spa.run \
+  --source ONS \
+  --input data/raw/ONS/ons_carga_diaria/CARGA_ENERGIA_2025.csv \
+  --time-col din_instante \
+  --value-col val_cargaenergiamwmed \
+  --ons-mode select \
+  --ons-filter subsistema=SE/CO \
+  --outdir results/ons_2025_seco
+```
 
-## Agente
-`agent/README.md` descreve como plugar futuros copilots (workflow, automacoes, etc.). Quando existir codigo efetivo, coloque notebooks/lambdas aqui para manter o resto limpo.
+Exemplo (carga diaria 2025):
 
-## Observacoes finais
-- `requirements.txt` cobre apenas dependencias runtime; ferramentas de lint/teste continuam declaradas no `pyproject`.
-- `pyproject.toml` aponta o discovery do setuptools para `modelos/`, e o `pytest` ja inicializa com `modelos/core` no caminho.
-- `A-firma.zip` e demais duplicatas foram removidas para evitar lixos grandes no Git.
+```bash
+python -m spa.run \
+  --source ONS \
+  --dataset ons_carga_diaria \
+  --year 2025 \
+  --time-col din_instante \
+  --value-col val_cargaenergiamwmed \
+  --ons-mode sum \
+  --outdir results/ons_2025
+```
+
+Saidas:
+
+- `processed.csv`
+- `summary.json`
+- `report.pdf`
+
+## Rodar em um CSV local
+
+```bash
+python -m spa.run \
+  --input path/para/arquivo.csv \
+  --time-col sua_coluna_tempo \
+  --value-col sua_coluna_valor \
+  --outdir results/minha_serie
+```
+
+## Testar o website localmente
+
+Alguns navegadores bloqueiam `fetch()` em `file://`. Para testar o dashboard:
+
+```bash
+cd website
+python -m http.server 8000
+```
+
+Depois abra `http://localhost:8000/index.html`.
+
+## Gerar atrator 3D e horizonte de previsibilidade
+
+Os JSONs sao gerados a partir de `results/_tmp/processed_*.csv` e ficam em `website/assets/spa_energy/`.
+
+Teste rapido:
+
+```bash
+python -m pytest tests/test_predictability.py
+```
+
+## Gerar dados do Lorenz Lab
+
+Gera os JSONs usados na pagina `website/lab_lorenz.html`:
+
+```bash
+python scripts/lab_generate_lorenz.py
+```
+
+## Gerar figuras em PNG (energia)
+
+Gera figuras em `results/_figs/energy/`:
+
+```bash
+python scripts/generate_figures.py
+```
+
+## Diagnostico visual por subsistema (fase/embedding)
+
+Exemplo com ONS (carga diaria):
+
+```bash
+python -m spa.diagnostics_phase \
+  --input data/external/ONS/carga-energia/raw.csv \
+  --time-col din_instante \
+  --value-col val_cargaenergiamwmed \
+  --group-col nom_subsistema \
+  --tau 4 \
+  --m 4 \
+  --k 10 \
+  --outdir results/phase
+```

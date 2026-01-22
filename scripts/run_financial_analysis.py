@@ -23,6 +23,9 @@ from financial_walk_model import (
     classify_phase,
     describe_phase,
     forecast_from_distribution,
+    mode_is_valid,
+    ForecastCurve,
+    ForecastSummary,
 )
 RESULTS_DIR = Path("results_finance")
 if TYPE_CHECKING:  # pragma: no cover
@@ -186,6 +189,29 @@ def _run_historical_forecast(
         mode: classify_phase(metrics.dispersion_alpha, low_thr, high_thr)
         for mode, metrics in last_window_pred.metrics.items()
     }
+    # --- physical validity checks per mode -------------------------------------------------
+    STABILITY_WINDOWS = getattr(args, "stability_windows", 3)
+    valid_map = {}
+    for mode, metrics in last_window_pred.metrics.items():
+        # collect recent metrics for the same mode (exclude current)
+        recent = []
+        if STABILITY_WINDOWS > 0:
+            for a in analyses_pred[max(0, len(analyses_pred) - STABILITY_WINDOWS - 1) : len(analyses_pred) - 1]:
+                if mode in a.metrics:
+                    recent.append(a.metrics[mode])
+        is_valid, reason = mode_is_valid(
+            metrics,
+            recent_metrics=recent,
+            alpha_min=low_thr,
+            alpha_max=high_thr,
+            entropy_max=getattr(args, "entropy_max", 2.5),
+            stability_tol=getattr(args, "stability_tol", 0.08),
+        )
+        valid_map[mode] = (is_valid, reason)
+        if not is_valid:
+            # mark phase as observation-only for downstream reporting
+            phase_by_mode_pred[mode] = "observation_only"
+    # --------------------------------------------------------------------------------------
     last_price = float(
         price_df_full.loc[price_df_full["date"] <= cutoff, "price"].iloc[-1]
     )
@@ -198,6 +224,25 @@ def _run_historical_forecast(
         phase_by_mode=phase_by_mode_pred,
         return_mode=args.return_method,
     )
+
+    # Replace curves/summaries for invalid modes with observation-only placeholders
+    if valid_map:
+        new_curves = []
+        new_summaries = []
+        for curve, summary in zip(forecast_curves, forecast_summaries):
+            is_valid, reason = valid_map.get(summary.mode, (True, "ok"))
+            if not is_valid:
+                # create NaN-filled placeholder curve and summary
+                steps_len = len(curve.predicted_prices) if (curve is not None and hasattr(curve, "predicted_prices")) else forecast_horizon
+                nan_arr = np.full(steps_len, np.nan)
+                placeholder_curve = ForecastCurve(mode=summary.mode, expected_returns=nan_arr, cumulative_returns=nan_arr, predicted_prices=nan_arr, std_per_step=nan_arr)
+                placeholder_summary = ForecastSummary(mode=summary.mode, total_return=float("nan"), avg_return=float("nan"), volatility=float("nan"), direction="indefinido", phase="observation_only", return_mode=summary.return_mode)
+                new_curves.append(placeholder_curve)
+                new_summaries.append(placeholder_summary)
+            else:
+                new_curves.append(curve)
+                new_summaries.append(summary)
+        forecast_curves, forecast_summaries = new_curves, new_summaries
     forecast_dates = pd.bdate_range(
         start=cutoff + pd.Timedelta(days=1),
         periods=forecast_horizon,

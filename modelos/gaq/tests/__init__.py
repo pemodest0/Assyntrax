@@ -1,1 +1,0 @@
-"""GAQ test suite."""

@@ -1,0 +1,10 @@
+{
+  "max_points_train": 6000,
+  "max_points_test": 5000,
+  "max_years": 6,
+  "max_plots_per_run": 12,
+  "plot_sample_points": 2000,
+  "disable_per_year_plots": true,
+  "disable_3d_plots_default": true,
+  "n_jobs": 1
+}

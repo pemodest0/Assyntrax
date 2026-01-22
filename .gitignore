@@ -7,6 +7,7 @@ __pycache__/
 .venv/
 .env/
 .idea/
+venv/
 
 # macOS artifacts
 .DS_Store
@@ -15,7 +16,17 @@ __pycache__/
 data/yf/
 dados/brutos/yf/
 dados/brutos/metrics/
+data/yfinance_cache/
+data/external/
 results/
+results/_tmp/
+results/_figs/
+results/walkforward/
+results/bench_finance/
+results/phase/
+results/market_data_aggregates/
+results/market_data_events/
+results/gpt_reports/
 results_*/
 outputs/
 logs/
