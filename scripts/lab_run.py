@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from spa.sanity import ensure_sorted_dates, safe_test_indices, split_hash, validate_time_split
 import sys as _sys
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in _sys.path:
@@ -248,7 +249,9 @@ def run_energy(subsystems, train_end, test_year):
         daily = df_sub.groupby("din_instante")["val_cargaenergiamwmed"].mean().reset_index()
         daily = daily.sort_values("din_instante")
 
-        dates = daily["din_instante"].to_numpy()
+        dates = pd.to_datetime(daily["din_instante"])
+        ensure_sorted_dates(dates)
+        dates = dates.to_numpy()
         prices = daily["val_cargaenergiamwmed"].to_numpy()
         log_price = np.log(prices)
         returns = np.diff(log_price)
@@ -272,6 +275,19 @@ def run_energy(subsystems, train_end, test_year):
             continue
         train_mask = dates[idx] <= train_end_dt
         test_mask = (dates[idx] >= test_start) & (dates[idx] <= test_end)
+        validate_time_split(
+            dates,
+            dates <= train_end_dt,
+            (dates >= test_start) & (dates <= test_end),
+            train_end=train_end_dt,
+            test_start=test_start,
+            test_end=test_end,
+        )
+        test_start_pos = int(np.where(dates >= test_start)[0].min()) if np.any(dates >= test_start) else None
+        if test_start_pos is None:
+            continue
+        min_valid = test_start_pos + (m - 1) * tau
+        test_idx, dropped = safe_test_indices(test_mask.values if hasattr(test_mask, "values") else test_mask, min_valid)
         if train_mask.sum() < k or test_mask.sum() < 10:
             continue
 
@@ -291,7 +307,6 @@ def run_energy(subsystems, train_end, test_year):
                 out_dir / "attractor_3d.png",
             )
 
-        test_idx = np.where((dates >= test_start) & (dates <= test_end))[0]
         if len(test_idx) < 5:
             continue
         mid_start = test_idx[len(test_idx) // 2]
@@ -344,7 +359,9 @@ def run_energy(subsystems, train_end, test_year):
             "horizon_est": int(horizon_est),
             "horizon_mae2": int(horizon_mae2),
             "train_n": int(train_mask.sum()),
-            "test_n": int(test_mask.sum()),
+            "test_n": int(len(test_idx)),
+            "split_hash": split_hash(np.where(dates <= train_end_dt)[0], test_idx),
+            "dropped_test_points_due_to_embedding": int(dropped),
         }
         # Variant on delta (difference)
         Xd, yd, idxd = embed(delta, tau, m)
@@ -355,7 +372,14 @@ def run_energy(subsystems, train_end, test_year):
             if train_mask_d.any():
                 train_idx_d = int(idxd[train_mask_d].max())
                 if model_d.fit(delta, train_idx=train_idx_d) and test_mask_d.sum() > 10:
-                    test_idx_d = np.where((delta_dates >= test_start) & (delta_dates <= test_end))[0]
+                    test_start_pos_d = int(np.where(delta_dates >= test_start)[0].min()) if np.any(delta_dates >= test_start) else None
+                    if test_start_pos_d is None:
+                        continue
+                    min_valid_d = test_start_pos_d + (m - 1) * tau
+                    test_idx_d, _ = safe_test_indices(
+                        (delta_dates >= test_start) & (delta_dates <= test_end),
+                        min_valid_d,
+                    )
                     if len(test_idx_d) > H_long + 1:
                         start_candidates_d = test_idx_d[: len(test_idx_d) - H_long]
                         picks_d = np.linspace(0, len(start_candidates_d) - 1, min(50, len(start_candidates_d))).astype(int)
@@ -384,7 +408,9 @@ def run_energy(subsystems, train_end, test_year):
             "horizon_est": int(horizon_est),
             "horizon_mae2": int(horizon_mae2),
             "train_n": int(train_mask.sum()),
-            "test_n": int(test_mask.sum()),
+            "test_n": int(len(test_idx)),
+            "split_hash": split_hash(np.where(dates <= train_end_dt)[0], test_idx),
+            "dropped_test_points_due_to_embedding": int(dropped),
             "train_end": train_end,
             "test_year": test_year,
         }

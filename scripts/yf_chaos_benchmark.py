@@ -18,6 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from spa.sanity import ensure_sorted_dates, safe_test_indices, split_hash, validate_time_split
+
 from scripts.yf_fetch_or_load import find_local_data, load_price_series, fetch_yfinance, unify_to_daily, save_cache
 from spa.features.phase_features import compute_phase_features
 from spa.models.baselines import persistence_next, zero_mean_next, ar1_fit, ar1_predict
@@ -85,8 +87,12 @@ def choose_params(dates, returns, tau_grid, m_grid, k_grid, max_train=5000, max_
             idx_all[(tau, m)] = idx
 
             date_idx = dates[idx]
+            val_start_pos = int(np.where(dates >= val_start)[0].min()) if np.any(dates >= val_start) else None
+            if val_start_pos is None:
+                continue
+            earliest = idx - 1 - (m - 1) * tau
             train_mask = date_idx <= train_end
-            val_mask = (date_idx >= val_start) & (date_idx <= val_end)
+            val_mask = (date_idx >= val_start) & (date_idx <= val_end) & (earliest >= val_start_pos)
             if train_mask.sum() < 50 or val_mask.sum() < 50:
                 continue
 
@@ -140,7 +146,10 @@ def compute_horizon_errors(returns, dates, tau, m, k, mean, std, X_train, y_trai
     test_start = pd.Timestamp("2025-01-01")
     test_end = pd.Timestamp("2025-12-31")
     idx = np.arange(len(returns))
-    valid = idx[(dates >= test_start) & (dates <= test_end)]
+    test_start_pos = int(np.where(dates >= test_start)[0].min()) if np.any(dates >= test_start) else None
+    if test_start_pos is None:
+        return None
+    valid = idx[(dates >= test_start) & (dates <= test_end) & (idx >= test_start_pos + (m - 1) * tau)]
     if len(valid) < H_long + 10:
         return None
 
@@ -316,7 +325,7 @@ def horizon_by_mae_ratio(mae_curve, ratio=2.0):
     return len(mae_curve)
 
 
-def run_for_ticker(ticker, base_dir, out_dir, cache_dir, train_end, test_start, test_end, H_short, H_long):
+def run_for_ticker(ticker, base_dir, out_dir, cache_dir, train_end, test_start, test_end, H_short, H_long, allow_downloads=False):
     local_candidates = find_local_data(ticker, base_dir)
     if (not local_candidates) and ticker.startswith("^"):
         local_candidates = find_local_data(ticker.replace("^", ""), base_dir)
@@ -326,6 +335,9 @@ def run_for_ticker(ticker, base_dir, out_dir, cache_dir, train_end, test_start, 
         if df is not None:
             break
     if df is None:
+        if not allow_downloads:
+            print(f"{ticker}: data not found locally; skipping to avoid downloads.")
+            return None
         df = fetch_yfinance(ticker)
     if df is None:
         return None
@@ -336,7 +348,9 @@ def run_for_ticker(ticker, base_dir, out_dir, cache_dir, train_end, test_start, 
 
     save_cache(df, base_dir, safe_name(ticker))
 
-    dates = df["date"].to_numpy()
+    dates = pd.to_datetime(df["date"])
+    ensure_sorted_dates(dates)
+    dates = dates.to_numpy()
     returns = df["r"].to_numpy()
     prices = df["price"].to_numpy()
 
@@ -369,7 +383,19 @@ def run_for_ticker(ticker, base_dir, out_dir, cache_dir, train_end, test_start, 
 
     # Example short window in 2025
     test_mask = (dates >= pd.Timestamp(test_start)) & (dates <= pd.Timestamp(test_end))
-    test_idx = np.where(test_mask)[0]
+    validate_time_split(
+        dates,
+        dates <= pd.Timestamp(train_end),
+        test_mask,
+        train_end=pd.Timestamp(train_end),
+        test_start=pd.Timestamp(test_start),
+        test_end=pd.Timestamp(test_end),
+    )
+    test_start_pos = int(np.where(dates >= pd.Timestamp(test_start))[0].min()) if np.any(dates >= pd.Timestamp(test_start)) else None
+    if test_start_pos is None:
+        return None
+    min_valid = test_start_pos + (m - 1) * tau
+    test_idx, dropped = safe_test_indices(test_mask, min_valid)
     if len(test_idx) == 0:
         return None
     mid_start = test_idx[len(test_idx) // 2]
@@ -466,7 +492,9 @@ def run_for_ticker(ticker, base_dir, out_dir, cache_dir, train_end, test_start, 
         "bias_h20": float(bias_curve[19]) if len(bias_curve) >= 20 else float("nan"),
         "bias_h60": float(bias_curve[59]) if len(bias_curve) >= 60 else float("nan"),
         "train_n": int(train_mask.sum()),
-        "test_n": int(test_mask.sum()),
+        "test_n": int(len(test_idx)),
+        "split_hash": split_hash(np.where(dates <= pd.Timestamp(train_end))[0], test_idx),
+        "dropped_test_points_due_to_embedding": int(dropped),
         "baseline_persist": baseline["mae_persist"] if baseline else float("nan"),
         "baseline_zero": baseline["mae_zero"] if baseline else float("nan"),
         "baseline_ar1": baseline["mae_ar1"] if baseline else float("nan"),
@@ -489,7 +517,9 @@ def run_for_ticker(ticker, base_dir, out_dir, cache_dir, train_end, test_start, 
         "horizon_mae2": int(horizon_mae2),
         "baseline": baseline,
         "train_n": int(train_mask.sum()),
-        "test_n": int(test_mask.sum()),
+        "test_n": int(len(test_idx)),
+        "split_hash": split_hash(np.where(dates <= pd.Timestamp(train_end))[0], test_idx),
+        "dropped_test_points_due_to_embedding": int(dropped),
         "train_end": train_end,
         "test_start": test_start,
         "test_end": test_end,
@@ -582,6 +612,11 @@ def main():
     parser.add_argument("--H-short", type=int, default=5)
     parser.add_argument("--H-long", type=int, default=60)
     parser.add_argument("--outdir", default=None, help="Base output dir for figures.")
+    parser.add_argument(
+        "--allow-downloads",
+        action="store_true",
+        help="Permite baixar dados via rede (desativado por padrão).",
+    )
     args = parser.parse_args()
 
     base_dir = Path(__file__).resolve().parents[1]
@@ -609,6 +644,7 @@ def main():
             args.test_end,
             args.H_short,
             args.H_long,
+            allow_downloads=args.allow_downloads,
         )
         if summary is None:
             continue

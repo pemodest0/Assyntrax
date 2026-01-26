@@ -15,6 +15,7 @@ from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error,
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
+from spa.sanity import ensure_sorted_dates, split_hash, validate_time_split
 
 def load_metrics(path: Path) -> pd.DataFrame:
     df = pd.read_csv(path, parse_dates=["date"])
@@ -87,6 +88,7 @@ def _baseline_metrics(target_kind: str, df_test: pd.DataFrame, y_test: pd.Series
 
 
 def main() -> None:
+    np.random.seed(42)
     parser = argparse.ArgumentParser(description="Treina regressões tradicionais para corrigir previsões clássicas/quânticas.")
     parser.add_argument("metrics", type=str, help="Arquivo daily_forecast_metrics.csv (modo clássico).")
     parser.add_argument("--target", type=str, choices=("price", "return"), default="price", help="Seleciona o alvo (preço ou retorno log).")
@@ -106,6 +108,7 @@ def main() -> None:
         df = df[df["date"] <= pd.Timestamp(args.end)]
     df.sort_values("date", inplace=True)
     df.reset_index(drop=True, inplace=True)
+    ensure_sorted_dates(df["date"])
 
     target_col = "price_real" if args.target == "price" else "actual_return"
     if target_col not in df.columns:
@@ -118,10 +121,12 @@ def main() -> None:
     mask_train = df["date"] <= train_end
     if mask_train.sum() == 0 or (~mask_train).sum() == 0:
         raise ValueError("Datas insuficientes para treino/teste com o corte fornecido.")
+    mask_test = ~mask_train
+    validate_time_split(df["date"], mask_train, mask_test, train_end=train_end)
 
     preprocessor = _build_preprocessor(feature_cols)
-    X_processed = preprocessor.fit_transform(features_df)
-    X_train, X_test = X_processed[mask_train], X_processed[~mask_train]
+    X_train = preprocessor.fit_transform(features_df[mask_train])
+    X_test = preprocessor.transform(features_df[mask_test])
     y_train, y_test = y[mask_train], y[~mask_train]
     df_test = df[~mask_train].copy()
 
@@ -149,6 +154,8 @@ def main() -> None:
     summary = {
         "asset": asset_label,
         "target": args.target,
+        "train_end": train_end.date().isoformat(),
+        "split_hash": split_hash(np.where(mask_train)[0], np.where(mask_test)[0]),
         "train_samples": int(mask_train.sum()),
         "test_samples": int((~mask_train).sum()),
         "baseline": baseline,

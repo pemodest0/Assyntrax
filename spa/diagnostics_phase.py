@@ -3,6 +3,7 @@ import json
 import os
 import re
 from datetime import datetime
+import hashlib
 
 import numpy as np
 import pandas as pd
@@ -281,6 +282,58 @@ def _plot_curve(x, y, x_sel, out_path, title, xlabel):
     plt.savefig(out_path, dpi=160)
     plt.close()
 
+
+def _ensure_sorted_dates(dates):
+    if not dates.is_monotonic_increasing:
+        raise ValueError("Datas fora de ordem; ordene antes de treinar/testar.")
+
+
+def _split_hash(train_idx, test_idx):
+    payload = np.concatenate([train_idx.astype(np.int64), test_idx.astype(np.int64)])
+    return hashlib.sha256(payload.tobytes()).hexdigest()
+
+
+def _validate_split(dates, train_end, test_year, train_end_idx, test_mask):
+    _ensure_sorted_dates(dates)
+    test_mask = np.asarray(test_mask, dtype=bool)
+    train_mask = ~test_mask
+    if not train_mask.any() or not test_mask.any():
+        raise ValueError("Split inválido: treino ou teste vazio.")
+    if train_end is not None:
+        if dates[train_mask].max() > train_end:
+            raise ValueError("Dados de treino passam do limite temporal.")
+        if dates[test_mask].min() <= train_end:
+            raise ValueError("Dados de teste incluem datas de treino.")
+    if test_year is not None:
+        years = pd.to_datetime(dates[test_mask]).dt.year.unique()
+        if len(years) != 1 or years[0] != test_year:
+            raise ValueError("Split temporal inconsistente com o ano de teste.")
+    if np.any(np.arange(len(dates))[train_mask] > train_end_idx):
+        raise ValueError("Indices de treino fora da janela esperada.")
+
+
+def _safe_test_indices(test_mask, m, tau, train_end_pos):
+    test_mask = np.asarray(test_mask, dtype=bool)
+    test_indices = np.where(test_mask)[0]
+    if test_indices.size == 0:
+        return np.array([], dtype=int), 0
+    test_start_idx = int(test_indices.min())
+    min_valid = test_start_idx + (m - 1) * tau
+    if min_valid <= train_end_pos:
+        min_valid = train_end_pos + 1
+    safe_indices = test_indices[test_indices >= min_valid]
+    dropped = int(test_indices.size - safe_indices.size)
+    return safe_indices, dropped
+
+
+def _embedding_segment(series, start_idx, end_idx, tau, m):
+    if end_idx - start_idx + 1 < (m - 1) * tau + 1:
+        return np.array([])
+    segment = series[start_idx : end_idx + 1]
+    X = []
+    for i in range((m - 1) * tau, len(segment)):
+        X.append([segment[i - j * tau] for j in range(m)])
+    return np.array(X)
 def _safe_group_name(name):
     if name is None:
         return "TOTAL"
@@ -414,6 +467,7 @@ def run_for_group(
         train_end_label = train_end.date().isoformat()
 
     train_end_pos = int(train_end_idx) if train_end_idx == train_end_idx else int(len(values) * 0.8)
+    _validate_split(dates, train_end, test_year, train_end_pos, test_mask)
 
     series = values.values
     model = TakensKNN(tau=tau, m=m, k=k)
@@ -428,10 +482,10 @@ def run_for_group(
     err_pct = []
     baseline_preds = []
 
-    for i in range((m - 1) * tau, len(series) - 1):
-        is_test = test_mask[i] if isinstance(test_mask, np.ndarray) else bool(test_mask.iloc[i])
-        if not is_test:
-            continue
+    test_indices, dropped = _safe_test_indices(test_mask, m, tau, train_end_pos)
+    if test_indices.size == 0:
+        return None
+    for i in test_indices:
         state = np.array([series[i - j * tau] for j in range(m)], dtype=float)
         pred = model.predict_1step(state)
         if pred is None:
@@ -461,8 +515,8 @@ def run_for_group(
 
     # Heuristic: correlation + shape stability
     corr = np.corrcoef(reals, preds)[0, 1] if len(reals) > 2 else 0.0
-    train_embed = np.array([series[i - j * tau] for i in range((m - 1) * tau, train_end_pos) for j in range(m)])
-    test_embed = np.array([series[i - j * tau] for i in range(train_end_pos + 1, len(series) - 1) for j in range(m)])
+    train_embed = _embedding_segment(series, 0, train_end_pos, tau, m)
+    test_embed = _embedding_segment(series, test_indices.min(), len(series) - 2, tau, m)
     if train_embed.size and test_embed.size:
         train_r = np.std(train_embed)
         test_r = np.std(test_embed)
@@ -575,6 +629,8 @@ def run_for_group(
         "m_fixed": m_fixed,
         "train_end": train_end_label,
         "test_year": int(test_year) if test_year else None,
+        "split_hash": _split_hash(np.where(~np.asarray(test_mask, dtype=bool))[0], test_indices),
+        "dropped_test_points_due_to_embedding": int(dropped),
         "metrics": {"mae": mae, "rmse": rmse, "mape": mape},
         "baseline": {"mae": b_mae, "rmse": b_rmse, "mape": b_mape},
         "better_than_baseline": bool(better_baseline),

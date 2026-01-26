@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from spa.sanity import ensure_sorted_dates, split_hash, validate_time_split
+
 try:
     import seaborn as sns
 except ImportError:  # pragma: no cover - seaborn is optional
@@ -186,11 +188,19 @@ def main() -> None:
 
     paths = [Path(p) for p in args.metrics]
     df = load_financial_metrics(paths, start=start, end=end)
+    df.sort_values("date", inplace=True)
+    df.reset_index(drop=True, inplace=True)
+    ensure_sorted_dates(df["date"])
     df = augment_with_derived_features(df)
     dataset = prepare_features(df, args.features)
     X_train, X_test, y_train, y_test, train_idx, test_idx = split_train_test(
         dataset, df["date"], test_start=test_start
     )
+    train_mask = np.zeros(len(df), dtype=bool)
+    test_mask = np.zeros(len(df), dtype=bool)
+    train_mask[train_idx] = True
+    test_mask[test_idx] = True
+    validate_time_split(df["date"], train_mask, test_mask, test_start=test_start)
 
     train_meta = dataset.meta.iloc[train_idx].copy()
     sample_weight = np.ones_like(y_train, dtype=float)
@@ -260,6 +270,7 @@ def main() -> None:
     summary_path = output_dir / "metrics_summary.txt"
     with summary_path.open("w", encoding="utf-8") as fh:
         fh.write("Direction classifier metrics (test set)\n")
+        fh.write(f"split_hash: {split_hash(np.array(train_idx), np.array(test_idx))}\n")
         fh.write(json.dumps(metrics, indent=2))
 
     print(f"Model metrics saved under {output_dir}")

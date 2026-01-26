@@ -5,7 +5,10 @@ import argparse
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
+
+from spa.sanity import ensure_sorted_dates, split_hash, validate_time_split
 
 from hybrid_forecast import (
     DEFAULT_FEATURES,
@@ -49,6 +52,9 @@ def main() -> None:
 
     path = Path(args.metrics)
     df = load_metrics(path, start=args.start)
+    df.sort_values("date", inplace=True)
+    df.reset_index(drop=True, inplace=True)
+    ensure_sorted_dates(df["date"])
 
     # ensure derived columns exist
     if "price_residual" not in df.columns:
@@ -76,7 +82,18 @@ def main() -> None:
     df = df.ffill().bfill()
 
     dataset = prepare_residual_dataset(df, DEFAULT_FEATURES, target_scaling=args.target_mode)
+    dataset.frame.sort_values("date", inplace=True)
+    dataset.frame.reset_index(drop=True, inplace=True)
+    ensure_sorted_dates(dataset.frame["date"])
     train_mask = dataset.frame["date"] <= pd.Timestamp(args.train_end)
+    test_mask = dataset.frame["date"] >= pd.Timestamp(args.test_start)
+    validate_time_split(
+        dataset.frame["date"],
+        train_mask.values,
+        test_mask.values,
+        train_end=pd.Timestamp(args.train_end),
+        test_start=pd.Timestamp(args.test_start),
+    )
 
     best_params = None
     tune_score = None
@@ -138,6 +155,11 @@ def main() -> None:
         "evaluation_test": eval_test,
         "train_records": int(train_mask.sum()),
         "test_records": int(test_mask.sum()),
+        "train_end": pd.Timestamp(args.train_end).date().isoformat(),
+        "test_start": pd.Timestamp(args.test_start).date().isoformat(),
+        "split_hash": split_hash(
+            np.where(train_mask.values)[0], np.where(test_mask.values)[0]
+        ),
         "feature_count": len(DEFAULT_FEATURES),
         "tuning": {
             "enabled": args.tune,
