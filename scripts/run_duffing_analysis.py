@@ -50,9 +50,25 @@ def simulate_duffing(
 
 
 def run_method(method: str, output_dir: Path, series: np.ndarray) -> None:
+    base_params = {
+        "merge_small_clusters": True,
+        "merge_min_pct": 0.02,
+        "merge_max_distance": 2.0,
+        "score_small_cluster_penalty": 0.1,
+        "score_max_clusters": 6,
+        "score_too_many_penalty": 0.05,
+    }
     classifier = RegimeClassifier(
         clustering_method=method,
-        cluster_params={"min_cluster_size": 25} if method == "hdbscan" else {"n_clusters": 3},
+        cluster_params=(
+            {
+                **base_params,
+                "min_cluster_size": 60,
+                "min_samples": 10,
+            }
+            if method == "hdbscan"
+            else {**base_params, "n_clusters": 3}
+        ),
     )
     classifier.run_full_analysis(
         series=series,

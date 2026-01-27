@@ -9,6 +9,15 @@ import numpy as np
 from sklearn.cluster import DBSCAN, KMeans
 from sklearn.preprocessing import StandardScaler
 
+from temporal_engine.diagnostics.auto_regime_model import (
+    load_auto_regime_model,
+    vector_from_cluster_stats,
+)
+from temporal_engine.diagnostics.macro_context import (
+    annotate_transitions,
+    load_macro_events,
+)
+
 try:
     import matplotlib.pyplot as plt
 except Exception:  # pragma: no cover - optional plotting dependency
@@ -49,6 +58,13 @@ class RegimeClassifier:
         self.params = cluster_params or {}
         self.alpha = alpha
         self.last_cluster_stats: dict[int, dict[str, float]] | None = None
+        self.auto_model = None
+        self.auto_feature_names: tuple[str, ...] | None = None
+
+    def set_auto_model(self, model: object, feature_names: tuple[str, ...]) -> None:
+        """Registra um modelo automático de regimes carregado externamente."""
+        self.auto_model = model
+        self.auto_feature_names = feature_names
 
     def shannon_entropy(self, embedded: np.ndarray, bins: int = 10) -> float:
         """Calcula entropia de Shannon de estados embutidos via discretização.
@@ -294,6 +310,81 @@ class RegimeClassifier:
         """
         return x**2 + self.alpha * v**2
 
+    def compute_local_features(
+        self, series: np.ndarray, window: int = 50, bins: int = 10
+    ) -> dict[str, np.ndarray]:
+        """Calcula features locais em janelas deslizantes.
+
+        Args:
+            series: Série temporal 1-D alinhada ao embedding.
+            window: Tamanho da janela para estatísticas locais.
+            bins: Número de bins para entropia local.
+
+        Returns:
+            Dicionário com arrays 1-D alinhados ao embedding.
+        """
+        values = np.asarray(series, dtype=float)
+        n = values.size
+        if n == 0:
+            return {}
+        w = max(5, int(window))
+        half = w // 2
+
+        def _window_slice(idx: int) -> np.ndarray:
+            start = max(0, idx - half)
+            end = min(n, idx + half + 1)
+            return values[start:end]
+
+        local_entropy = np.zeros(n)
+        local_rr = np.zeros(n)
+        local_skew = np.zeros(n)
+        local_kurt = np.zeros(n)
+        acf1 = np.zeros(n)
+        acf2 = np.zeros(n)
+        acf3 = np.zeros(n)
+        acf4 = np.zeros(n)
+        acf5 = np.zeros(n)
+
+        for i in range(n):
+            window_vals = _window_slice(i)
+            if window_vals.size < 3:
+                continue
+            hist, _ = np.histogram(window_vals, bins=bins, density=True)
+            probs = hist / (hist.sum() + 1e-12)
+            local_entropy[i] = -np.sum(probs * np.log2(probs + 1e-12))
+
+            diffs = np.abs(window_vals[:, None] - window_vals[None, :])
+            tri = diffs[np.triu_indices(diffs.shape[0], k=1)]
+            eps = np.percentile(tri, 10) if tri.size else 0.0
+            local_rr[i] = float((diffs <= eps).mean())
+
+            mean = np.mean(window_vals)
+            std = np.std(window_vals) + 1e-12
+            centered = (window_vals - mean) / std
+            local_skew[i] = float(np.mean(centered**3))
+            local_kurt[i] = float(np.mean(centered**4) - 3.0)
+
+            for lag, target in zip(
+                [1, 2, 3, 4, 5], [acf1, acf2, acf3, acf4, acf5]
+            ):
+                if window_vals.size > lag:
+                    v0 = window_vals[:-lag]
+                    v1 = window_vals[lag:]
+                    denom = np.std(v0) * np.std(v1) + 1e-12
+                    target[i] = float(np.corrcoef(v0, v1)[0, 1]) if denom > 0 else 0.0
+
+        return {
+            "local_entropy": local_entropy,
+            "local_rr": local_rr,
+            "local_skew": local_skew,
+            "local_kurtosis": local_kurt,
+            "acf1": acf1,
+            "acf2": acf2,
+            "acf3": acf3,
+            "acf4": acf4,
+            "acf5": acf5,
+        }
+
     def cluster_states(
         self, embedded: np.ndarray, features: dict[str, np.ndarray]
     ) -> np.ndarray:
@@ -327,20 +418,187 @@ class RegimeClassifier:
         method = self.method.lower()
         def _filter_params(allowed: set[str]) -> dict:
             return {key: value for key, value in self.params.items() if key in allowed}
+        n_samples = scaled.shape[0]
+        default_min_cluster = max(5, int(0.005 * n_samples))
+        default_min_samples = max(3, int(0.002 * n_samples))
+        merge_small_clusters = bool(self.params.get("merge_small_clusters", True))
+        merge_min_pct = float(self.params.get("merge_min_pct", 0.005))
         if method == "hdbscan":
             if HDBSCAN is None:
                 model = DBSCAN(**_filter_params({"eps", "min_samples", "metric", "p", "algorithm", "leaf_size"}))
-                return model.fit_predict(scaled)
-            model = HDBSCAN(**self.params)
-            return model.fit_predict(scaled)
+                labels = model.fit_predict(scaled)
+                if not merge_small_clusters:
+                    return labels
+                return self._merge_small_clusters(
+                    labels, scaled, default_min_cluster, merge_min_pct
+                )
+            # Remover chaves que não pertencem ao HDBSCAN
+            params = {
+                key: value
+                for key, value in self.params.items()
+                if key
+                not in {
+                    "merge_small_clusters",
+                    "merge_min_pct",
+                    "merge_max_distance",
+                    "score_small_cluster_penalty",
+                    "score_max_clusters",
+                    "score_too_many_penalty",
+                }
+            }
+            params.setdefault("min_cluster_size", default_min_cluster)
+            params.setdefault("min_samples", default_min_samples)
+            model = HDBSCAN(**params)
+            labels = model.fit_predict(scaled)
+            if not merge_small_clusters:
+                return labels
+            return self._merge_small_clusters(
+                labels,
+                scaled,
+                int(params["min_cluster_size"]),
+                merge_min_pct,
+            )
         if method == "dbscan":
             model = DBSCAN(**_filter_params({"eps", "min_samples", "metric", "p", "algorithm", "leaf_size"}))
-            return model.fit_predict(scaled)
+            labels = model.fit_predict(scaled)
+            if not merge_small_clusters:
+                return labels
+            return self._merge_small_clusters(
+                labels, scaled, default_min_cluster, merge_min_pct
+            )
         if method == "kmeans":
             model = KMeans(**_filter_params({"n_clusters", "random_state", "n_init", "max_iter", "tol", "algorithm"}))
-            return model.fit_predict(scaled)
+            labels = model.fit_predict(scaled)
+            if not merge_small_clusters:
+                return labels
+            return self._merge_small_clusters(
+                labels, scaled, default_min_cluster, merge_min_pct
+            )
+
+        if method == "auto":
+            return self._auto_cluster(scaled)
 
         raise ValueError(f"Unknown clustering method: {self.method}")
+
+    def _auto_cluster(self, scaled: np.ndarray) -> np.ndarray:
+        """Seleciona automaticamente entre HDBSCAN e KMeans com base em score."""
+        candidates: list[tuple[str, np.ndarray, float]] = []
+        # HDBSCAN
+        if HDBSCAN is not None:
+            params = {
+                key: value
+                for key, value in self.params.items()
+                if key
+                not in {
+                    "n_clusters",
+                    "merge_small_clusters",
+                    "merge_min_pct",
+                    "merge_max_distance",
+                    "score_small_cluster_penalty",
+                    "score_max_clusters",
+                    "score_too_many_penalty",
+                }
+            }
+            params.setdefault("min_cluster_size", max(5, int(0.005 * scaled.shape[0])))
+            params.setdefault("min_samples", max(3, int(0.002 * scaled.shape[0])))
+            labels = HDBSCAN(**params).fit_predict(scaled)
+            score = self._cluster_score(scaled, labels)
+            candidates.append(("hdbscan", labels, score))
+        # KMeans
+        params = {key: value for key, value in self.params.items() if key in {"n_clusters", "random_state", "n_init"}}
+        params.setdefault("n_clusters", 3)
+        labels = KMeans(**params).fit_predict(scaled)
+        score = self._cluster_score(scaled, labels)
+        candidates.append(("kmeans", labels, score))
+
+        best = max(candidates, key=lambda item: item[2])
+        return best[1]
+
+    def _cluster_score(self, scaled: np.ndarray, labels: np.ndarray) -> float:
+        """Avalia a qualidade de clustering usando DBCV (se disponível) ou silhouette.
+
+        Aplica penalidade leve para clusters muito pequenos para evitar overclustering.
+        """
+        labels = np.asarray(labels)
+        unique = np.unique(labels[labels != -1])
+        if unique.size <= 1:
+            return -1.0
+        n = labels.size
+        min_count = max(5, int(0.005 * n))
+        counts = {lab: int(np.sum(labels == lab)) for lab in unique}
+        small_clusters = sum(1 for count in counts.values() if count < min_count)
+        penalty = float(self.params.get("score_small_cluster_penalty", 0.05)) * small_clusters
+        max_clusters = int(self.params.get("score_max_clusters", 12))
+        if unique.size > max_clusters:
+            penalty += float(self.params.get("score_too_many_penalty", 0.02)) * (unique.size - max_clusters)
+        try:
+            from hdbscan.validity import validity_index
+
+            return float(validity_index(scaled, labels)) - penalty
+        except Exception:
+            pass
+        try:
+            from sklearn.metrics import silhouette_score
+
+            mask = labels != -1
+            if mask.sum() < 2:
+                return -1.0
+            return float(silhouette_score(scaled[mask], labels[mask])) - penalty
+        except Exception:
+            return -1.0 - penalty
+
+    def _merge_small_clusters(
+        self,
+        labels: np.ndarray,
+        data: np.ndarray,
+        min_cluster_size: int,
+        min_pct: float,
+    ) -> np.ndarray:
+        labels = np.asarray(labels).copy()
+        if labels.size == 0:
+            return labels
+        unique, counts = np.unique(labels, return_counts=True)
+        if unique.size <= 1:
+            return labels
+        min_count = max(min_cluster_size, int(min_pct * labels.size))
+        large_labels = []
+        small_labels = []
+        for label, count in zip(unique, counts):
+            if label == -1 or count < min_count:
+                small_labels.append(label)
+            else:
+                large_labels.append(label)
+        if not large_labels:
+            return labels
+
+        centroids = {}
+        for label in large_labels:
+            centroids[label] = np.nanmean(data[labels == label], axis=0)
+
+        max_distance = self.params.get("merge_max_distance")
+        if max_distance is None and len(large_labels) >= 2:
+            centers = np.stack([centroids[label] for label in large_labels], axis=0)
+            diffs = centers[:, None, :] - centers[None, :, :]
+            dists = np.linalg.norm(diffs, axis=2)
+            tri = dists[np.triu_indices(dists.shape[0], k=1)]
+            if tri.size:
+                max_distance = float(np.percentile(tri, 75))
+
+        for label in small_labels:
+            idx = np.where(labels == label)[0]
+            if idx.size == 0:
+                continue
+            cluster_center = np.nanmean(data[idx], axis=0)
+            distances = {
+                big: float(np.linalg.norm(cluster_center - centroids[big]))
+                for big in large_labels
+            }
+            nearest = min(distances, key=distances.get)
+            if max_distance is not None and distances[nearest] > max_distance:
+                labels[idx] = -1
+                continue
+            labels[idx] = nearest
+        return labels
 
     def label_sequence(
         self,
@@ -395,11 +653,23 @@ class RegimeClassifier:
             mean_e = float(np.nanmean(e_cluster))
             v_mean = float(np.nanmean(v_cluster))
             v_std = float(np.nanstd(v_cluster))
+            x_std = float(np.nanstd(x_cluster))
+            e_std = float(np.nanstd(e_cluster))
+            abs_mean_x = float(np.nanmean(np.abs(x_cluster)))
+            abs_mean_v = float(np.nanmean(np.abs(v_cluster)))
+            e_p10 = float(np.nanpercentile(e_cluster, 10)) if e_cluster.size else 0.0
+            e_p90 = float(np.nanpercentile(e_cluster, 90)) if e_cluster.size else 0.0
             cluster_stats[int(label)] = {
                 "mean_x": mean_x,
+                "std_x": x_std,
+                "abs_mean_x": abs_mean_x,
                 "mean_energy": mean_e,
+                "std_energy": e_std,
+                "energy_p10": e_p10,
+                "energy_p90": e_p90,
                 "mean_velocity": v_mean,
                 "std_velocity": v_std,
+                "abs_mean_v": abs_mean_v,
                 "count": float(np.sum(mask)),
             }
 
@@ -434,20 +704,110 @@ class RegimeClassifier:
                 elif (not high_energy) and persistent_v:
                     cluster_name_map[int(label)] = "rotation"
             elif system_type == "duffing":
-                if high_energy or count == min_count:
+                near_zero_duffing = abs_mean_x <= 0.7 * abs_x_med if abs_x_med > 0 else abs_mean_x < 1e-12
+                if (high_energy and near_zero_duffing) or (count == min_count and high_energy):
                     cluster_name_map[int(label)] = "transicao"
                 elif mean_x < 0:
                     cluster_name_map[int(label)] = "poco_esquerdo"
                 else:
                     cluster_name_map[int(label)] = "poco_direito"
+            elif system_type == "lorenz":
+                xyz = features.get("xyz")
+                mean_x_lobe = mean_x
+                mean_y_lobe = 0.0
+                z_std = 0.0
+                if isinstance(xyz, np.ndarray) and xyz.shape[0] == embedded.shape[0]:
+                    x_vals = xyz[:, 0][mask]
+                    y_vals = xyz[:, 1][mask]
+                    z_vals = xyz[:, 2][mask]
+                    mean_x_lobe = float(np.nanmean(x_vals))
+                    mean_y_lobe = float(np.nanmean(y_vals))
+                    z_std = float(np.nanstd(z_vals))
+                # Transição: energia alta, região próxima do eixo central ou cluster muito pequeno.
+                central_band = abs(mean_x_lobe) <= 0.2 * abs_x_med if abs_x_med > 0 else abs(mean_x_lobe) < 1e-12
+                if high_energy or z_std > np.nanmedian(np.abs(energy)) or central_band or count == min_count:
+                    cluster_name_map[int(label)] = "transicao"
+                else:
+                    lobe_score = mean_x_lobe + mean_y_lobe
+                    if lobe_score >= 0:
+                        cluster_name_map[int(label)] = "asa_direita"
+                    else:
+                        cluster_name_map[int(label)] = "asa_esquerda"
+            elif system_type in {"auto", "automatico"}:
+                try:
+                    if self.auto_model is None:
+                        loaded = load_auto_regime_model()
+                        self.auto_model = loaded.model
+                        self.auto_feature_names = loaded.feature_names
+                    feature_names = self.auto_feature_names or ()
+                    total = labels.size
+                    percent = float(count / total * 100.0) if total else 0.0
+                    transitions_out = 0.0
+                    if labels.size > 1:
+                        changes = labels[1:] != labels[:-1]
+                        for idx, changed in enumerate(changes, start=1):
+                            if changed and int(labels[idx - 1]) == int(label):
+                                transitions_out += 1.0
+                    segments = 0.0
+                    if labels.size > 0:
+                        current = labels[0]
+                        if int(current) == int(label):
+                            segments += 1.0
+                        for value in labels[1:]:
+                            if value != current:
+                                current = value
+                                if int(current) == int(label):
+                                    segments += 1.0
+                    stats["segments"] = segments
+                    vector = vector_from_cluster_stats(
+                        stats,
+                        percent=percent,
+                        transitions_out=transitions_out,
+                        feature_names=feature_names,
+                    )
+                    predicted = self.auto_model.predict(vector.reshape(1, -1))[0]
+                    cluster_name_map[int(label)] = str(predicted)
+                except Exception:
+                    cluster_name_map[int(label)] = f"state_{label}"
 
         self.last_cluster_stats = cluster_stats
         return np.array([cluster_name_map[int(lbl)] for lbl in labels], dtype=object)
+
+    def _smooth_labels(self, labels: np.ndarray, min_run: int = 5) -> np.ndarray:
+        """Suaviza rótulos removendo segmentos muito curtos."""
+        if min_run <= 1:
+            return labels
+        values = np.asarray(labels, dtype=object).copy()
+        n = values.size
+        if n == 0:
+            return values
+
+        start = 0
+        while start < n:
+            current = values[start]
+            end = start + 1
+            while end < n and values[end] == current:
+                end += 1
+            run_len = end - start
+            if run_len < min_run:
+                left_label = values[start - 1] if start > 0 else None
+                right_label = values[end] if end < n else None
+                if left_label is not None and right_label is not None and left_label == right_label:
+                    values[start:end] = left_label
+                elif left_label is None and right_label is not None:
+                    values[start:end] = right_label
+                elif right_label is None and left_label is not None:
+                    values[start:end] = left_label
+                else:
+                    values[start:end] = left_label if left_label is not None else right_label
+            start = end
+        return values
 
     def run_full_analysis(
         self,
         series: np.ndarray,
         output_dir: str | Path,
+        dates: np.ndarray | None = None,
         system_type: str | None = None,
         filename_suffix: str = "",
         tau_range: range = range(1, 11),
@@ -455,6 +815,14 @@ class RegimeClassifier:
         selection_criterion: str = "min_entropy",
         bins: int = 10,
         rr_percentile: float = 10.0,
+        smooth_labels: bool = True,
+        min_run: int = 3,
+        local_window: int = 50,
+        generate_plots: bool = True,
+        generate_report: bool = True,
+        macro_events_path: str | Path | None = None,
+        macro_asset: str | None = None,
+        macro_window_days: int = 3,
     ) -> dict[str, object]:
         """Executa a pipeline completa de detecção e rotulagem de regimes.
 
@@ -488,14 +856,20 @@ class RegimeClassifier:
         embedded = self.embed(series)
         velocity = self.compute_velocity(series)
         energy = self.compute_energy(embedded[:, 0], velocity)
+        local_features = self.compute_local_features(embedded[:, 0], window=local_window)
         cluster_features: dict[str, np.ndarray] = {"velocity": velocity, "energy": energy}
+        cluster_features.update(local_features)
         cluster_labels = self.cluster_states(embedded, cluster_features)
         label_features = dict(cluster_features)
         if system_type:
             label_features["system_type"] = np.array([system_type], dtype=object)
         label_names = self.label_sequence(series, cluster_labels, embedded, label_features)
+        if smooth_labels:
+            label_names = self._smooth_labels(label_names, min_run=min_run)
 
-        summary_rows = self._build_summary(embedded, velocity, energy, label_names)
+        summary_rows = self._build_summary(
+            embedded, velocity, energy, label_names, extra_features=local_features
+        )
         summary_path = output_path / f"summary{filename_suffix}.csv"
         self._write_csv(summary_path, summary_rows)
 
@@ -503,34 +877,50 @@ class RegimeClassifier:
         self._write_csv(debug_path, metrics)
 
         report_path = output_path / f"report{filename_suffix}.md"
-        self._write_report(
-            report_path,
-            best_m=best_m,
-            best_tau=best_tau,
-            selection_criterion=selection_criterion,
-            metrics=metrics,
-            summary=summary_rows,
-            system_type=system_type,
-            filename_suffix=filename_suffix,
-        )
+        macro_notes: list[dict[str, str]] = []
+        if dates is not None and macro_events_path:
+            start = (self.m - 1) * self.tau
+            dates_aligned = np.asarray(dates)[start : start + embedded.shape[0]]
+            events = load_macro_events(Path(macro_events_path))
+            macro_notes = annotate_transitions(
+                dates_aligned,
+                label_names,
+                events,
+                asset=macro_asset,
+                window_days=macro_window_days,
+            )
+        if generate_report:
+            self._write_report(
+                report_path,
+                best_m=best_m,
+                best_tau=best_tau,
+                selection_criterion=selection_criterion,
+                metrics=metrics,
+                summary=summary_rows,
+                system_type=system_type,
+                filename_suffix=filename_suffix,
+                macro_notes=macro_notes,
+            )
 
-        plot_paths = self._generate_plots(
-            output_path,
-            series,
-            embedded,
-            velocity,
-            energy,
-            label_names,
-            metrics,
-            filename_suffix=filename_suffix,
-        )
+        plot_paths = {}
+        if generate_plots:
+            plot_paths = self._generate_plots(
+                output_path,
+                series,
+                embedded,
+                velocity,
+                energy,
+                label_names,
+                metrics,
+                filename_suffix=filename_suffix,
+            )
 
         return {
             "best_m": best_m,
             "best_tau": best_tau,
             "summary_csv": str(summary_path),
             "debug_entropy_csv": str(debug_path),
-            "report_md": str(report_path),
+            "report_md": str(report_path) if generate_report else "",
             "plots": plot_paths,
             "cluster_labels": cluster_labels,
             "label_names": label_names,
@@ -542,6 +932,7 @@ class RegimeClassifier:
         velocity: np.ndarray,
         energy: np.ndarray,
         label_names: np.ndarray,
+        extra_features: dict[str, np.ndarray] | None = None,
     ) -> list[dict[str, float | str]]:
         """Resume estatísticas por regime para gerar summary.csv.
 
@@ -558,29 +949,48 @@ class RegimeClassifier:
         unique, counts = np.unique(labels, return_counts=True)
         total = labels.size
         transitions_out: dict[str, int] = {}
+        segments_count: dict[str, int] = {}
         if labels.size > 1:
             changes = labels[1:] != labels[:-1]
             for idx, changed in enumerate(changes, start=1):
                 if changed:
                     prev_label = str(labels[idx - 1])
                     transitions_out[prev_label] = transitions_out.get(prev_label, 0) + 1
+        # Conta segmentos contínuos por regime
+        if labels.size > 0:
+            current = str(labels[0])
+            segments_count[current] = segments_count.get(current, 0) + 1
+            for value in labels[1:]:
+                value_str = str(value)
+                if value_str != current:
+                    current = value_str
+                    segments_count[current] = segments_count.get(current, 0) + 1
         summary: list[dict[str, float | str]] = []
         for regime, count in zip(unique, counts):
             mask = labels == regime
-            summary.append(
-                {
-                    "regime": str(regime),
-                    "count": float(count),
-                    "percent": float(count / total * 100.0),
-                    "mean_x": float(np.nanmean(embedded[mask, 0])),
-                    "std_x": float(np.nanstd(embedded[mask, 0])),
-                    "mean_v": float(np.nanmean(velocity[mask])),
-                    "std_v": float(np.nanstd(velocity[mask])),
-                    "mean_energy": float(np.nanmean(energy[mask])),
-                    "std_energy": float(np.nanstd(energy[mask])),
-                    "transitions_out": float(transitions_out.get(str(regime), 0)),
-                }
-            )
+            row: dict[str, float | str] = {
+                "regime": str(regime),
+                "count": float(count),
+                "percent": float(count / total * 100.0),
+                "mean_x": float(np.nanmean(embedded[mask, 0])),
+                "std_x": float(np.nanstd(embedded[mask, 0])),
+                "abs_mean_x": float(np.nanmean(np.abs(embedded[mask, 0]))),
+                "mean_v": float(np.nanmean(velocity[mask])),
+                "std_v": float(np.nanstd(velocity[mask])),
+                "abs_mean_v": float(np.nanmean(np.abs(velocity[mask]))),
+                "mean_energy": float(np.nanmean(energy[mask])),
+                "std_energy": float(np.nanstd(energy[mask])),
+                "energy_p10": float(np.nanpercentile(energy[mask], 10)),
+                "energy_p90": float(np.nanpercentile(energy[mask], 90)),
+                "transitions_out": float(transitions_out.get(str(regime), 0)),
+                "segments": float(segments_count.get(str(regime), 0)),
+            }
+            if extra_features:
+                for name, values in extra_features.items():
+                    if values.shape[0] == labels.shape[0]:
+                        row[f"mean_{name}"] = float(np.nanmean(values[mask]))
+                        row[f"std_{name}"] = float(np.nanstd(values[mask]))
+            summary.append(row)
         return summary
 
     def _write_csv(self, path: Path, rows: list[dict[str, float | str]]) -> None:
@@ -607,6 +1017,7 @@ class RegimeClassifier:
         summary: list[dict[str, float | str]],
         system_type: str | None,
         filename_suffix: str = "",
+        macro_notes: list[dict[str, str]] | None = None,
     ) -> None:
         """Gera um relatório em Markdown explicando os regimes detectados.
 
@@ -652,6 +1063,18 @@ class RegimeClassifier:
                 "Para sistemas desconhecidos, rótulos genéricos são utilizados.",
             ]
         )
+        if macro_notes:
+            lines.extend(
+                [
+                    "",
+                    "## Anotações macro (próximas a transições)",
+                ]
+            )
+            for note in macro_notes[:20]:
+                lines.append(
+                    f"- {note['date']}: {note['from']} → {note['to']} | {note['asset']} "
+                    f"({note['range']} {note['variation']}) — {note['description']}"
+                )
         path.write_text("\n".join(lines), encoding="utf-8")
 
     def _generate_plots(
