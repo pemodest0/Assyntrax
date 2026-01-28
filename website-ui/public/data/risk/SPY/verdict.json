@@ -1,0 +1,49 @@
+{
+  "score": 74.82,
+  "level": "HIGH",
+  "action": "OPERAR",
+  "verdict": "SIM",
+  "reasons": [],
+  "breakdown": [
+    {
+      "metric_name": "roc_auc",
+      "raw_value": 0.8494108983799706,
+      "normalized_value": 1.0,
+      "weight": 0.35,
+      "contribution": 0.35,
+      "comment": "capacidade discriminativa"
+    },
+    {
+      "metric_name": "balanced_acc",
+      "raw_value": 0.6091678939617085,
+      "normalized_value": 0.3638929798723615,
+      "weight": 0.25,
+      "contribution": 0.09097324496809038,
+      "comment": "equilibrio de classes"
+    },
+    {
+      "metric_name": "f1",
+      "raw_value": 0.3829787234042553,
+      "normalized_value": 0.4787234042553191,
+      "weight": 0.15,
+      "contribution": 0.07180851063829786,
+      "comment": "qualidade geral"
+    },
+    {
+      "metric_name": "transition_rate",
+      "raw_value": 0.036,
+      "normalized_value": 0.964,
+      "weight": 0.15,
+      "contribution": 0.14459999999999998,
+      "comment": "instabilidade de regime"
+    },
+    {
+      "metric_name": "novelty",
+      "raw_value": 0.09149313663954789,
+      "normalized_value": 0.908506863360452,
+      "weight": 0.1,
+      "contribution": 0.0908506863360452,
+      "comment": "fora de distribuicao"
+    }
+  ]
+}

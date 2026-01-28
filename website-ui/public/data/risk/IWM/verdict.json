@@ -1,0 +1,49 @@
+{
+  "score": 61.55,
+  "level": "MED",
+  "action": "REDUZIR_RISCO",
+  "verdict": "DEPENDE",
+  "reasons": [],
+  "breakdown": [
+    {
+      "metric_name": "roc_auc",
+      "raw_value": 0.7026433358153388,
+      "normalized_value": 0.6754777860511293,
+      "weight": 0.35,
+      "contribution": 0.23641722511789523,
+      "comment": "capacidade discriminativa"
+    },
+    {
+      "metric_name": "balanced_acc",
+      "raw_value": 0.5860387192851824,
+      "normalized_value": 0.2867957309506079,
+      "weight": 0.25,
+      "contribution": 0.07169893273765197,
+      "comment": "equilibrio de classes"
+    },
+    {
+      "metric_name": "f1",
+      "raw_value": 0.4057971014492754,
+      "normalized_value": 0.5072463768115942,
+      "weight": 0.15,
+      "contribution": 0.07608695652173914,
+      "comment": "qualidade geral"
+    },
+    {
+      "metric_name": "transition_rate",
+      "raw_value": 0.09236947791164658,
+      "normalized_value": 0.9076305220883534,
+      "weight": 0.15,
+      "contribution": 0.136144578313253,
+      "comment": "instabilidade de regime"
+    },
+    {
+      "metric_name": "novelty",
+      "raw_value": 0.04819485826367311,
+      "normalized_value": 0.9518051417363269,
+      "weight": 0.1,
+      "contribution": 0.0951805141736327,
+      "comment": "fora de distribuicao"
+    }
+  ]
+}

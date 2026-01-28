@@ -1,0 +1,51 @@
+{
+  "score": 37.25,
+  "level": "LOW",
+  "action": "NAO_OPERAR",
+  "verdict": "NAO",
+  "reasons": [
+    "bal_acc fraco"
+  ],
+  "breakdown": [
+    {
+      "metric_name": "roc_auc",
+      "raw_value": 0.6135338345864662,
+      "normalized_value": 0.37844611528822053,
+      "weight": 0.35,
+      "contribution": 0.1324561403508772,
+      "comment": "capacidade discriminativa"
+    },
+    {
+      "metric_name": "balanced_acc",
+      "raw_value": 0.5,
+      "normalized_value": 0.0,
+      "weight": 0.25,
+      "contribution": 0.0,
+      "comment": "equilibrio de classes"
+    },
+    {
+      "metric_name": "f1",
+      "raw_value": 0.0,
+      "normalized_value": 0.0,
+      "weight": 0.15,
+      "contribution": 0.0,
+      "comment": "qualidade geral"
+    },
+    {
+      "metric_name": "transition_rate",
+      "raw_value": 0.0,
+      "normalized_value": 1.0,
+      "weight": 0.15,
+      "contribution": 0.15,
+      "comment": "instabilidade de regime"
+    },
+    {
+      "metric_name": "novelty",
+      "raw_value": 0.09994408753785955,
+      "normalized_value": 0.9000559124621405,
+      "weight": 0.1,
+      "contribution": 0.09000559124621405,
+      "comment": "fora de distribuicao"
+    }
+  ]
+}
