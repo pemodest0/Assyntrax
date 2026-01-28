@@ -289,7 +289,9 @@ def _ensure_sorted_dates(dates):
 
 
 def _split_hash(train_idx, test_idx):
-    payload = np.concatenate([train_idx.astype(np.int64), test_idx.astype(np.int64)])
+    train_arr = np.asarray(train_idx, dtype=np.int64)
+    test_arr = np.asarray(test_idx, dtype=np.int64)
+    payload = np.concatenate([train_arr, test_arr])
     return hashlib.sha256(payload.tobytes()).hexdigest()
 
 
@@ -486,6 +488,8 @@ def run_for_group(
     if test_indices.size == 0:
         return None
     for i in test_indices:
+        if i + 1 >= len(series):
+            continue
         state = np.array([series[i - j * tau] for j in range(m)], dtype=float)
         pred = model.predict_1step(state)
         if pred is None:

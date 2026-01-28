@@ -6,19 +6,27 @@ com uma vertical slice minima (sem drift/difusao).
 
 ## Estrutura
 
-- `spa/` pipeline minimo (leitura, preprocessamento, features, diagnosticos, relatorio).
-- `scripts/fetch_datasets.py` downloader de CSVs publicos do ONS.
+- `spa/` pipeline principal do motor (IO, preprocess, features, diagnosticos, relatorio).
+- `spa/engine/` motor de regimes (antigo `temporal_engine/`).
+- `scripts/` organizado por area:
+  - `scripts/data/` ingestao e checagens de dados
+  - `scripts/finance/` pipelines financeiros
+  - `scripts/sim/` simulacoes e sinteticos
+  - `scripts/bench/` benchmarks e avaliacao
+  - `scripts/report/` geracao de relatorios/figuras
+  - `scripts/engine/` execucoes do motor
+  - `scripts/maintenance/` limpeza/manutencao
+  - `scripts/lab/` experimentos locais
+  - `scripts/utils/` utilitarios comuns
 - `data/raw/` dados brutos baixados.
-- `data/processed/` dados processados e exemplos.
-- `examples/energy_demo.py` demo sintetica.
-- `tests/test_smoke.py` teste simples de ponta a ponta.
+- `tests/` testes simples (opcionais).
 
 ## Baixar dados do ONS
 
 Exemplo (curva de carga horaria 2024):
 
 ```bash
-python scripts/fetch_datasets.py --source ONS --dataset ons_curva_carga_horaria --year 2024
+python scripts/data/fetch_datasets.py --source ONS --dataset ons_curva_carga_horaria --year 2024
 ```
 
 O CSV sera salvo em `data/raw/ONS/ons_curva_carga_horaria/`.
@@ -111,7 +119,7 @@ python -m pytest tests/test_predictability.py
 Gera os JSONs usados na pagina `website/lab_lorenz.html`:
 
 ```bash
-python scripts/lab_generate_lorenz.py
+python scripts/sim/lab_generate_lorenz.py
 ```
 
 ## Gerar figuras em PNG (energia)
@@ -119,7 +127,7 @@ python scripts/lab_generate_lorenz.py
 Gera figuras em `results/_figs/energy/`:
 
 ```bash
-python scripts/generate_figures.py
+python scripts/report/generate_figures.py
 ```
 
 ## Diagnostico visual por subsistema (fase/embedding)

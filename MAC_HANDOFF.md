@@ -4,10 +4,10 @@ This file summarizes the current state and how to continue on the Mac.
 
 ## Repo state
 - Project root: `C:\Users\Pedro Henrique\Desktop\A-firma`
-- Engine name: **temporal_engine**
+- Engine name: **spa.engine**
 - Key modules:
-  - `temporal_engine/diagnostics/regime_labels.py` (Takens embedding, clustering, labeling, local features)
-  - `temporal_engine/diagnostics/auto_regime_model.py` (auto-regime model + feature vector)
+  - `spa/engine/diagnostics/regime_labels.py` (Takens embedding, clustering, labeling, local features)
+  - `spa/engine/diagnostics/auto_regime_model.py` (auto-regime model + feature vector)
 - New scripts:
   - `scripts/run_phase1_curriculum.py` (local+real data ingest; supports `--no-plots`)
   - `scripts/run_phase1_heavy_synthetic.py` (heavy synthetic generator w/ progress)
@@ -30,7 +30,7 @@ This file summarizes the current state and how to continue on the Mac.
 
 ## What to copy to the Mac (USB)
 - `scripts/`
-- `temporal_engine/`
+- `spa/engine/`
 - `models/` (if you want the trained auto-regime model)
 - `MAC_HANDOFF.md` (this file)
 
