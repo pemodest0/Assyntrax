@@ -14,7 +14,7 @@ import pandas as pd
 
 from spa.sanity import ensure_sorted_dates, safe_test_indices, split_hash, validate_time_split
 import sys as _sys
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in _sys.path:
     _sys.path.insert(0, str(ROOT))
 

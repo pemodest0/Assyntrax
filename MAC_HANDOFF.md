@@ -28,6 +28,11 @@ This file summarizes the current state and how to continue on the Mac.
 - `results/` (large, can be regenerated)
 - `data/` (unless you need specific local datasets)
 
+## Data locations (raw)
+- ONS: `data/raw/ONS/ons_carga_diaria/ons_carga_diaria_2000_2026.csv`
+- Geo: `data/geo/br_uf.geojson`
+- Finance cache (yfinance): `data/raw/finance/yfinance_daily/*.csv`
+
 ## What to copy to the Mac (USB)
 - `scripts/`
 - `spa/engine/`

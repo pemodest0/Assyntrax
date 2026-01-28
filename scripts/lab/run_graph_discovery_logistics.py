@@ -151,7 +151,7 @@ def main() -> None:
 
     best_candidate, best_score = select_best_graph(candidates, score_fn, penalties)
 
-        target_cfg_path = _resolve_config(Path("data/configs/targets_logistics.json"))
+    target_cfg_path = _resolve_config(Path("data/configs/targets_logistics.json"))
     threshold_values = (0.5, 0.3, 0.1)
     aggregate_top_k = 5
     custom_target_nodes = None

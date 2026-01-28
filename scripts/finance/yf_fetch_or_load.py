@@ -103,7 +103,7 @@ def unify_to_daily(df):
 
 
 def save_cache(df, base_dir, ticker):
-    out_dir = Path(base_dir) / "results" / "_tmp" / "yfinance_daily"
+    out_dir = Path(base_dir) / "data" / "raw" / "finance" / "yfinance_daily"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{ticker}.csv"
     df.to_csv(out_path, index=False)

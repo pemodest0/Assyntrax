@@ -18,6 +18,22 @@ efetivos em tempo discreto. Nesta fase, o foco e a vertical de ENERGIA.
 
 ---
 
+## Localizacao dos dados (materia-prima)
+- ONS (energia): `data/raw/ONS/ons_carga_diaria/ons_carga_diaria_2000_2026.csv`
+- Geo (mapa): `data/geo/br_uf.geojson`
+- Financeiro (cache local, yfinance): `data/raw/finance/yfinance_daily/*.csv`
+
+## Motor e features principais
+- Motor principal: `spa/` e `spa/engine/`
+- Regimes (auto-model): `spa/engine/diagnostics/auto_regime_model.py`
+- Features do auto-model:
+  mean_x, std_x, abs_mean_x, mean_v, std_v, abs_mean_v, mean_energy, std_energy,
+  energy_p10, energy_p90, percent, transitions_out, segments, mean_local_entropy,
+  mean_local_rr, mean_local_skew, mean_local_kurtosis, mean_acf1..mean_acf5,
+  kinetic_mean, potential_mean
+
+---
+
 ## Restricoes importantes
 - Nao implementar drift/difusao fisica ainda
 - Evitar overengineering e dependencias extras

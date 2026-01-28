@@ -283,6 +283,59 @@ def _plot_curve(x, y, x_sel, out_path, title, xlabel):
     plt.close()
 
 
+def _plot_pred_vs_true(dates, real, pred, out_path, title):
+    plt.figure(figsize=(9, 4))
+    plt.plot(dates, real, color="black", label="real", linewidth=1.2)
+    plt.plot(dates, pred, color="#1d4ed8", label="pred", linewidth=1.0)
+    plt.title(title)
+    plt.xlabel("Data")
+    plt.ylabel("Valor")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=160)
+    plt.close()
+
+
+def _plot_residual_hist(residuals, out_path, title):
+    plt.figure(figsize=(7, 4))
+    plt.hist(residuals, bins=30, color="#f97316", alpha=0.8)
+    plt.title(title)
+    plt.xlabel("Residuo")
+    plt.ylabel("Freq")
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=160)
+    plt.close()
+
+
+def _smape(y_true, y_pred, eps=1e-6):
+    denom = np.abs(y_true) + np.abs(y_pred) + eps
+    return float(np.mean(2.0 * np.abs(y_pred - y_true) / denom))
+
+
+def _mase(y_true, y_pred, baseline_true, baseline_pred):
+    mae_model = float(np.mean(np.abs(y_true - y_pred)))
+    mae_base = float(np.mean(np.abs(baseline_true - baseline_pred)))
+    if mae_base <= 0:
+        return float("nan")
+    return mae_model / mae_base
+
+
+def _safe_corr(a, b):
+    if len(a) < 3:
+        return float("nan")
+    if np.std(a) == 0 or np.std(b) == 0:
+        return float("nan")
+    return float(np.corrcoef(a, b)[0, 1])
+
+
+def _spearman_corr(a, b):
+    if len(a) < 3:
+        return float("nan")
+    rank_a = pd.Series(a).rank().to_numpy()
+    rank_b = pd.Series(b).rank().to_numpy()
+    return _safe_corr(rank_a, rank_b)
+
+
 def _ensure_sorted_dates(dates):
     if not dates.is_monotonic_increasing:
         raise ValueError("Datas fora de ordem; ordene antes de treinar/testar.")
@@ -369,6 +422,9 @@ def run_for_group(
     fnn_threshold=0.02,
     horizon=30,
     mape_threshold=5.0,
+    horizons: list[int] | None = None,
+    target_is_returns: bool = False,
+    sanity_examples: int = 3,
 ):
     df_g = df.copy()
     if group_value is not None:
@@ -538,66 +594,157 @@ def run_for_group(
             "err_pct": err_pct,
         }
     )
-    pred_df.to_csv(os.path.join(outdir, "pred_vs_real.csv"), index=False)
+    pred_df.to_csv(os.path.join(outdir, "pred_vs_true.csv"), index=False)
 
-    _plot_pred_vs_real(
+    _plot_pred_vs_true(
         pred_dates,
         reals,
         preds,
-        os.path.join(outdir, "pred_vs_real.png"),
+        os.path.join(outdir, "pred_vs_true.png"),
         f"Previsto vs Real ({test_year})  {group_value or 'TOTAL'}",
     )
-    _plot_err_pct(
-        pred_dates,
-        err_pct,
-        os.path.join(outdir, "pred_error_pct.png"),
-        f"Erro % - {group_value or 'TOTAL'}",
+    _plot_residual_hist(
+        np.array(preds) - np.array(reals),
+        os.path.join(outdir, "residual_hist.png"),
+        f"Residuo - {group_value or 'TOTAL'}",
     )
 
     # Horizon evaluation (multi-step rollout)
-    H = max(1, int(horizon))
-    h_vals = np.arange(1, H + 1)
-    mape_h = []
-    rmse_h = []
-    test_indices = [i for i in range((m - 1) * tau, len(series) - 1) if (test_mask[i] if isinstance(test_mask, np.ndarray) else bool(test_mask.iloc[i]))]
+    if horizons is None:
+        horizons = list(range(1, max(1, int(horizon)) + 1))
+    h_vals = np.array(sorted(set(int(h) for h in horizons if int(h) >= 1)))
+    test_indices = [
+        i
+        for i in range((m - 1) * tau, len(series) - 1)
+        if (test_mask[i] if isinstance(test_mask, np.ndarray) else bool(test_mask.iloc[i]))
+    ]
+
+    horizon_metrics = {}
     for h in h_vals:
-        errs = []
-        errs_pct = []
+        preds_h = []
+        reals_h = []
+        base_preds = []
         for i in test_indices:
             if i + h >= len(series):
                 continue
-            preds_h = model.predict_multistep(series, i, h)
-            if preds_h is None or len(preds_h) < h:
+            preds_seq = model.predict_multistep(series, i, h)
+            if preds_seq is None or len(preds_seq) < h:
                 continue
-            pred = preds_h[-1]
+            pred = preds_seq[-1]
             real = series[i + h]
-            err = pred - real
-            errs.append(err)
-            if real != 0:
-                errs_pct.append(abs(err / real) * 100.0)
-        if errs:
-            errs = np.array(errs)
-            mape_h.append(float(np.mean(errs_pct)) if errs_pct else np.nan)
-            rmse_h.append(float(np.sqrt(np.mean(errs ** 2))))
-        else:
-            mape_h.append(np.nan)
-            rmse_h.append(np.nan)
+            preds_h.append(pred)
+            reals_h.append(real)
+            base_preds.append(series[i])
+        if not preds_h:
+            horizon_metrics[int(h)] = {"n": 0}
+            continue
+        preds_h = np.array(preds_h)
+        reals_h = np.array(reals_h)
+        base_preds = np.array(base_preds)
 
-    h_useful = 0
-    for h, mape_val in zip(h_vals, mape_h):
-        if mape_val == mape_val and mape_val <= mape_threshold:
-            h_useful = int(h)
-        else:
-            break
+        mae_h = float(np.mean(np.abs(reals_h - preds_h)))
+        rmse_h = float(np.sqrt(np.mean((reals_h - preds_h) ** 2)))
+        smape_h = _smape(reals_h, preds_h, eps=1e-6)
+        mase_h = _mase(reals_h, preds_h, reals_h, base_preds)
+        corr_p = _safe_corr(reals_h, preds_h)
+        corr_s = _spearman_corr(reals_h, preds_h)
 
-    _plot_horizon_error(
-        h_vals,
-        mape_h,
-        mape_threshold,
-        h_useful if h_useful > 0 else None,
-        os.path.join(outdir, "horizon_error.png"),
-        f"Erro vs horizonte - {group_value or 'TOTAL'}",
-    )
+        if target_is_returns:
+            dir_acc = float(
+                np.mean(np.sign(reals_h) == np.sign(preds_h))
+            )
+        else:
+            dir_acc = float("nan")
+
+        horizon_metrics[int(h)] = {
+            "n": int(len(reals_h)),
+            "mae": mae_h,
+            "rmse": rmse_h,
+            "smape": smape_h,
+            "mase": mase_h,
+            "corr_pearson": corr_p,
+            "corr_spearman": corr_s,
+            "directional_acc": dir_acc,
+            "target_stats": {
+                "min": float(np.min(reals_h)),
+                "max": float(np.max(reals_h)),
+                "mean": float(np.mean(reals_h)),
+                "std": float(np.std(reals_h)),
+            },
+            "pred_stats": {
+                "min": float(np.min(preds_h)),
+                "max": float(np.max(preds_h)),
+                "mean": float(np.mean(preds_h)),
+                "std": float(np.std(preds_h)),
+            },
+        }
+
+        # artifacts per horizon
+        out_pred = os.path.join(outdir, f"pred_vs_true_h{h}.csv")
+        pd.DataFrame({"real": reals_h, "pred": preds_h}).to_csv(out_pred, index=False)
+        _plot_pred_vs_true(
+            np.arange(len(reals_h)),
+            reals_h,
+            preds_h,
+            os.path.join(outdir, f"pred_vs_true_h{h}.png"),
+            f"Previsto vs Real (h={h})  {group_value or 'TOTAL'}",
+        )
+        _plot_residual_hist(
+            preds_h - reals_h,
+            os.path.join(outdir, f"residual_hist_h{h}.png"),
+            f"Residuo (h={h})  {group_value or 'TOTAL'}",
+        )
+
+    # Sanity log
+    sanity = {
+        "n_train": int(np.sum(~np.asarray(test_mask, dtype=bool))),
+        "n_test": int(np.sum(np.asarray(test_mask, dtype=bool))),
+        "train_target_stats": {
+            "min": float(np.min(series[: train_end_pos + 1])),
+            "max": float(np.max(series[: train_end_pos + 1])),
+            "mean": float(np.mean(series[: train_end_pos + 1])),
+            "std": float(np.std(series[: train_end_pos + 1])),
+        },
+        "test_target_stats": {
+            "min": float(np.min(series[train_end_pos + 1 :])),
+            "max": float(np.max(series[train_end_pos + 1 :])),
+            "mean": float(np.mean(series[train_end_pos + 1 :])),
+            "std": float(np.std(series[train_end_pos + 1 :])),
+        },
+        "pred_stats": {
+            "min": float(np.min(preds)),
+            "max": float(np.max(preds)),
+            "mean": float(np.mean(preds)),
+            "std": float(np.std(preds)),
+        },
+        "near_zero_pct": float(np.mean(np.abs(series[train_end_pos + 1 :]) < 1e-4)) if len(series) > train_end_pos + 1 else float("nan"),
+    }
+
+    examples_by_h = {}
+    for h in h_vals:
+        examples = []
+        for idx in test_indices[: max(0, int(sanity_examples))]:
+            if idx + h >= len(series):
+                continue
+            feats = [series[idx - j * tau] for j in range(m)]
+            examples.append(
+                {
+                    "timestamp": str(dates.iloc[idx]),
+                    "target_t+h": float(series[idx + h]),
+                    "features_t": feats,
+                }
+            )
+        examples_by_h[int(h)] = examples
+    sanity["alignment_examples_by_h"] = examples_by_h
+
+    for h, examples in examples_by_h.items():
+        for item in examples:
+            print(
+                f"[ALIGN] h={h} ts={item['timestamp']} target={item['target_t+h']} "
+                f"features_t={item['features_t']}"
+            )
+    with open(os.path.join(outdir, "sanity_log.json"), "w", encoding="utf-8") as f:
+        json.dump(sanity, f, indent=2, ensure_ascii=False)
 
     # Divergence indicator (simple neighbor separation)
     X, y_embed, idx_embed = embed(series, tau, m)
@@ -642,21 +789,25 @@ def run_for_group(
         "corr_pred_real": float(corr) if corr == corr else None,
         "shape_ok": bool(shape_ok),
         "horizon": {
-            "H": H,
-            "mape_threshold": mape_threshold,
-            "mape_h": mape_h,
-            "rmse_h": rmse_h,
-            "horizon_useful": int(h_useful),
+            "H": int(h_vals.max()) if h_vals.size else 0,
+            "metrics_by_h": horizon_metrics,
         },
-        "horizon_note": (
-            f"Horizonte util estimado: {h_useful} passo(s) com MAPE <= {mape_threshold:.1f}%."
-            if h_useful > 0
-            else f"MAPE ultrapassa {mape_threshold:.1f}% ja nos primeiros passos."
-        ),
+        "sanity": sanity,
     }
 
     with open(os.path.join(outdir, "summary_phase.json"), "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2, ensure_ascii=False)
+
+    with open(os.path.join(outdir, "metrics.json"), "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "summary": summary,
+                "sanity": sanity,
+            },
+            f,
+            indent=2,
+            ensure_ascii=False,
+        )
 
     return summary
 

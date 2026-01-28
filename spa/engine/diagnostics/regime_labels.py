@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 import csv
+import hashlib
+import json
 
 import numpy as np
 from sklearn.cluster import DBSCAN, KMeans
@@ -829,6 +831,9 @@ class RegimeClassifier:
         macro_events_path: str | Path | None = None,
         macro_asset: str | None = None,
         macro_window_days: int = 3,
+        write_meta: bool = True,
+        write_confidence: bool = True,
+        write_master_plot: bool = True,
     ) -> dict[str, object]:
         """Executa a pipeline completa de detecção e rotulagem de regimes.
 
@@ -876,8 +881,27 @@ class RegimeClassifier:
         summary_rows = self._build_summary(
             embedded, velocity, energy, label_names, extra_features=local_features
         )
+        run_id = _compute_run_id(
+            system_type=system_type,
+            method=self.method,
+            tau=self.tau,
+            m=self.m,
+            n_samples=int(embedded.shape[0]),
+            filename_suffix=filename_suffix,
+        )
+        context = _build_context(
+            run_id=run_id,
+            system_type=system_type,
+            method=self.method,
+            tau=self.tau,
+            m=self.m,
+            n_samples=int(embedded.shape[0]),
+            dates=dates,
+            filename_suffix=filename_suffix,
+        )
+        summary_rows_std = _standardize_summary(summary_rows, label_names, context)
         summary_path = output_path / f"summary{filename_suffix}.csv"
-        self._write_csv(summary_path, summary_rows)
+        self._write_csv(summary_path, summary_rows_std)
 
         debug_path = output_path / f"debug_entropy{filename_suffix}.csv"
         self._write_csv(debug_path, metrics)
@@ -895,6 +919,35 @@ class RegimeClassifier:
                 asset=macro_asset,
                 window_days=macro_window_days,
             )
+        confidence = _compute_confidence(
+            embedded=embedded,
+            labels=label_names,
+            cluster_labels=cluster_labels,
+            metrics=metrics,
+            current_label=str(label_names[-1]) if label_names.size else "",
+        )
+        warnings_list = confidence.get("warnings", [])
+        if write_meta:
+            meta_path = output_path / f"meta{filename_suffix}.json"
+            _write_meta(meta_path, context, warnings_list)
+        if write_confidence:
+            breakdown_path = output_path / f"confidence_breakdown{filename_suffix}.csv"
+            _write_breakdown(breakdown_path, confidence)
+            verdict_path = output_path / f"verdict{filename_suffix}.json"
+            _write_verdict(verdict_path, confidence)
+
+        master_plot_path = ""
+        if write_master_plot and plt is not None:
+            master_plot_path = _plot_master(
+                output_path,
+                series,
+                embedded,
+                velocity,
+                label_names,
+                confidence,
+                filename_suffix=filename_suffix,
+            )
+
         if generate_report:
             self._write_report(
                 report_path,
@@ -902,10 +955,12 @@ class RegimeClassifier:
                 best_tau=best_tau,
                 selection_criterion=selection_criterion,
                 metrics=metrics,
-                summary=summary_rows,
+                summary=summary_rows_std,
                 system_type=system_type,
                 filename_suffix=filename_suffix,
                 macro_notes=macro_notes,
+                verdict=confidence,
+                master_plot=master_plot_path,
             )
 
         plot_paths = {}
@@ -927,6 +982,12 @@ class RegimeClassifier:
             "summary_csv": str(summary_path),
             "debug_entropy_csv": str(debug_path),
             "report_md": str(report_path) if generate_report else "",
+            "meta_json": str(output_path / f"meta{filename_suffix}.json") if write_meta else "",
+            "confidence_csv": str(output_path / f"confidence_breakdown{filename_suffix}.csv")
+            if write_confidence
+            else "",
+            "verdict_json": str(output_path / f"verdict{filename_suffix}.json") if write_confidence else "",
+            "master_plot": master_plot_path,
             "plots": plot_paths,
             "cluster_labels": cluster_labels,
             "label_names": label_names,
@@ -1024,6 +1085,8 @@ class RegimeClassifier:
         system_type: str | None,
         filename_suffix: str = "",
         macro_notes: list[dict[str, str]] | None = None,
+        verdict: dict[str, object] | None = None,
+        master_plot: str = "",
     ) -> None:
         """Gera um relatório em Markdown explicando os regimes detectados.
 
@@ -1046,15 +1109,21 @@ class RegimeClassifier:
             "## Resumo por regime",
         ]
         for row in summary:
+            label = row.get("label", row.get("regime", ""))
+            pct = row.get("pct_time", row.get("percent", 0.0))
+            energy = row.get("energy_mean", row.get("mean_energy", 0.0))
+            mean_x = row.get("mean_x", 0.0)
+            mean_v = row.get("mean_v", 0.0)
             lines.append(
-                f"- {row['regime']}: {row['percent']:.2f}% | "
-                f"energia média {row['mean_energy']:.4f} | "
-                f"média x {row['mean_x']:.4f} | média v {row['mean_v']:.4f}"
+                f"- {label}: {float(pct):.2f}% | "
+                f"energia média {float(energy):.4f} | "
+                f"média x {float(mean_x):.4f} | média v {float(mean_v):.4f}"
             )
         lines.extend(
             [
                 "",
                 "## Arquivos gerados",
+                f"- master_plot{filename_suffix}.png" if master_plot else "",
                 f"- regime_map{filename_suffix}.png",
                 f"- labels_over_time{filename_suffix}.png",
                 f"- xv_regime{filename_suffix}.png",
@@ -1069,6 +1138,18 @@ class RegimeClassifier:
                 "Para sistemas desconhecidos, rótulos genéricos são utilizados.",
             ]
         )
+        if verdict:
+            lines.extend(
+                [
+                    "",
+                    "## Veredito",
+                    f"- verdict: {verdict.get('verdict', '')}",
+                    f"- confidence_level: {verdict.get('level', '')}",
+                    f"- score: {verdict.get('score', '')}",
+                    f"- action: {verdict.get('action', '')}",
+                    f"- recommended_horizon: {verdict.get('recommended_horizon', '')}",
+                ]
+            )
         if macro_notes:
             lines.extend(
                 [
@@ -1252,3 +1333,306 @@ class RegimeClassifier:
             pass
 
         return plot_paths
+
+
+def _compute_run_id(**kwargs) -> str:
+    payload = json.dumps(kwargs, sort_keys=True, default=str)
+    return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:12]
+
+
+def _build_context(
+    run_id: str,
+    system_type: str | None,
+    method: str,
+    tau: int,
+    m: int,
+    n_samples: int,
+    dates: np.ndarray | None,
+    filename_suffix: str,
+) -> dict[str, object]:
+    dt = None
+    if dates is not None and len(dates) > 1:
+        try:
+            diffs = np.diff(np.asarray(dates).astype("datetime64[ns]"))
+            dt = float(np.median(diffs.astype("timedelta64[s]").astype(float)))
+        except Exception:
+            dt = None
+    return {
+        "run_id": run_id,
+        "system_type": system_type or "",
+        "method": method,
+        "tau": int(tau),
+        "m": int(m),
+        "n_samples": int(n_samples),
+        "dt_seconds": dt,
+        "filename_suffix": filename_suffix,
+    }
+
+
+def _standardize_summary(
+    rows: list[dict[str, float | str]],
+    labels: np.ndarray,
+    context: dict[str, object],
+) -> list[dict[str, float | str]]:
+    out: list[dict[str, float | str]] = []
+    for row in rows:
+        label = str(row.get("regime", ""))
+        count = float(row.get("count", 0.0))
+        pct = float(row.get("percent", 0.0))
+        base = {
+            "run_id": context.get("run_id", ""),
+            "entity_name": "",
+            "system_type": context.get("system_type", ""),
+            "ticker": "",
+            "freq": "",
+            "method": context.get("method", ""),
+            "n_samples": context.get("n_samples", ""),
+            "dt": context.get("dt_seconds", ""),
+            "m": context.get("m", ""),
+            "tau": context.get("tau", ""),
+            "cluster_id": "",
+            "label": label,
+            "pct_time": pct,
+            "n_segments": float(row.get("segments", 0.0)),
+            "mean_duration": "",
+            "std_duration": "",
+            "energy_mean": float(row.get("mean_energy", np.nan)),
+            "energy_std": float(row.get("std_energy", np.nan)),
+            "entropy_mean": float(row.get("mean_local_entropy", np.nan)),
+            "recurrence_mean": float(row.get("mean_local_rr", np.nan)),
+            "notes": "",
+        }
+        base.update(row)
+        out.append(base)
+    return out
+
+
+def _compute_confidence(
+    embedded: np.ndarray,
+    labels: np.ndarray,
+    cluster_labels: np.ndarray,
+    metrics: list[dict[str, float]],
+    current_label: str,
+) -> dict[str, object]:
+    warnings_list: list[str] = []
+    n = len(labels)
+    if n == 0:
+        return {
+            "score": 0.0,
+            "level": "LOW",
+            "action": "NAO_OPERAR",
+            "recommended_horizon": "curto",
+            "warnings": ["SEM_DADOS"],
+            "breakdown": [],
+            "verdict": "NAO",
+        }
+
+    unique_labels = np.unique(labels)
+    n_clusters = len(unique_labels)
+    if n_clusters == 1:
+        warnings_list.append("COLAPSO_CLUSTER")
+    if n_clusters > 10:
+        warnings_list.append("OVERCLUSTER")
+    if current_label.startswith("state_") or not current_label:
+        warnings_list.append("SEM_ROTULO")
+
+    # transition rate (last 10%)
+    window = max(10, int(0.1 * n))
+    recent = labels[-window:]
+    changes = np.sum(recent[1:] != recent[:-1])
+    transition_rate = float(changes / max(1, (len(recent) - 1)))
+    if transition_rate > 0.3:
+        warnings_list.append("REGIME_INSTAVEL")
+
+    # regime purity
+    current_pct = float(np.mean(recent == recent[-1])) if recent.size else 0.0
+
+    # cluster stability proxy
+    stability = 0.0
+    if embedded.size and n_clusters > 1:
+        centroids = []
+        for lab in unique_labels:
+            centroids.append(np.nanmean(embedded[labels == lab], axis=0))
+        centroids = np.array(centroids)
+        inter = np.mean(
+            np.linalg.norm(centroids[:, None, :] - centroids[None, :, :], axis=2)
+        )
+        intra = 0.0
+        for lab in unique_labels:
+            pts = embedded[labels == lab]
+            if pts.size == 0:
+                continue
+            c = np.nanmean(pts, axis=0)
+            intra += float(np.mean(np.linalg.norm(pts - c, axis=1)))
+        intra = intra / max(1, n_clusters)
+        ratio = intra / max(inter, 1e-6)
+        stability = float(np.clip(1.0 - ratio, 0.0, 1.0))
+
+    # novelty (z-score distance from current cluster centroid)
+    novelty = 0.0
+    if embedded.size:
+        current_cluster = cluster_labels[-1]
+        pts = embedded[cluster_labels == current_cluster]
+        if pts.size:
+            c = np.nanmean(pts, axis=0)
+            dists = np.linalg.norm(pts - c, axis=1)
+            last_dist = float(np.linalg.norm(embedded[-1] - c))
+            if np.std(dists) > 0:
+                z = (last_dist - float(np.mean(dists))) / float(np.std(dists))
+                novelty = float(np.clip(z / 3.0, 0.0, 1.0))
+            else:
+                novelty = 0.0
+        if novelty > 0.7:
+            warnings_list.append("FORA_DISTRIBUICAO")
+
+    # embedding quality proxy
+    embedding_quality = 0.0
+    if metrics:
+        row = min(metrics, key=lambda x: abs(x.get("m", 0) - 0) + abs(x.get("tau", 0) - 0))
+        rr = float(row.get("recurrence_rate", 0.0))
+        embedding_quality = float(np.clip((rr - 0.01) / 0.2, 0.0, 1.0))
+    if embedding_quality < 0.3:
+        warnings_list.append("EMBEDDING_FRACO")
+
+    weights = {
+        "cluster_stability": 0.3,
+        "novelty": 0.2,
+        "transition_rate": 0.2,
+        "regime_purity": 0.15,
+        "embedding_quality": 0.15,
+        "method_agreement": 0.0,
+    }
+    breakdown = []
+    def add_metric(name, raw, norm, weight, comment):
+        breakdown.append(
+            {
+                "metric_name": name,
+                "raw_value": raw,
+                "normalized_value": norm,
+                "weight": weight,
+                "contribution": norm * weight,
+                "comment": comment,
+            }
+        )
+
+    add_metric("cluster_stability", stability, stability, weights["cluster_stability"], "proxy intra/inter")
+    add_metric("novelty", novelty, 1.0 - novelty, weights["novelty"], "fora de distribuicao penaliza")
+    add_metric("transition_rate", transition_rate, 1.0 - transition_rate, weights["transition_rate"], "mudancas recentes")
+    add_metric("regime_purity", current_pct, current_pct, weights["regime_purity"], "dominancia do regime atual")
+    add_metric("embedding_quality", embedding_quality, embedding_quality, weights["embedding_quality"], "recorrencia/entropia proxy")
+    add_metric("method_agreement", 0.0, 0.0, weights["method_agreement"], "nao aplicado")
+
+    score = float(np.clip(sum(item["contribution"] for item in breakdown) * 100.0, 0.0, 100.0))
+    if score >= 70:
+        level = "HIGH"
+        action = "OPERAR"
+        verdict = "SIM"
+        recommended_horizon = "medio"
+    elif score >= 50:
+        level = "MED"
+        action = "REDUZIR_RISCO"
+        verdict = "DEPENDE"
+        recommended_horizon = "curto"
+    else:
+        level = "LOW"
+        action = "NAO_OPERAR"
+        verdict = "NAO"
+        recommended_horizon = "curto"
+
+    return {
+        "score": round(score, 2),
+        "level": level,
+        "action": action,
+        "recommended_horizon": recommended_horizon,
+        "warnings": warnings_list,
+        "breakdown": breakdown,
+        "verdict": verdict,
+    }
+
+
+def _write_meta(path: Path, context: dict[str, object], warnings_list: list[str]) -> None:
+    payload = dict(context)
+    payload["warnings"] = warnings_list
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _write_breakdown(path: Path, confidence: dict[str, object]) -> None:
+    rows = confidence.get("breakdown", [])
+    if not rows:
+        return
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _write_verdict(path: Path, confidence: dict[str, object]) -> None:
+    payload = {k: v for k, v in confidence.items() if k != "breakdown"}
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _plot_master(
+    output_path: Path,
+    series: np.ndarray,
+    embedded: np.ndarray,
+    velocity: np.ndarray,
+    label_names: np.ndarray,
+    confidence: dict[str, object],
+    filename_suffix: str = "",
+) -> str:
+    if plt is None:
+        return ""
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+    labels = np.asarray(label_names)
+    unique_labels = np.unique(labels)
+    cmap = plt.get_cmap("tab10")
+    color_map = {lab: cmap(i % 10) for i, lab in enumerate(unique_labels)}
+
+    # time series
+    ax = axes[0, 0]
+    offset = max(0, len(series) - len(labels))
+    series_aligned = np.asarray(series)[offset : offset + len(labels)]
+    ax.plot(series_aligned, color="#64748b", linewidth=1.0)
+    for lab in unique_labels:
+        mask = labels == lab
+        ax.scatter(
+            np.where(mask)[0],
+            series_aligned[mask],
+            s=6,
+            color=color_map[lab],
+            label=str(lab),
+        )
+    ax.set_title("Serie + regimes")
+
+    # embedding scatter
+    ax = axes[0, 1]
+    if embedded.shape[1] >= 2:
+        for lab in unique_labels:
+            mask = labels == lab
+            ax.scatter(embedded[mask, 0], embedded[mask, 1], s=6, color=color_map[lab])
+        ax.set_title("Embedding (2D)")
+    else:
+        ax.text(0.5, 0.5, "Embedding insuficiente", ha="center")
+
+    # phase portrait
+    ax = axes[1, 0]
+    ax.scatter(embedded[:, 0], velocity, s=6, color="#0f172a", alpha=0.6)
+    ax.set_title("Retrato de fase (x vs v)")
+
+    # text box
+    ax = axes[1, 1]
+    ax.axis("off")
+    text = (
+        f"regime_atual: {labels[-1] if labels.size else ''}\n"
+        f"score: {confidence.get('score')}\n"
+        f"nivel: {confidence.get('level')}\n"
+        f"action: {confidence.get('action')}\n"
+        f"warnings: {', '.join(confidence.get('warnings', []))}"
+    )
+    ax.text(0.02, 0.98, text, va="top", fontsize=10)
+
+    fig.tight_layout()
+    out_path = output_path / f"master_plot{filename_suffix}.png"
+    fig.savefig(out_path, dpi=150)
+    plt.close(fig)
+    return str(out_path)

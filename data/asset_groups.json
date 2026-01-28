@@ -1,0 +1,59 @@
+{
+  "crypto": [
+    "BTC-USD",
+    "ETH-USD"
+  ],
+  "volatility": [
+    "VIX",
+    "^VIX"
+  ],
+  "commodities_broad": [
+    "DBA",
+    "DBC"
+  ],
+  "energy": [
+    "USO",
+    "XLE",
+    "XOP"
+  ],
+  "metals": [
+    "GLD",
+    "SLV"
+  ],
+  "bonds_rates": [
+    "TLT",
+    "IEF",
+    "SHY",
+    "TIP",
+    "LQD",
+    "HYG"
+  ],
+  "fx": [
+    "UUP",
+    "FXE",
+    "FXY"
+  ],
+  "equities_us_broad": [
+    "SPY",
+    "VTI",
+    "DIA",
+    "RSP"
+  ],
+  "equities_us_sectors": [
+    "XLB",
+    "XLF",
+    "XLI",
+    "XLK",
+    "XLP",
+    "XLRE",
+    "XLU",
+    "XLV",
+    "XLY"
+  ],
+  "equities_international": [
+    "EEM",
+    "EFA",
+    "EWJ",
+    "EWZ"
+  ]
+}

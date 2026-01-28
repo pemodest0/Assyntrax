@@ -14,7 +14,7 @@ import pandas as pd
 
 import sys
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -23,6 +23,7 @@ from spa.sanity import ensure_sorted_dates, safe_test_indices, split_hash, valid
 from scripts.finance.yf_fetch_or_load import find_local_data, load_price_series, fetch_yfinance, unify_to_daily, save_cache
 from spa.features.phase_features import compute_phase_features
 from spa.models.baselines import persistence_next, zero_mean_next, ar1_fit, ar1_predict
+from spa.api_records import PredictionRecord, save_prediction_records
 
 
 def safe_name(name):
@@ -668,6 +669,7 @@ def main():
         action="store_true",
         help="Permite baixar dados via rede (desativado por padrão).",
     )
+    parser.add_argument("--emit-api-records", action="store_true", help="Gera api_records.jsonl e api_records.csv")
     args = parser.parse_args()
 
     base_dir = Path(__file__).resolve().parents[1]
@@ -742,6 +744,40 @@ def main():
     summary_df = pd.DataFrame(summary_rows)
     summary_path = out_base / "benchmark_summary.csv"
     summary_df.to_csv(summary_path, index=False)
+
+    if args.emit_api_records:
+        records = []
+        for _, row in summary_df.iterrows():
+            warnings = []
+            if not bool(row.get('passed_baseline', True)):
+                warnings.append('BASELINE_FAIL')
+            records.append(
+                PredictionRecord(
+                    timestamp=str(args.test_end),
+                    asset=row.get('ticker', ''),
+                    timeframe='daily',
+                    horizon=int(row.get('horizon_est')) if not pd.isna(row.get('horizon_est')) else None,
+                    regime_label=None,
+                    regime_confidence=None,
+                    regime_risk=None,
+                    novelty_score=None,
+                    transition_rate=None,
+                    entropy=None,
+                    y_true=None,
+                    y_pred=None,
+                    y_pred_p10=None,
+                    y_pred_p50=None,
+                    y_pred_p90=None,
+                    model_name='takens_knn',
+                    model_family='knn',
+                    forecast_confidence=1.0 if bool(row.get('passed_baseline', False)) else 0.0,
+                    warnings=warnings,
+                    mase_6m=None,
+                    smape_6m=None,
+                    diracc_6m=None,
+                )
+            )
+        save_prediction_records(records, out_base / 'api_records.jsonl', out_base / 'api_records.csv')
 
     if not summary_df.empty:
         ranked = summary_df.sort_values("MAE20")

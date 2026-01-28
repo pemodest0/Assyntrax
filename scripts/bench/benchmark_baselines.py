@@ -126,6 +126,6 @@ if __name__ == '__main__':
             legacy_cfg = Path("dados/configs/top5_assets.json")
             if legacy_cfg.exists():
                 syms = list(json.loads(legacy_cfg.read_text()).values())
-        else:
-            syms = ["SPY", "AAPL", "MSFT", "GOOG", "AMZN"]
+            else:
+                syms = ["SPY", "AAPL", "MSFT", "GOOG", "AMZN"]
     main(syms)
