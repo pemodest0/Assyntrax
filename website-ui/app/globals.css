@@ -22,5 +22,37 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+}
+
+.grid-panel {
+  background-image:
+    linear-gradient(rgba(14, 19, 26, 0.6) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(14, 19, 26, 0.6) 1px, transparent 1px);
+  background-size: 42px 42px;
+  background-position: -1px -1px;
+}
+
+.card-depth {
+  box-shadow:
+    0 0 0 1px rgba(24, 24, 30, 0.8),
+    0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.badge-ok {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #a7f3d0;
+}
+
+.badge-warn {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #fde68a;
+}
+
+.badge-danger {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #fecaca;
 }

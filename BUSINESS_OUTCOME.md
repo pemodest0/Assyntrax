@@ -8,6 +8,11 @@ posicionado como produto. O foco é honestidade metodológica e utilidade práti
 Ao final da bateria de testes, o motor deve emitir um veredito objetivo sobre
 previsibilidade, com horizonte de validade e estabilidade ao longo do tempo.
 
+## 0) Ideia principal (produto)
+- Regime -> confianca -> forecast (opcional)
+- Filtro de estrutura, nao promessa de prever mercado
+- Sempre mostrar quando falha e por que
+
 Exemplo de declaração:
 
 > “Após uma bateria extensiva de testes, concluímos que a série X apresenta
@@ -53,6 +58,11 @@ O veredito será entregue como:
 - Se o modelo falhar, o veredito dirá “falhou”.
 - Sem ajustes ad hoc para “parecer bom”.
 - Preferimos subestimar a previsibilidade a inflar resultados.
+
+## Anti-enganacao (sempre)
+- Comparar com baseline
+- Mostrar metricas e alertas
+- Expor quando nao ha estrutura
 
 ## 6) Próximos passos
 

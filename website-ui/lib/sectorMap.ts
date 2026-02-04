@@ -1,0 +1,45 @@
+export const sectorMap: Record<string, string[]> = {
+  finance: [
+    "SPY",
+    "QQQ",
+    "DIA",
+    "IWM",
+    "VTI",
+    "VT",
+    "RSP",
+    "XLF",
+    "KRE",
+    "LQD",
+    "HYG",
+    "SHY",
+    "IEF",
+    "TLT",
+    "TIP",
+    "UUP",
+    "FXE",
+    "FXY",
+    "VIX",
+    "^VIX",
+  ],
+  logistics: [
+    "USO",
+    "DBC",
+    "DBA",
+    "XLE",
+    "XOP",
+    "XLB",
+    "GLD",
+    "SLV",
+    "BTC-USD",
+    "ETH-USD",
+  ],
+  realestate: [
+    "XLRE",
+  ],
+};
+
+export const sectorLabels: Record<string, string> = {
+  finance: "Financeiro",
+  logistics: "Logístico",
+  realestate: "Imobiliário",
+};

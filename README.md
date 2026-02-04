@@ -1,5 +1,15 @@
 # Stochastic Process Analyzer (SPA) — Energia
 
+## Idea Principal
+- Regime first, then confidence
+- Forecast is optional and gated
+- Not a promise to predict markets; it is a filter for structure
+
+## Base Teorica (Regimes)
+Para a fundamentacao matematica detalhada do motor de regimes (Takens, MSM,
+clustering espectral, classificacao de regimes), veja:
+- `docs/REGIME_METHODS_STUDY.md`
+
 SPA e um produto demo tecnico para analisar series temporais reais (tempo + metrica)
 como processos estocasticos efetivos em tempo discreto. Nesta fase, o foco e energia
 com uma vertical slice minima (sem drift/difusao).

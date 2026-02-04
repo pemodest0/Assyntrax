@@ -4,25 +4,23 @@ import Link from "next/link";
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-zinc-950 to-black text-zinc-100">
-      <div className="mx-auto max-w-[1400px] px-4 py-6">
+      <div className="mx-auto max-w-none w-full px-4 py-6">
         <div className="grid grid-cols-12 gap-6">
           <aside className="col-span-12 lg:col-span-3">
             <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 backdrop-blur shadow-lg p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-lg font-semibold tracking-tight">Assyntrax</div>
-                  <div className="text-xs text-zinc-400">Regime &amp; Risk Engine</div>
+                  <div className="text-xs text-zinc-400">Regimes &amp; Diagnóstico</div>
                 </div>
                 <span className="text-[10px] px-2 py-1 rounded-full border border-zinc-700 text-zinc-300">
-                  Production
+                  Institucional
                 </span>
               </div>
 
               <nav className="mt-6 space-y-1 text-sm">
                 <NavItem href="/app/dashboard" label="Dashboard" />
-                <NavItem href="/app/assets" label="Assets" />
-                <NavItem href="/app/groups" label="Grupos" />
-                <NavItem href="/app/health" label="System Health" />
+                <NavItem href="/app/principles" label="Princípios" />
               </nav>
 
               <div className="mt-6 border-t border-zinc-800 pt-4 text-xs text-zinc-400">
@@ -37,7 +35,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </aside>
 
           <main className="col-span-12 lg:col-span-9">
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 backdrop-blur shadow-lg">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 backdrop-blur shadow-lg w-full">
               {children}
             </div>
           </main>

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="540" viewBox="0 0 900 540">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#0b0b0d"/>
+      <stop offset="100%" stop-color="#141419"/>
+    </linearGradient>
+    <linearGradient id="line" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0%" stop-color="#d4d4d8"/>
+      <stop offset="100%" stop-color="#6b7280"/>
+    </linearGradient>
+  </defs>
+  <rect width="900" height="540" rx="24" fill="url(#bg)"/>
+  <rect x="36" y="40" width="240" height="120" rx="12" fill="#111116" stroke="#2a2a31"/>
+  <rect x="320" y="40" width="540" height="120" rx="12" fill="#111116" stroke="#2a2a31"/>
+  <rect x="36" y="200" width="824" height="300" rx="16" fill="#0f0f13" stroke="#24242b"/>
+  <path d="M80 420 C180 360, 280 380, 360 330 C460 270, 560 320, 680 260 C740 230, 800 240, 840 200" stroke="url(#line)" stroke-width="3" fill="none"/>
+  <text x="60" y="90" fill="#e5e7eb" font-family="Arial, Helvetica, sans-serif" font-size="18">Dashboard</text>
+  <text x="60" y="120" fill="#9ca3af" font-family="Arial, Helvetica, sans-serif" font-size="12">Regime + Risk Overview</text>
+  <text x="340" y="90" fill="#e5e7eb" font-family="Arial, Helvetica, sans-serif" font-size="18">Walk-forward</text>
+  <text x="340" y="120" fill="#9ca3af" font-family="Arial, Helvetica, sans-serif" font-size="12">Performance and diagnostics</text>
+</svg>

@@ -1,0 +1,122 @@
+[
+  {
+    "asset": "SPY",
+    "group": "equities_us_broad",
+    "timeframe": "daily",
+    "asof": "2026-01-29",
+    "risk": { "label": "HIGH_VOL", "p": 0.64, "model": "RF" },
+    "state": { "label": "TRANSITION", "confidence": 0.71 },
+    "predictability": { "score": 52, "label": "MEDIUM" },
+    "forecast_diag": { "mase": 0.95, "dir_acc": 0.504, "alerts": ["DIRECAO_FRACA"] },
+    "alerts": ["REGIME_INSTAVEL"],
+    "links": { "json": "/api/assets?file=SPY_daily.json" }
+  },
+  {
+    "asset": "QQQ",
+    "group": "equities_us_tech",
+    "timeframe": "daily",
+    "asof": "2026-01-29",
+    "risk": { "label": "HIGH_VOL", "p": 0.62, "model": "RF" },
+    "state": { "label": "UNSTABLE", "confidence": 0.79 },
+    "predictability": { "score": 45, "label": "LOW" },
+    "forecast_diag": { "mase": 1.1, "dir_acc": 0.491, "alerts": ["DIRECAO_FRACA"] },
+    "alerts": ["REGIME_INSTAVEL"],
+    "links": { "json": "/api/assets?file=QQQ_daily.json" }
+  },
+  {
+    "asset": "IWM",
+    "group": "equities_us_smallcap",
+    "timeframe": "daily",
+    "asof": "2026-01-29",
+    "risk": { "label": "HIGH_VOL", "p": 0.58, "model": "RF" },
+    "state": { "label": "TRANSITION", "confidence": 0.62 },
+    "predictability": { "score": 41, "label": "LOW" },
+    "forecast_diag": { "mase": 1.05, "dir_acc": 0.497, "alerts": ["DIRECAO_FRACA"] },
+    "alerts": ["REGIME_INSTAVEL"],
+    "links": { "json": "/api/assets?file=IWM_daily.json" }
+  },
+  {
+    "asset": "GLD",
+    "group": "metals",
+    "timeframe": "daily",
+    "asof": "2026-01-29",
+    "risk": { "label": "LOW_VOL", "p": 0.31, "model": "RF" },
+    "state": { "label": "STABLE", "confidence": 0.73 },
+    "predictability": { "score": 60, "label": "MEDIUM" },
+    "forecast_diag": { "mase": 0.9, "dir_acc": 0.521 },
+    "alerts": [],
+    "links": { "json": "/api/assets?file=GLD_daily.json" }
+  },
+  {
+    "asset": "TLT",
+    "group": "rates",
+    "timeframe": "daily",
+    "asof": "2026-01-29",
+    "risk": { "label": "LOW_VOL", "p": 0.36, "model": "RF" },
+    "state": { "label": "STABLE", "confidence": 0.69 },
+    "predictability": { "score": 55, "label": "MEDIUM" },
+    "forecast_diag": { "mase": 0.96, "dir_acc": 0.509 },
+    "alerts": [],
+    "links": { "json": "/api/assets?file=TLT_daily.json" }
+  },
+  {
+    "asset": "XLE",
+    "group": "energy",
+    "timeframe": "daily",
+    "asof": "2026-01-29",
+    "risk": { "label": "HIGH_VOL", "p": 0.6, "model": "RF" },
+    "state": { "label": "TRANSITION", "confidence": 0.6 },
+    "predictability": { "score": 50, "label": "MEDIUM" },
+    "forecast_diag": { "mase": 0.98, "dir_acc": 0.506 },
+    "alerts": ["REGIME_INSTAVEL"],
+    "links": { "json": "/api/assets?file=XLE_daily.json" }
+  },
+  {
+    "asset": "USO",
+    "group": "energy",
+    "timeframe": "daily",
+    "asof": "2026-01-29",
+    "risk": { "label": "HIGH_VOL", "p": 0.82, "model": "RF" },
+    "state": { "label": "UNSTABLE", "confidence": 0.84 },
+    "predictability": { "score": 38, "label": "LOW" },
+    "forecast_diag": { "mase": 1.2, "dir_acc": 0.486, "alerts": ["DIRECAO_FRACA"] },
+    "alerts": ["REGIME_INSTAVEL"],
+    "links": { "json": "/api/assets?file=USO_daily.json" }
+  },
+  {
+    "asset": "BTC-USD",
+    "group": "crypto",
+    "timeframe": "daily",
+    "asof": "2026-01-29",
+    "risk": { "label": "HIGH_VOL", "p": 0.9, "model": "RF" },
+    "state": { "label": "CHAOTIC", "confidence": 0.86 },
+    "predictability": { "score": 30, "label": "LOW" },
+    "forecast_diag": { "mase": 1.28, "dir_acc": 0.48, "alerts": ["DIRECAO_FRACA"] },
+    "alerts": ["REGIME_INSTAVEL"],
+    "links": { "json": "/api/assets?file=BTC-USD_daily.json" }
+  },
+  {
+    "asset": "VIX",
+    "group": "vol",
+    "timeframe": "daily",
+    "asof": "2026-01-29",
+    "risk": { "label": "HIGH_VOL", "p": 0.94, "model": "RF" },
+    "state": { "label": "UNSTABLE", "confidence": 0.89 },
+    "predictability": { "score": 34, "label": "LOW" },
+    "forecast_diag": { "mase": 1.3, "dir_acc": 0.475, "alerts": ["DIRECAO_FRACA"] },
+    "alerts": ["REGIME_INSTAVEL"],
+    "links": { "json": "/api/assets?file=VIX_daily.json" }
+  },
+  {
+    "asset": "FXE",
+    "group": "fx",
+    "timeframe": "daily",
+    "asof": "2026-01-29",
+    "risk": { "label": "LOW_VOL", "p": 0.25, "model": "RF" },
+    "state": { "label": "STABLE", "confidence": 0.75 },
+    "predictability": { "score": 65, "label": "HIGH" },
+    "forecast_diag": { "mase": 0.82, "dir_acc": 0.532 },
+    "alerts": [],
+    "links": { "json": "/api/assets?file=FXE_daily.json" }
+  }
+]
