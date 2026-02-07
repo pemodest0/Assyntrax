@@ -16,6 +16,8 @@ def write_asset_report(
     graph_params: dict[str, Any],
     recommendation: str,
     gating: dict[str, Any] | None = None,
+    diagnostics: dict[str, Any] | None = None,
+    **_: Any,
 ) -> Path:
     base = f"{asset}_{timeframe}"
     report_path = outdir / "assets" / f"{base}_report.md"
@@ -74,6 +76,14 @@ Escape = 1 - confiança.
 
 **Qualidade do grafo**
 - {quality}
+"""
+    if diagnostics:
+        report += f"""
+
+**Diagnósticos de dinâmica (experimental)**
+- {diagnostics}
+"""
+    report += f"""
 
 ## Arquivos gerados
 - embedding: assets/{base}_embedding.csv

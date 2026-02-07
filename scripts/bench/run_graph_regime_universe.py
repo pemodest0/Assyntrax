@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT))
 
 from graph_engine.core import run_graph_engine  # noqa: E402
 from graph_engine.embedding import estimate_embedding_params  # noqa: E402
+from graph_engine.diagnostics import compute_diagnostics  # noqa: E402
 from graph_engine.plots import (  # noqa: E402
     plot_embedding_2d,
     plot_stretch_hist,
@@ -30,6 +31,29 @@ from graph_engine.export import write_asset_bundle, write_universe  # noqa: E402
 from graph_engine.merge_existing import merge_forecast_risk  # noqa: E402
 from graph_engine.sanity import sanity_alerts  # noqa: E402
 from graph_engine.report import write_asset_report  # noqa: E402
+from graph_engine.risk_thresholds import get_risk_thresholds  # noqa: E402
+
+
+def _load_asset_groups(path: Path = Path("data/asset_groups.csv")) -> dict:
+    if not path.exists():
+        return {}
+    mapping = {}
+    try:
+        import csv
+
+        with path.open("r", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            for row in reader:
+                asset = (row.get("asset") or "").strip()
+                group = (row.get("group") or "").strip()
+                if asset:
+                    mapping[asset] = group or "unknown"
+    except Exception:
+        return {}
+    return mapping
+
+
+ASSET_GROUPS = _load_asset_groups()
 
 
 def load_series_from_csv(path: Path, timeframe: str) -> np.ndarray:
@@ -122,6 +146,68 @@ def _rolling_mode(labels: list[str], window: int = 3) -> list[str]:
     return out
 
 
+def _graph_entropy_metrics(p_matrix: np.ndarray) -> dict:
+    if p_matrix is None:
+        return {"shannon": None, "von_neumann": None}
+    p = np.array(p_matrix, dtype=float)
+    if p.size == 0:
+        return {"shannon": None, "von_neumann": None}
+    row_sums = p.sum(axis=1, keepdims=True)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        p_norm = np.where(row_sums > 0, p / row_sums, 0.0)
+        logp = np.where(p_norm > 0, np.log(p_norm), 0.0)
+    shannon_rows = -np.sum(p_norm * logp, axis=1)
+    shannon = float(np.mean(shannon_rows)) if shannon_rows.size else 0.0
+    # Von Neumann graph entropy (symmetric adjacency)
+    a = 0.5 * (p_norm + p_norm.T)
+    deg = np.diag(a.sum(axis=1))
+    lap = deg - a
+    trace = float(np.trace(lap))
+    if trace <= 0:
+        von_neumann = 0.0
+    else:
+        rho = lap / trace
+        eigvals = np.linalg.eigvalsh(rho)
+        eigvals = eigvals[eigvals > 1e-12]
+        von_neumann = float(-np.sum(eigvals * np.log(eigvals))) if eigvals.size else 0.0
+    return {"shannon": shannon, "von_neumann": von_neumann}
+
+
+def _graph_entropy_delta(outdir: Path, ticker: str, timeframe: str, current: dict) -> dict:
+    prior_path = outdir / "assets" / f"{ticker}_{timeframe}.json"
+    if not prior_path.exists():
+        return {"delta": None, "prev": None}
+    try:
+        import json
+
+        prior = json.loads(prior_path.read_text())
+        prev = ((prior.get("governance") or {}).get("stress") or {}).get("graph_entropy") or {}
+        prev_val = prev.get("shannon")
+        cur_val = current.get("shannon")
+        if isinstance(prev_val, (int, float)) and isinstance(cur_val, (int, float)):
+            return {"delta": float(cur_val - prev_val), "prev": float(prev_val)}
+    except Exception:
+        return {"delta": None, "prev": None}
+    return {"delta": None, "prev": None}
+
+
+def _transition_matrix_from_labels(labels: list[str]) -> np.ndarray:
+    if len(labels) < 2:
+        return np.zeros((1, 1), dtype=float)
+    uniq = sorted(set(labels))
+    idx = {lbl: i for i, lbl in enumerate(uniq)}
+    n = len(uniq)
+    mat = np.zeros((n, n), dtype=float)
+    for i in range(len(labels) - 1):
+        mat[idx[labels[i]], idx[labels[i + 1]]] += 1.0
+    return mat
+
+
+def _graph_entropy_from_labels(labels: list[str]) -> dict:
+    mat = _transition_matrix_from_labels(labels)
+    return _graph_entropy_metrics(mat)
+
+
 def _align_lag(labels: list[str], ref: list[str], max_lag: int = 6) -> tuple[list[str], int, float]:
     if not labels or not ref:
         return labels, 0, 0.0
@@ -165,6 +251,12 @@ def build_asset_output(
     k_nn: int,
     theiler: int,
     alpha: float,
+    micro_method: str,
+    micro_params: dict | None,
+    micro_smooth: str | None,
+    micro_smooth_noise: float,
+    state_smooth: str | None,
+    state_smooth_noise: float,
     mode: str,
     m: int | None,
     tau: int | None,
@@ -191,13 +283,33 @@ def build_asset_output(
         m=m_use,
         tau=tau_use,
         n_micro=effective_micro,
+        micro_method=micro_method,
+        micro_params=micro_params,
+        micro_smooth=micro_smooth,
+        micro_smooth_noise=micro_smooth_noise,
         n_regimes=n_regimes,
         k_nn=effective_knn,
         theiler=theiler,
         alpha=alpha,
         seed=7,
         method=method,
+        timeframe=timeframe,
+        state_smooth=state_smooth,
+        state_smooth_noise=state_smooth_noise,
     )
+
+    # Recompute thresholds with timeframe-specific calibration
+    from graph_engine.labels import compute_thresholds  # local import to avoid cycles
+    conf_smoothed = result.confidence
+    escape_series = 1.0 - conf_smoothed
+    thresholds = compute_thresholds(
+        escape_series,
+        result.stretch_mu,
+        result.stretch_frac_pos,
+        conf_smoothed,
+        timeframe=timeframe,
+    )
+    result.thresholds = thresholds
 
     raw_labels = [str(lbl) for lbl in result.state_labels]
     smooth_labels = _smooth_labels(
@@ -237,11 +349,12 @@ def build_asset_output(
     merged = merge_forecast_risk(ticker, timeframe, outdir)
 
     # thresholds + quality already computed in result
+    asset_group = ASSET_GROUPS.get(ticker, "unknown")
     asset = GraphAsset(
         asset=ticker,
         timeframe=timeframe,
         asof=iso_now(),
-        group="unknown",
+        group=asset_group,
         state=GraphState(label=str(state_label), confidence=conf_now),
         graph=GraphConfig(n_micro=effective_micro, k_nn=effective_knn, theiler=theiler, alpha=alpha, method=method),
         metrics=GraphMetrics(
@@ -323,23 +436,69 @@ def build_asset_output(
         if aligned_labels[i] != aligned_labels[i - 1]:
             recent_changes += 1
     recent_change_rate = recent_changes / max(1, window)
+    recent_labels = aligned_labels[-window:] if len(aligned_labels) > window else aligned_labels
+    prior_labels = aligned_labels[:-window] if len(aligned_labels) > window else aligned_labels
+    graph_entropy_recent = _graph_entropy_from_labels(recent_labels)
+    graph_entropy_prior = _graph_entropy_from_labels(prior_labels)
+    ge_delta_local = None
+    if isinstance(graph_entropy_recent.get("shannon"), (int, float)) and isinstance(
+        graph_entropy_prior.get("shannon"), (int, float)
+    ):
+        ge_delta_local = float(graph_entropy_recent["shannon"] - graph_entropy_prior["shannon"])
 
     entropy_rate = float(result.quality.get("entropy_rate", 0.0)) if result.quality else 0.0
     entropy_norm = float(entropy_rate / max(1e-12, np.log(effective_micro + 1)))
     lcc_ratio = float(result.quality.get("lcc_ratio", 0.0)) if result.quality else 0.0
     deg_low_frac = float(result.quality.get("deg_low_frac", 1.0)) if result.quality else 1.0
     active_edge_frac = float(result.quality.get("active_edge_frac", 0.0)) if result.quality else 0.0
+    graph_entropy = _graph_entropy_metrics(result.p_matrix)
+    graph_entropy_delta = _graph_entropy_delta(outdir, ticker, timeframe, graph_entropy)
 
     stress_flags: List[str] = []
-    if recent_change_rate > 0.55 or change_rate > 0.45:
+    if recent_change_rate > 0.35 or change_rate > 0.30:
         stress_flags.append("FAST_REGIME_CHANGES")
     if lcc_ratio < 0.7 or deg_low_frac > 0.6 or active_edge_frac < 0.05:
         stress_flags.append("MICROSTATES_DEGENERATE")
-    if entropy_norm > 0.95:
+    # entropy anomaly should be relative, not absolute
+    entropy_z = 0.0
+    if result.quality and isinstance(result.quality.get("entropy_norms"), list):
+        # not used in current pipeline, placeholder for future rolling stats
+        pass
+    # approximate z-score using a small local window to avoid global leak
+    local_entropy = entropy_norm
+    entropy_z = float((local_entropy - 0.99) / max(1e-6, 0.01))
+    if entropy_z > 1.5 and (recent_change_rate > 0.02 or change_rate > 0.02):
         stress_flags.append("ENTROPY_ANOMAL")
+    if isinstance(graph_entropy_delta.get("delta"), (int, float)):
+        if abs(graph_entropy_delta["delta"]) > 0.18:
+            stress_flags.append("GRAPH_ENTROPY_SHIFT")
+    if isinstance(ge_delta_local, (int, float)):
+        if abs(ge_delta_local) > 0.10 and recent_change_rate > 0.04:
+            stress_flags.append("GRAPH_ENTROPY_SHIFT_LOCAL")
+    if conf_now < conf_floor:
+        stress_flags.append("CONFIDENCE_DROP")
 
-    if len(stress_flags) >= 2 and quality_score < 0.45:
+    if (len(stress_flags) >= 2 and quality_score < 0.6) or len(stress_flags) >= 3:
         alerts.append("MODE_UNSTABLE")
+
+    # Score-based proxy risk (calibrated on official regimes for weekly).
+    risk_thresholds = get_risk_thresholds(ticker, timeframe, group=asset_group)
+    weights = {"UNSTABLE": 1.0, "TRANSITION": 0.6, "NOISY": 0.7, "STABLE": 0.0}
+    risk_score = float(weights.get(str(state_label), 0.0) * (1.0 - conf_now) * quality_score * recent_change_rate)
+    risk_flags: list[str] = []
+    for proxy, thr in risk_thresholds.items():
+        if thr is None:
+            continue
+        if risk_score >= float(thr):
+            risk_flags.append(f"RISK_{proxy.upper()}")
+    if risk_flags:
+        alerts.extend(risk_flags)
+        if "MODE_UNSTABLE" not in alerts:
+            alerts.append("MODE_UNSTABLE")
+    # Weekly: enable MODE_UNSTABLE when multiple internal alerts accumulate
+    if timeframe == "weekly" and "MODE_UNSTABLE" not in alerts:
+        if "REGIME_INSTAVEL" in alerts and "LOW_CONFIDENCE" in alerts:
+            alerts.append("MODE_UNSTABLE")
 
     asset.governance = {
         "drift_score": drift_score,
@@ -357,13 +516,53 @@ def build_asset_output(
             "recent_change_rate": recent_change_rate,
             "entropy_rate": entropy_rate,
             "entropy_norm": entropy_norm,
+            "graph_entropy": graph_entropy,
+            "graph_entropy_delta": graph_entropy_delta,
+            "graph_entropy_recent": graph_entropy_recent,
+            "graph_entropy_prior": graph_entropy_prior,
+            "graph_entropy_delta_local": ge_delta_local,
             "lcc_ratio": lcc_ratio,
             "deg_low_frac": deg_low_frac,
             "active_edge_frac": active_edge_frac,
         },
     }
+    asset.risk = {
+        "score": risk_score,
+        "recent_change_rate": recent_change_rate,
+        "thresholds": risk_thresholds,
+        "flags": list(risk_flags),
+        "external": merged.get("risk"),
+    }
 
-    base_stability = float(1.0 - asset.metrics.escape_prob)
+    # Diagnosticos dinamicos (experimental, nao bloqueia)
+    asset.diagnostics = compute_diagnostics(series, m=m_use, tau=tau_use, theiler=theiler)
+    if asset.diagnostics is None:
+        asset.diagnostics = {}
+    asset.diagnostics["graph_entropy"] = graph_entropy
+    asset.diagnostics["graph_entropy_delta"] = graph_entropy_delta
+    asset.diagnostics["graph_entropy_recent"] = graph_entropy_recent
+    asset.diagnostics["graph_entropy_prior"] = graph_entropy_prior
+    asset.diagnostics["graph_entropy_delta_local"] = ge_delta_local
+    ews = asset.diagnostics.get("ews", {}) if isinstance(asset.diagnostics, dict) else {}
+    cpd = asset.diagnostics.get("cpd", {}) if isinstance(asset.diagnostics, dict) else {}
+    if isinstance(ews, dict):
+        ar1_slope = ews.get("ar1_slope")
+        var_slope = ews.get("var_slope")
+        if isinstance(ar1_slope, (int, float)) and isinstance(var_slope, (int, float)):
+            if ar1_slope > 0.01 and var_slope > 0.0:
+                stress_flags.append("EWS_RISING")
+    if isinstance(cpd, dict):
+        last_offset = cpd.get("cpd_last_offset")
+        if isinstance(last_offset, (int, float)) and last_offset <= max(15, window // 2):
+            stress_flags.append("CPD_RECENT")
+        recent = cpd.get("recent") if isinstance(cpd.get("recent"), dict) else {}
+        recent_off = recent.get("cpd_last_offset") if isinstance(recent, dict) else None
+        if isinstance(recent_off, (int, float)) and recent_off <= 20:
+            stress_flags.append("CPD_RECENT")
+    if "MODE_UNSTABLE" not in alerts and ((len(stress_flags) >= 2 and quality_score < 0.6) or len(stress_flags) >= 3):
+        alerts.append("MODE_UNSTABLE")
+
+    base_stability = float(1.0 - asset.metrics.escape_prob) if asset.metrics else 0.0
     stability_score = float(max(0.0, base_stability * quality_score * (1.0 - change_rate)))
     instability_score = float(1.0 - stability_score)
     predictability_score = float(max(0.0, stability_score * (1.0 - max(0.0, asset.metrics.stretch_frac_pos))))
@@ -419,6 +618,7 @@ def build_asset_output(
         graph_params=graph_params,
         recommendation=asset.recommendation or "USE",
         gating=asset.gating,
+        diagnostics=asset.diagnostics,
     )
 
     plots_dir = (outdir / "assets" / f"{ticker}_{timeframe}_plots")
@@ -518,6 +718,12 @@ def main() -> None:
     parser.add_argument("--k-nn", type=int, default=10)
     parser.add_argument("--theiler", type=int, default=10)
     parser.add_argument("--alpha", type=float, default=2.0)
+    parser.add_argument("--micro-method", default="kmeans", choices=["kmeans", "hdbscan", "hdbscan_hmm", "dbscan"])
+    parser.add_argument("--micro-smooth", default="none", choices=["none", "hmm"])
+    parser.add_argument("--micro-smooth-noise", type=float, default=0.05)
+    parser.add_argument("--state-smooth", default="none", choices=["none", "hmm"])
+    parser.add_argument("--state-smooth-noise", type=float, default=0.05)
+    parser.add_argument("--micro-params", default="", help="JSON string with clustering params")
     parser.add_argument("--metastable-method", default="spectral", choices=["spectral", "pcca"])
     parser.add_argument("--m", type=int, default=3, help="Embedding dimension (manual default)")
     parser.add_argument("--tau", type=int, default=1, help="Embedding lag (manual default)")
@@ -541,6 +747,13 @@ def main() -> None:
             t = t[:-4]
         tickers.append(t)
     timeframes = [t.strip() for t in args.timeframes.split(",") if t.strip()]
+
+    micro_params = None
+    if args.micro_params:
+        try:
+            micro_params = json.loads(args.micro_params)
+        except Exception:
+            micro_params = None
 
     universe_daily: List[GraphAsset] = []
     universe_weekly: List[GraphAsset] = []
@@ -578,6 +791,12 @@ def main() -> None:
             k_nn=args.k_nn,
             theiler=args.theiler,
             alpha=args.alpha,
+            micro_method=args.micro_method,
+            micro_params=micro_params,
+            micro_smooth=None if args.micro_smooth == "none" else args.micro_smooth,
+            micro_smooth_noise=args.micro_smooth_noise,
+            state_smooth=None if args.state_smooth == "none" else args.state_smooth,
+            state_smooth_noise=args.state_smooth_noise,
             mode=args.mode,
             m=args.m,
             tau=args.tau,
@@ -605,6 +824,58 @@ def main() -> None:
             universe_daily.append(asset)
         else:
             universe_weekly.append(asset)
+
+    def _apply_entropy_percentile(universe: list[GraphAsset], percentile: float = 0.9) -> None:
+        deltas = []
+        for asset in universe:
+            delta = (
+                (asset.governance or {})
+                .get("stress", {})
+                .get("graph_entropy_delta_local")
+            )
+            if isinstance(delta, (int, float)):
+                deltas.append(abs(float(delta)))
+        if not deltas:
+            return
+        threshold = float(np.quantile(np.array(deltas, dtype=float), percentile))
+        if threshold <= 0:
+            return
+        for asset in universe:
+            stress = (asset.governance or {}).get("stress", {})
+            delta = stress.get("graph_entropy_delta_local")
+            if not isinstance(delta, (int, float)):
+                continue
+            if abs(float(delta)) >= threshold:
+                flags = stress.get("flags") or []
+                if "GRAPH_ENTROPY_SHIFT_P90" not in flags:
+                    flags.append("GRAPH_ENTROPY_SHIFT_P90")
+                stress["flags"] = flags
+                stress["graph_entropy_delta_threshold"] = threshold
+                (asset.governance or {})["stress"] = stress
+                # elevate to MODE_UNSTABLE when entropy jump co-occurs with stress
+                change_rate = (stress or {}).get("change_rate", 0.0)
+                if change_rate > 0.25 and "MODE_UNSTABLE" not in (asset.alerts or []):
+                    asset.alerts.append("MODE_UNSTABLE")
+
+    if universe_daily:
+        _apply_entropy_percentile(universe_daily)
+    if universe_weekly:
+        _apply_entropy_percentile(universe_weekly)
+
+    # Rewrite asset jsons with updated stress flags
+    assets_dir = outdir / "assets"
+    for asset in universe_daily + universe_weekly:
+        asset_path = assets_dir / f"{asset.asset}_{asset.timeframe}.json"
+        asset_path.write_text(json.dumps(asset.to_dict(), indent=2), encoding="utf-8")
+    if audit_rows:
+        audit_flags = {
+            (asset.asset, asset.timeframe): (asset.governance or {}).get("stress", {}).get("flags")
+            for asset in (universe_daily + universe_weekly)
+        }
+        for row in audit_rows:
+            key = (row.get("asset"), row.get("timeframe"))
+            if key in audit_flags:
+                row["stress_flags"] = audit_flags[key] or []
 
     if universe_weekly:
         write_universe(universe_weekly, outdir / "universe_weekly.json")

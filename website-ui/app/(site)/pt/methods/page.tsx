@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import TransitionDiagram from "@/components/visuals/TransitionDiagram";
+import PipelineFlow from "@/components/visuals/PipelineFlow";
 
 const topics = [
   {
@@ -92,7 +94,24 @@ export default function MethodsPage() {
   const current = useMemo(() => topics.find((t) => t.id === active) || topics[0], [active]);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-8">
+    <div className="space-y-10">
+      <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] gap-10 items-center">
+        <div className="space-y-3">
+          <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Métodos</div>
+          <h1 className="text-4xl md:text-5xl font-semibold tracking-tight">
+            Fundamentos científicos com execução prática
+          </h1>
+          <p className="text-zinc-300 max-w-3xl text-lg">
+            Diagnóstico de estado antes de qualquer previsão. Cada tópico traz a explicação leiga,
+            o formalismo e a aplicação prática.
+          </p>
+        </div>
+        <TransitionDiagram />
+      </div>
+
+      <PipelineFlow />
+
+      <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-8">
       <aside className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 h-fit">
         <div className="text-xs uppercase tracking-[0.3em] text-zinc-500">Tópicos</div>
         <div className="mt-4 flex flex-col gap-2">
@@ -114,11 +133,7 @@ export default function MethodsPage() {
 
       <section className="space-y-6">
         <div className="space-y-3">
-          <h1 className="text-4xl font-semibold tracking-tight">Métodos &amp; Filosofia</h1>
-          <p className="text-zinc-300 max-w-3xl">
-            Diagnosticamos o estado do sistema. Forecast sem consciência de regime é extrapolação
-            cega. Selecione um tópico para ver a explicação leiga, o formalismo e a aplicação.
-          </p>
+          <div className="text-xs uppercase tracking-[0.3em] text-zinc-500">Detalhe do tópico</div>
         </div>
 
         <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-6">
@@ -130,6 +145,7 @@ export default function MethodsPage() {
           </div>
         </div>
       </section>
+      </div>
     </div>
   );
 }

@@ -19,6 +19,13 @@ def metastable_regimes(
     seed: int = 7,
     method: str = "spectral",
 ) -> np.ndarray:
+    n = p_matrix.shape[0]
+    if n == 0:
+        return np.array([], dtype=int)
+    if n_regimes <= 1:
+        return np.zeros(n, dtype=int)
+    if n_regimes > n:
+        n_regimes = n
     affinity = (p_matrix + p_matrix.T) / 2.0
     if method == "pcca":
         return _pcca_like(p_matrix, n_regimes=n_regimes, seed=seed)

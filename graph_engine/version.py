@@ -1,1 +1,1 @@
-ENGINE_VERSION = "2026.02.03-layer2-3"
+ENGINE_VERSION = "2026.02.06-sector-risk-v1"

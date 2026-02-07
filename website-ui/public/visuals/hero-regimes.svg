@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-label="Faixas de regime">
+  <rect width="1600" height="900" fill="#050507"/>
+  <rect x="0" y="0" width="320" height="900" fill="#1b2b26" opacity="0.6"/>
+  <rect x="320" y="0" width="320" height="900" fill="#2a1f14" opacity="0.55"/>
+  <rect x="640" y="0" width="320" height="900" fill="#2b1420" opacity="0.5"/>
+  <rect x="960" y="0" width="320" height="900" fill="#1b2b26" opacity="0.55"/>
+  <rect x="1280" y="0" width="320" height="900" fill="#2a1f14" opacity="0.5"/>
+  <g stroke="#38bdf8" stroke-width="3" fill="none">
+    <path d="M80 720 C 260 560, 460 600, 640 480 C 860 320, 1120 380, 1520 220"/>
+  </g>
+  <g stroke="#f97316" stroke-width="2" fill="none" opacity="0.7">
+    <path d="M100 760 C 260 640, 420 720, 640 600 C 860 520, 1160 520, 1480 360"/>
+  </g>
+  <g stroke="#22c55e" stroke-width="2" fill="none" opacity="0.7">
+    <path d="M120 680 C 280 520, 520 520, 720 420 C 960 300, 1200 360, 1480 200"/>
+  </g>
+</svg>

@@ -86,7 +86,7 @@ export default function SiteHeader() {
         </div>
         <Link
           className="rounded-xl bg-zinc-100 text-black px-3 py-2 font-medium hover:bg-white transition"
-          href="/ativos"
+          href="/app/dashboard"
         >
           {labels.open}
         </Link>

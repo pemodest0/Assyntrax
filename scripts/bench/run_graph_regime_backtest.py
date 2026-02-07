@@ -68,6 +68,8 @@ def backtest_series(
     method: str,
     m: int,
     tau: int,
+    purge: int,
+    embargo: int,
 ) -> Dict[str, any]:
     years = _year_slices(series.index)
     results = {}
@@ -78,6 +80,11 @@ def backtest_series(
         train_end = pd.Timestamp(year=year - 1, month=12, day=31)
         train = series[series.index <= train_end]
         test = series[(series.index.year == year)]
+        if purge > 0 and len(train) > purge:
+            train = train.iloc[:-purge]
+            train_end = train.index[-1]
+        if embargo > 0 and len(test) > embargo:
+            test = test.iloc[embargo:]
         if len(train) < (m - 1) * tau + 5 or len(test) < 5:
             continue
 
@@ -115,7 +122,13 @@ def backtest_series(
         # thresholds from train only
         train_mask = aligned_index <= train_end
         escape_train = 1.0 - conf_full[train_mask]
-        thresholds = compute_thresholds(escape_train, stretch_mu[train_mask], stretch_frac[train_mask])
+        thresholds = compute_thresholds(
+            escape_train,
+            stretch_mu[train_mask],
+            stretch_frac[train_mask],
+            conf_full[train_mask],
+            timeframe=timeframe,
+        )
 
         edges = knn_edges(centroids, k=k_nn)
         quality = compute_graph_quality(len(centroids), edges, np.bincount(train_labels, minlength=len(centroids)), p_matrix, {})
@@ -193,6 +206,8 @@ def main() -> None:
     parser.add_argument("--auto-embed", action="store_true")
     parser.add_argument("--tau-method", default="ami", choices=["ami", "acf"])
     parser.add_argument("--m-method", default="cao", choices=["cao", "fnn"])
+    parser.add_argument("--purge", type=int, default=0, help="Remove últimas N amostras do treino para evitar leakage")
+    parser.add_argument("--embargo", type=int, default=0, help="Ignora primeiras N amostras do teste")
     args = parser.parse_args()
 
     outdir = Path(args.outdir)
@@ -224,6 +239,8 @@ def main() -> None:
                 method=args.method,
                 m=m_use,
                 tau=tau_use,
+                purge=args.purge,
+                embargo=args.embargo,
             )
 
             asset_dir = outdir / ticker

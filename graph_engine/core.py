@@ -52,15 +52,30 @@ def run_graph_engine(
     m: int = 3,
     tau: int = 1,
     n_micro: int = 200,
+    micro_method: str = "kmeans",
+    micro_params: dict | None = None,
+    micro_smooth: str | None = None,
+    micro_smooth_noise: float = 0.05,
     n_regimes: int = 4,
     k_nn: int = 5,
     theiler: int = 10,
     alpha: float = 2.0,
     seed: int = 7,
     method: str = "spectral",
+    timeframe: str = "daily",
+    state_smooth: str | None = None,
+    state_smooth_noise: float = 0.05,
 ) -> GraphResult:
     embedding = takens_embed(series, m=m, tau=tau)
-    micro_labels, centroids = build_microstates(embedding, n_micro=n_micro, seed=seed)
+    micro_labels, centroids = build_microstates(
+        embedding,
+        n_micro=n_micro,
+        seed=seed,
+        method=micro_method,
+        cluster_params=micro_params,
+        smooth_method=micro_smooth,
+        smooth_noise=micro_smooth_noise,
+    )
     counts = transition_counts(micro_labels)
     p_matrix = normalize_counts(counts, alpha=alpha)
     micro_regime = metastable_regimes(p_matrix, n_regimes=n_regimes, seed=seed, method=method)
@@ -81,6 +96,9 @@ def run_graph_engine(
         stretch_mu,
         stretch_frac_pos,
         quality_score=quality["score"],
+        timeframe=timeframe,
+        smooth_method=state_smooth,
+        smooth_noise=state_smooth_noise,
     )
     return GraphResult(
         embedding=embedding,

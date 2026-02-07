@@ -124,20 +124,62 @@ def _median_filter(values: np.ndarray, window: int) -> np.ndarray:
     return out
 
 
+def _hmm_smooth_labels(labels: list[str], noise: float = 0.05) -> list[str]:
+    obs = np.asarray(labels, dtype=object)
+    states = list(dict.fromkeys(obs.tolist()))
+    if len(states) <= 1:
+        return labels
+    state_map = {s: i for i, s in enumerate(states)}
+    inv_map = {i: s for s, i in state_map.items()}
+    obs_idx = np.array([state_map[s] for s in obs], dtype=int)
+    k = len(states)
+    counts = np.ones((k, k), dtype=float) * 1e-3
+    for a, b in zip(obs_idx[:-1], obs_idx[1:]):
+        counts[a, b] += 1.0
+    trans = counts / counts.sum(axis=1, keepdims=True)
+    emit = np.full((k, k), noise / max(k - 1, 1), dtype=float)
+    np.fill_diagonal(emit, 1.0 - noise)
+    log_trans = np.log(trans + 1e-12)
+    log_emit = np.log(emit + 1e-12)
+    log_pi = np.full(k, -np.log(k), dtype=float)
+    dp = np.zeros((obs_idx.size, k), dtype=float)
+    back = np.zeros((obs_idx.size, k), dtype=int)
+    dp[0] = log_pi + log_emit[:, obs_idx[0]]
+    for t in range(1, obs_idx.size):
+        scores = dp[t - 1][:, None] + log_trans
+        back[t] = np.argmax(scores, axis=0)
+        dp[t] = scores[back[t], np.arange(k)] + log_emit[:, obs_idx[t]]
+    path = np.zeros(obs_idx.size, dtype=int)
+    path[-1] = int(np.argmax(dp[-1]))
+    for t in range(obs_idx.size - 2, -1, -1):
+        path[t] = back[t + 1, path[t + 1]]
+    return [inv_map[int(s)] for s in path]
+
+
 def compute_thresholds(
     escape: np.ndarray,
     stretch_mu: np.ndarray,
     stretch_frac_pos: np.ndarray,
     conf: np.ndarray,
+    timeframe: str = "daily",
 ) -> dict[str, float]:
     # Auto-calibrated thresholds (quantis) to avoid manual tuning.
-    escape_lo = float(np.quantile(escape, 0.35))
+    if timeframe == "daily":
+        escape_lo_q = 0.50
+        stretch_lo_q = 0.40
+        conf_hi_q = 0.60
+    else:
+        escape_lo_q = 0.45
+        stretch_lo_q = 0.35
+        conf_hi_q = 0.70
+
+    escape_lo = float(np.quantile(escape, escape_lo_q))
     escape_hi = float(np.quantile(escape, 0.80))
-    stretch_lo = float(np.quantile(stretch_mu, 0.25))
+    stretch_lo = float(np.quantile(stretch_mu, stretch_lo_q))
     stretch_hi = float(np.quantile(stretch_mu, 0.75))
     frac_hi = float(np.quantile(stretch_frac_pos, 0.75))
     conf_lo = float(np.quantile(conf, 0.35))
-    conf_hi = float(np.quantile(conf, 0.80))
+    conf_hi = float(np.quantile(conf, conf_hi_q))
     return {
         "escape_lo": escape_lo,
         "escape_hi": escape_hi,
@@ -163,10 +205,13 @@ def labels_for_series(
     stretch_frac_pos: np.ndarray,
     quality_score: float,
     noisy_threshold: float = 0.3,
+    timeframe: str = "daily",
+    smooth_method: str | None = None,
+    smooth_noise: float = 0.05,
 ) -> tuple[np.ndarray, dict[str, float]]:
     conf_smoothed = _median_filter(conf, window=5)
     escape = 1.0 - conf_smoothed
-    thresholds = compute_thresholds(escape, stretch_mu, stretch_frac_pos, conf_smoothed)
+    thresholds = compute_thresholds(escape, stretch_mu, stretch_frac_pos, conf_smoothed, timeframe=timeframe)
     labels = []
     for c, s, f in zip(conf_smoothed, stretch_mu, stretch_frac_pos):
         if quality_score < noisy_threshold:
@@ -181,4 +226,6 @@ def labels_for_series(
                     labels.append("TRANSITION")
             else:
                 labels.append(label_state(c_val, float(s), float(1.0 - c_val), float(f), thresholds))
+    if smooth_method == "hmm":
+        labels = _hmm_smooth_labels(labels, noise=smooth_noise)
     return np.asarray(labels), thresholds

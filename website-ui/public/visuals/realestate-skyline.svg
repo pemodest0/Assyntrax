@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" role="img" aria-label="Skyline urbano">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0b1220"/>
+      <stop offset="100%" stop-color="#050506"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#sky)"/>
+  <g fill="#101827">
+    <rect x="60" y="260" width="120" height="280" rx="8"/>
+    <rect x="200" y="220" width="140" height="320" rx="8"/>
+    <rect x="370" y="180" width="160" height="360" rx="8"/>
+    <rect x="560" y="240" width="180" height="300" rx="8"/>
+  </g>
+  <g fill="#1f2937">
+    <rect x="90" y="300" width="40" height="40" rx="6"/>
+    <rect x="140" y="300" width="40" height="40" rx="6"/>
+    <rect x="240" y="260" width="40" height="40" rx="6"/>
+    <rect x="290" y="260" width="40" height="40" rx="6"/>
+    <rect x="410" y="220" width="40" height="40" rx="6"/>
+    <rect x="460" y="220" width="40" height="40" rx="6"/>
+    <rect x="600" y="280" width="40" height="40" rx="6"/>
+    <rect x="650" y="280" width="40" height="40" rx="6"/>
+  </g>
+  <rect x="0" y="520" width="800" height="80" fill="#0a0a0d"/>
+</svg>

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-label="Fluxos dinâmicos">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0a0a0f"/>
+      <stop offset="45%" stop-color="#0b1320"/>
+      <stop offset="100%" stop-color="#050509"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#37c5ff" stop-opacity="0.1"/>
+      <stop offset="50%" stop-color="#ffd166" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#fb7185" stop-opacity="0.15"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <g opacity="0.9">
+    <path d="M-80 200 C 260 80, 520 320, 840 220 C 1160 120, 1280 260, 1700 120" stroke="url(#glow)" stroke-width="140" fill="none"/>
+    <path d="M-100 620 C 220 420, 620 760, 900 560 C 1180 360, 1300 540, 1700 380" stroke="#38bdf8" stroke-opacity="0.14" stroke-width="120" fill="none"/>
+    <path d="M-120 420 C 220 260, 560 520, 860 420 C 1160 320, 1320 420, 1720 320" stroke="#f97316" stroke-opacity="0.18" stroke-width="90" fill="none"/>
+  </g>
+  <g opacity="0.45">
+    <circle cx="240" cy="240" r="3" fill="#38bdf8"/>
+    <circle cx="320" cy="210" r="2" fill="#a855f7"/>
+    <circle cx="460" cy="260" r="2" fill="#f97316"/>
+    <circle cx="640" cy="260" r="3" fill="#22c55e"/>
+    <circle cx="780" cy="240" r="2" fill="#f472b6"/>
+    <circle cx="980" cy="220" r="3" fill="#facc15"/>
+    <circle cx="1120" cy="260" r="2" fill="#38bdf8"/>
+    <circle cx="1240" cy="240" r="3" fill="#fb7185"/>
+  </g>
+</svg>

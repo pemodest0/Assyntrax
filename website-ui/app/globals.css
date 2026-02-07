@@ -1,8 +1,19 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #05060b;
+  --foreground: #eef1f7;
+  --ax-surface: #0b0f16;
+  --ax-panel: #0f141c;
+  --ax-card: #121826;
+  --ax-muted: #94a3b8;
+  --ax-border: rgba(148, 163, 184, 0.18);
+  --ax-accent: #ff7a18;
+  --ax-accent-2: #7c3aed;
+  --ax-accent-3: #22d3ee;
+  --ax-radius-lg: 28px;
+  --ax-radius-md: 20px;
+  --ax-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
 }
 
 @theme inline {
@@ -12,17 +23,55 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+}
+
+.ax-surface {
+  background: var(--ax-surface);
+}
+
+.ax-panel {
+  background: color-mix(in srgb, var(--ax-panel) 92%, transparent);
+  border: 1px solid var(--ax-border);
+  border-radius: var(--ax-radius-lg);
+  box-shadow: var(--ax-shadow);
+}
+
+.ax-card {
+  background: color-mix(in srgb, var(--ax-card) 88%, transparent);
+  border: 1px solid var(--ax-border);
+  border-radius: var(--ax-radius-md);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+.ax-glow {
+  box-shadow:
+    0 0 0 1px rgba(120, 132, 180, 0.16),
+    0 24px 60px rgba(10, 10, 20, 0.6);
+}
+
+.hero-noise {
+  position: absolute;
+  inset: 0;
+  opacity: 0.12;
+  background-image:
+    radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 140px 140px, 90px 90px;
+  background-position: 0 0, 40px 60px;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.ax-grid {
+  background-image:
+    linear-gradient(rgba(14, 19, 26, 0.45) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(14, 19, 26, 0.45) 1px, transparent 1px);
+  background-size: 56px 56px;
+  background-position: -1px -1px;
 }
 
 .grid-panel {
@@ -55,4 +104,34 @@ body {
   background: rgba(239, 68, 68, 0.18);
   border-color: rgba(239, 68, 68, 0.45);
   color: #fecaca;
+}
+
+@keyframes floatSlow {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes glowPulse {
+  0% { opacity: 0.25; }
+  50% { opacity: 0.6; }
+  100% { opacity: 0.25; }
+}
+
+@keyframes drift {
+  0% { transform: translateX(-6px); }
+  50% { transform: translateX(10px); }
+  100% { transform: translateX(-6px); }
+}
+
+.animate-float-slow {
+  animation: floatSlow 10s ease-in-out infinite;
+}
+
+.animate-glow {
+  animation: glowPulse 6s ease-in-out infinite;
+}
+
+.animate-drift {
+  animation: drift 8s ease-in-out infinite;
 }

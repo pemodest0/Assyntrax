@@ -23,8 +23,12 @@ SPY,equities_us_broad
 VTI,equities_us_broad
 DIA,equities_us_broad
 RSP,equities_us_broad
+QQQ,equities_us_broad
+IWM,equities_us_broad
+VT,equities_us_broad
 XLB,equities_us_sectors
 XLF,equities_us_sectors
+KRE,equities_us_sectors
 XLI,equities_us_sectors
 XLK,equities_us_sectors
 XLP,equities_us_sectors

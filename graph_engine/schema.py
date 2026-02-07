@@ -59,6 +59,7 @@ class GraphAsset:
     thresholds: Optional[Dict[str, Any]] = None
     gating: Optional[Dict[str, Any]] = None
     governance: Optional[Dict[str, Any]] = None
+    diagnostics: Optional[Dict[str, Any]] = None
     recommendation: Optional[str] = None
     scores: Optional[Dict[str, Any]] = None
     badges: Optional[List[str]] = None
@@ -81,6 +82,8 @@ class GraphAsset:
             data.pop("gating", None)
         if self.governance is None:
             data.pop("governance", None)
+        if self.diagnostics is None:
+            data.pop("diagnostics", None)
         if self.recommendation is None:
             data.pop("recommendation", None)
         if self.scores is None:
