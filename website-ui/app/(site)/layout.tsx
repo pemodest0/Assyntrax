@@ -1,4 +1,4 @@
-import "@/app/globals.css";
+﻿import "@/app/globals.css";
 import SiteHeader from "@/components/SiteHeader";
 import Link from "next/link";
 
@@ -8,15 +8,41 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(24,24,27,0.55),_rgba(0,0,0,1))] text-zinc-100">
       <SiteHeader />
       <main className="mx-auto max-w-7xl px-4 md:px-6 lg:px-8 pb-10 md:pb-12 lg:pb-14 xl:pb-16">{children}</main>
-      <footer className="mx-auto max-w-7xl px-4 md:px-6 lg:px-8 py-6 md:py-8 text-xs text-zinc-500 space-y-3">
-        <div className="flex flex-wrap gap-4">
-          <Link className="hover:text-zinc-200" href="/about">Sobre</Link>
-          <Link className="hover:text-zinc-200" href="/contact">Contato</Link>
-          <Link className="hover:text-zinc-200" href="/privacy">Politica de Privacidade</Link>
+      <footer className="border-t border-zinc-900/80 bg-black/40">
+        <div className="mx-auto max-w-7xl px-4 md:px-6 lg:px-8 py-10 grid grid-cols-1 md:grid-cols-4 gap-8 text-sm">
+          <div className="space-y-3">
+            <div className="text-zinc-100 font-semibold tracking-wide">ASSYNTRAX</div>
+            <p className="text-zinc-400 text-xs leading-relaxed">
+              Sistema de diagnóstico de regime e risco estrutural para finanças e imobiliário.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <div className="text-zinc-200 text-xs uppercase tracking-[0.2em]">Produto</div>
+            <Link className="block text-zinc-400 hover:text-zinc-200" href="/product">Visão geral</Link>
+            <Link className="block text-zinc-400 hover:text-zinc-200" href="/methods">Metodologia</Link>
+            <Link className="block text-zinc-400 hover:text-zinc-200" href="/app/dashboard">Dashboard</Link>
+          </div>
+          <div className="space-y-2">
+            <div className="text-zinc-200 text-xs uppercase tracking-[0.2em]">Suporte</div>
+            <Link className="block text-zinc-400 hover:text-zinc-200" href="/contact">Contato</Link>
+            <Link className="block text-zinc-400 hover:text-zinc-200" href="/privacy">Política de Privacidade</Link>
+            <Link className="block text-zinc-400 hover:text-zinc-200" href="/about">Sobre</Link>
+          </div>
+          <div className="space-y-2">
+            <div className="text-zinc-200 text-xs uppercase tracking-[0.2em]">Conformidade</div>
+            <p className="text-zinc-400 text-xs">Uso para diagnóstico e gestão de risco.</p>
+            <p className="text-zinc-400 text-xs">Sem promessa de retorno financeiro.</p>
+            <p className="text-zinc-500 text-xs">run_id e regras de gate disponíveis na auditoria.</p>
+          </div>
         </div>
-        <div>(c) {year} Assyntrax - Regime & Risk Engine</div>
-        <div className="text-zinc-600">
-          Aviso legal: Assyntrax é uma ferramenta de diagnóstico, sem promessas de retorno financeiro.
+        <div className="mx-auto max-w-7xl px-4 md:px-6 lg:px-8 pb-6 pt-1 border-t border-zinc-900/70 text-xs text-zinc-500 flex flex-wrap items-center justify-between gap-2">
+          <span>© {year} Assyntrax Labs. Todos os direitos reservados.</span>
+          <div className="flex items-center gap-4">
+            <a href="https://github.com/pemodest0/Assyntrax" className="hover:text-zinc-300 transition">GitHub</a>
+            <a href="https://www.linkedin.com/in/pedro-henrique-gesualdo-modesto-39a135272/" className="hover:text-zinc-300 transition">LinkedIn</a>
+            <a href="https://pemodest0.github.io/" className="hover:text-zinc-300 transition">Portfólio</a>
+            <span>Regime and Risk Engine</span>
+          </div>
         </div>
       </footer>
     </div>

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import TransitionDiagram from "@/components/visuals/TransitionDiagram";
 import { motion } from "framer-motion";
@@ -13,12 +13,10 @@ export default function ProblemSection() {
         transition={{ duration: 0.5 }}
       >
         <div className="text-xs uppercase tracking-[0.2em] text-zinc-400">O problema</div>
-        <h2 className="mt-3 text-3xl md:text-4xl font-semibold tracking-tight">
-          Modelos falham quando o regime muda.
-        </h2>
+        <h2 className="mt-3 text-3xl md:text-4xl font-semibold tracking-tight">Modelos falham quando o regime muda.</h2>
         <p className="mt-3 text-zinc-300 text-base lg:text-lg">
-          Previsores tradicionais ignoram a mudança estrutural. A Assyntrax detecta a transição,
-          mede estabilidade e explica quando não faz sentido prever.
+          Modelos tradicionais tendem a extrapolar o último estado observado. A Assyntrax detecta
+          transição estrutural, mede estabilidade e informa quando não há base para ação.
         </p>
       </motion.div>
       <TransitionDiagram />

@@ -1,4 +1,4 @@
-import { readGlobalVerdict, readLatestSnapshot, readRiskTruthPanel } from "@/lib/server/data";
+﻿import { readGlobalVerdict, readLatestSnapshot, readRiskTruthPanel } from "@/lib/server/data";
 
 function toNum(v: unknown, fallback = 0) {
   const n = Number(v);
@@ -22,10 +22,11 @@ export default async function MetodologiaPage() {
   return (
     <div className="p-5 md:p-6 lg:p-8 space-y-6">
       <section className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-5">
-        <p className="text-xs tracking-[0.14em] uppercase text-zinc-500">Nivel 2 - Metodo e auditoria</p>
-        <h1 className="mt-2 text-2xl md:text-3xl font-semibold text-zinc-100">Metodologia e evidencias do run atual</h1>
+        <p className="text-xs tracking-[0.14em] uppercase text-zinc-500">Nível 2 - Método e auditoria</p>
+        <h1 className="mt-2 text-2xl md:text-3xl font-semibold text-zinc-100">Metodologia e evidências do run atual</h1>
         <p className="mt-3 text-sm text-zinc-300">
-          Todos os numeros abaixo sao carregados de artefatos reais do repositorio: snapshot validado, painel de verdade de risco e gate global.
+          Todos os números abaixo são carregados de artefatos reais do repositório: snapshot validado,
+          painel de verdade de risco e gate global.
         </p>
       </section>
 
@@ -91,7 +92,7 @@ export default async function MetodologiaPage() {
                 <th className="text-left py-2">Status</th>
                 <th className="text-left py-2">Gate reason</th>
                 <th className="text-left py-2">Thr conf/qual/trans</th>
-                <th className="text-left py-2">Adequacy</th>
+                <th className="text-left py-2">Adequação</th>
                 <th className="text-left py-2">Pseudo bifurcation</th>
               </tr>
             </thead>
@@ -127,7 +128,7 @@ export default async function MetodologiaPage() {
           <li>2. Sinal inconclusivo deve ficar em modo diagnóstico, sem ação automática.</li>
           <li>3. Backtest e replay não garantem resultado futuro.</li>
           <li>4. Custos de transação e latência podem degradar desempenho operacional.</li>
-          <li>5. Decisao final exige contexto de dominio e governanca de risco.</li>
+          <li>5. Decisão final exige contexto de domínio e governança de risco.</li>
         </ul>
       </section>
     </div>

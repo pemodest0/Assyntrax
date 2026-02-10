@@ -21,6 +21,8 @@ type AssetMeta = {
   city: string;
   state: string;
   region: string;
+  source_type: string;
+  source_name: string;
 };
 
 type RealEstatePayload = {
@@ -64,10 +66,20 @@ function formatPct(v: number | null | undefined) {
 
 function formatRegime(regime?: string) {
   if (!regime) return "--";
-  if (regime === "STABLE") return "Estavel";
-  if (regime === "TRANSITION") return "Transicao";
-  if (regime === "UNSTABLE") return "Instavel";
+  if (regime === "STABLE") return "Estável";
+  if (regime === "TRANSITION") return "Transição";
+  if (regime === "UNSTABLE") return "Instável";
   return regime;
+}
+
+function getOperationalRule(status?: string, regime?: string) {
+  if (status === "validated" && regime === "STABLE") {
+    return "Projeções condicionais permitidas dentro do regime atual.";
+  }
+  if (status === "watch") {
+    return "Regime em observação: evitar extrapolações e reduzir agressividade.";
+  }
+  return "Somente diagnóstico: ação operacional bloqueada por baixa estrutura.";
 }
 
 function computeForecast(
@@ -205,18 +217,54 @@ export default function RealEstateDashboard() {
   return (
     <div className="p-6 space-y-6">
       <header className="space-y-2">
-        <h1 className="text-2xl font-semibold">Setor Imobiliario</h1>
+        <h1 className="text-2xl font-semibold">Setor Imobiliário</h1>
         <p className="text-sm text-zinc-400">
-          Modelo em 3 camadas: dados (P/L/J/D), dinamica (embedding e transicoes) e operacao (gate auditavel).
+          Modelo em 3 camadas: dados (P/L/J/D), dinâmica (embedding e transições) e operação (gate auditável).
         </p>
       </header>
+
+      <div className="rounded-xl border border-zinc-800 bg-black/40 p-4">
+        <div className="text-xs uppercase tracking-wide text-zinc-500">O que muda hoje</div>
+        <div className="mt-2 grid gap-3 md:grid-cols-4">
+          <div
+            className="rounded-lg border border-zinc-700 bg-zinc-950/50 p-3"
+            title="Status final do gate: validated, watch ou inconclusive."
+          >
+            <div className="text-[11px] text-zinc-400">Status operacional</div>
+            <div className="mt-1 text-base font-semibold text-zinc-100">{payload?.operational.status || "--"}</div>
+          </div>
+          <div
+            className="rounded-lg border border-zinc-700 bg-zinc-950/50 p-3"
+            title="Regime dominante no último ponto disponível para o ativo selecionado."
+          >
+            <div className="text-[11px] text-zinc-400">Regime atual</div>
+            <div className="mt-1 text-base font-semibold text-zinc-100">{formatRegime(latest?.regime)}</div>
+          </div>
+          <div
+            className="rounded-lg border border-zinc-700 bg-zinc-950/50 p-3"
+            title="Confiança e qualidade medem consistência estrutural da leitura."
+          >
+            <div className="text-[11px] text-zinc-400">Confiabilidade</div>
+            <div className="mt-1 text-base font-semibold text-zinc-100">
+              C {latest?.confidence?.toFixed(2) ?? "--"} | Q {latest?.quality?.toFixed(2) ?? "--"}
+            </div>
+          </div>
+          <div
+            className="rounded-lg border border-zinc-700 bg-zinc-950/50 p-3"
+            title="Regra operacional recomendada para reduzir erro em regime instável."
+          >
+            <div className="text-[11px] text-zinc-400">Regra do dia</div>
+            <div className="mt-1 text-sm text-zinc-200">{getOperationalRule(payload?.operational.status, latest?.regime)}</div>
+          </div>
+        </div>
+      </div>
 
       <div className="grid grid-cols-12 gap-6">
         <div className="col-span-12 lg:col-span-4 space-y-4">
           <div className="rounded-xl border border-zinc-800 bg-black/40 p-4">
-            <div className="text-xs text-zinc-500 mb-2">Filtro geografico</div>
+            <div className="text-xs text-zinc-500 mb-2">Filtro geográfico</div>
             <div className="space-y-3">
-              <label className="text-xs text-zinc-400">Regiao</label>
+              <label className="text-xs text-zinc-400">Região</label>
               <select
                 className="w-full rounded-lg border border-zinc-700 bg-black/30 px-3 py-2 text-sm"
                 value={regionFilter}
@@ -259,20 +307,34 @@ export default function RealEstateDashboard() {
                   </option>
                 ))}
               </select>
+              <div className="rounded-lg border border-zinc-700 bg-zinc-950/40 p-2 text-xs text-zinc-400">
+                Fonte: {currentMeta?.source_type || "--"} / {currentMeta?.source_name || "--"}
+              </div>
             </div>
           </div>
 
           <div className="rounded-xl border border-zinc-800 bg-black/40 p-4">
-            <div className="text-xs text-zinc-500 mb-2">Mapa politico do Brasil por estados</div>
+            <div className="text-xs text-zinc-500 mb-2">Mapa político do Brasil por estados</div>
             <BrMap selectedUF={stateFilter} onSelectUF={onSelectUF} />
+            <div className="mt-2 text-[11px] text-zinc-500">
+              Clique no estado para filtrar ativos da UF e atualizar a lista de cidades.
+            </div>
           </div>
 
           <div className="rounded-xl border border-zinc-800 bg-black/40 p-4">
             <div className="text-xs text-zinc-500 mb-3">Gate operacional</div>
             <div className="space-y-1 text-sm text-zinc-200">
-              <div>Status: {payload?.operational.status || "--"}</div>
-              <div>Adequacao de dados: {payload?.operational.adequacy_ok ? "ok" : "falhou"}</div>
+              <div title="validated: sinal operacional; watch: monitorar; inconclusive: somente diagnóstico">
+                Status: {payload?.operational.status || "--"}
+              </div>
+              <div title="Confere se série possui tamanho, frequência e cobertura mínima para o modelo">
+                Adequação de dados: {payload?.operational.adequacy_ok ? "ok" : "falhou"}
+              </div>
+              <div>Instability score: {latest?.instability_score?.toFixed(3) ?? "--"}</div>
               <div className="text-zinc-400">{payload?.operational.explanation || "--"}</div>
+            </div>
+            <div className="mt-2 text-[11px] text-zinc-500">
+              Quando o gate está inconclusive, as projeções p50 são bloqueadas para evitar uso indevido.
             </div>
           </div>
         </div>
@@ -281,10 +343,10 @@ export default function RealEstateDashboard() {
           <div className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-5">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <div className="text-xs text-zinc-500">
-                Preco medio (P) com bandas de regime - camada dinamica (m={payload?.dynamic.m ?? "-"}, tau={payload?.dynamic.tau ?? "-"})
+                Preço médio (P) com bandas de regime - camada dinâmica (m={payload?.dynamic.m ?? "-"}, tau={payload?.dynamic.tau ?? "-"})
               </div>
               <div className="flex items-center gap-2 text-xs text-zinc-400">
-                <label>Visao</label>
+                <label>Visão</label>
                 <select
                   className="rounded-lg border border-zinc-700 bg-black/30 px-2 py-1 text-xs"
                   value={viewMode}
@@ -292,7 +354,7 @@ export default function RealEstateDashboard() {
                 >
                   <option value="mensal">Mensal</option>
                   <option value="anual">Anual</option>
-                  <option value="diario">Diario</option>
+                  <option value="diario">Diário</option>
                 </select>
               </div>
             </div>
@@ -366,10 +428,10 @@ export default function RealEstateDashboard() {
                 {hoverIndex != null && displaySeries[hoverIndex] && (
                   <div className="absolute right-6 top-6 rounded-lg border border-zinc-700 bg-black/80 px-3 py-2 text-xs text-zinc-200">
                     <div className="font-semibold">{displaySeries[hoverIndex].date}</div>
-                    <div>Preco: R$ {displaySeries[hoverIndex].value.toFixed(0)}</div>
+                    <div>Preço: R$ {displaySeries[hoverIndex].value.toFixed(0)}</div>
                     {rowByDisplayIndex(hoverIndex) && (
                       <div>
-                        Regime: {formatRegime(rowByDisplayIndex(hoverIndex)?.regime)} | Confianca{" "}
+                        Regime: {formatRegime(rowByDisplayIndex(hoverIndex)?.regime)} | Confiança{" "}
                         {rowByDisplayIndex(hoverIndex)?.confidence.toFixed(2)}
                       </div>
                     )}
@@ -397,12 +459,23 @@ export default function RealEstateDashboard() {
                 <div>{profile?.coverage_years ?? "--"}</div>
                 <div className="text-zinc-400">Gap ratio</div>
                 <div>{profile?.gap_ratio ?? "--"}</div>
-                <div className="text-zinc-400">L(t) (liquidez proxy)</div>
+                <div className="text-zinc-400" title="L(t): proxy de liquidez (atividade/estoque)">
+                  L(t) (liquidez)
+                </div>
                 <div>{formatPct(L.at(-1)?.value)}</div>
-                <div className="text-zinc-400">J(t) (juros)</div>
-                <div>{J.at(-1)?.value.toFixed(2) ?? "--"}</div>
-                <div className="text-zinc-400">D(t) (desconto medio)</div>
-                <div>{payload?.data.series.D.length ? formatPct(payload.data.series.D.at(-1)?.value) : "--"}</div>
+                <div className="text-zinc-400" title="J(t): juros/crédito; impacta custo de financiamento">
+                  J(t) (juros)
+                </div>
+                <div>{J.at(-1)?.value != null ? J.at(-1)?.value.toFixed(2) : "N/D"}</div>
+                <div className="text-zinc-400" title="D(t): desconto pedido x fechamento, quando disponível">
+                  D(t) (desconto médio)
+                </div>
+                <div>{payload?.data.series.D.length ? formatPct(payload.data.series.D.at(-1)?.value) : "N/D"}</div>
+                <div className="text-zinc-400">Disponibilidade P/L/J/D</div>
+                <div>
+                  P {profile?.required_fields.P ? "ok" : "off"} | L {profile?.required_fields.L ? "ok" : "off"} | J{" "}
+                  {profile?.required_fields.J ? "ok" : "off"} | D {profile?.required_fields.D ? "ok" : "off"}
+                </div>
               </div>
             </div>
 
@@ -419,16 +492,19 @@ export default function RealEstateDashboard() {
                   <option value={10}>10 dias</option>
                 </select>
               </div>
-              <div className="space-y-1 text-sm text-zinc-200">
+                <div className="space-y-1 text-sm text-zinc-200">
                 <div>Regime atual: {formatRegime(latest?.regime)}</div>
-                <div>Confianca: {latest?.confidence?.toFixed(2) ?? "--"}</div>
+                <div>Confiança: {latest?.confidence?.toFixed(2) ?? "--"}</div>
                 <div>Qualidade: {latest?.quality?.toFixed(2) ?? "--"}</div>
                 <div>Entropia: {latest?.entropy?.toFixed(2) ?? "--"}</div>
-                <div>Persistencia de regime: {latest?.persistence ?? "--"} dias</div>
-                <div>Forecast p50 ({horizonDays}d): R$ {forecast?.p50?.toFixed(0) ?? "--"}</div>
+                <div>Persistência de regime: {latest?.persistence ?? "--"} dias</div>
+                <div title="p50 condicional ao regime. Se gate inconclusive, fica indisponível.">
+                  Forecast p50 ({horizonDays}d): R$ {forecast?.p50?.toFixed(0) ?? "N/D"}
+                </div>
+                <div>Instability score: {latest?.instability_score?.toFixed(3) ?? "--"}</div>
                 <div className="text-zinc-400">{payload?.operational.explanation || "--"}</div>
                 {!allowForecast && (
-                  <div className="text-amber-400">Forecast desativado: sem regime validado do motor para este ativo.</div>
+                  <div className="text-amber-400">Somente diagnóstico: projeções bloqueadas por gate inconclusivo.</div>
                 )}
               </div>
             </div>

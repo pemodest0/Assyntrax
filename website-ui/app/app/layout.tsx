@@ -20,9 +20,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
               <nav className="mt-6 space-y-1 text-sm">
                 <NavItem href="/app/dashboard" label="Dashboard" />
-                <NavItem href="/app/setores" label="Setores" />
+                <NavItem href="/app/finance" label="Finanças" />
+                <NavItem href="/app/real-estate" label="Imobiliário" />
                 <NavItem href="/app/metodologia" label="Metodologia" />
-                <NavItem href="/app/sobre" label="Sobre" />
               </nav>
 
               <div className="mt-6 border-t border-zinc-800 pt-4 text-xs text-zinc-400">

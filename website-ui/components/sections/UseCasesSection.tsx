@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { FinanceVisual, RealEstateVisual } from "@/components/visuals/UseCasePanels";
@@ -8,17 +8,27 @@ const tabs = [
   {
     id: "financeiro",
     label: "Financeiro",
-    title: "Risco estrutural e regimes multiativos",
+    title: "Financeiro: leitura de regime para reduzir erro de decisão",
     description:
-      "Monitoramento de volatilidade, spreads e regimes de risco com alertas de instabilidade e transparência no forecast.",
+      "A utilidade não é prever preço. É limitar decisões frágeis quando o sistema perde estrutura.",
+    bullets: [
+      "Confiabilidade baixa: evita extrapolar estratégia calibrada em outro regime.",
+      "Transição persistente: reduz exposição e força revisão operacional.",
+      "Instabilidade estrutural: projeções ficam em modo diagnóstico.",
+    ],
     Visual: FinanceVisual,
   },
   {
     id: "imobiliario",
     label: "Imobiliário",
-    title: "Ciclos urbanos e liquidez estrutural",
+    title: "Imobiliário: ciclo urbano por cidade, UF e liquidez",
     description:
-      "Diagnóstico de ciclos de preço, travamento de liquidez e transições críticas em indicadores regionais.",
+      "Preço por m² isolado não basta. O sistema cruza preço, liquidez, juros e desconto para detectar mudança de fase.",
+    bullets: [
+      "Liquidez travando com juros altos: alerta de risco estrutural crescente.",
+      "Regime estável com gate aprovado: projeção condicional pode ser habilitada.",
+      "Diagnóstico inconclusivo: ação automática bloqueada e monitoramento reforçado.",
+    ],
     Visual: RealEstateVisual,
   },
 ];
@@ -33,9 +43,7 @@ export default function UseCasesSection() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Casos de uso</div>
-          <h2 className="mt-2 text-3xl md:text-4xl font-semibold tracking-tight">
-            {current.title}
-          </h2>
+          <h2 className="mt-2 text-3xl md:text-4xl font-semibold tracking-tight">{current.title}</h2>
           <p className="mt-2 text-zinc-300 max-w-3xl text-base lg:text-lg">{current.description}</p>
         </div>
         <div className="flex gap-2">
@@ -63,16 +71,14 @@ export default function UseCasesSection() {
         <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] gap-6">
           <Visual />
           <div className="rounded-3xl border border-zinc-800 bg-zinc-950/60 p-5 space-y-3">
-            <div className="text-xs uppercase tracking-[0.2em] text-zinc-400">
-              O que observar
-            </div>
+            <div className="text-xs uppercase tracking-[0.2em] text-zinc-400">Impacto operacional</div>
             <ul className="space-y-2 text-sm text-zinc-300">
-              <li>- Estabilidade do regime e qualidade do grafo.</li>
-              <li>- Alertas de transição e mudanças de volatilidade.</li>
-              <li>- Forecast condicional apenas quando há estrutura.</li>
+              {current.bullets.map((item) => (
+                <li key={item}>- {item}</li>
+              ))}
             </ul>
             <div className="text-xs text-zinc-500">
-              A leitura de risco muda conforme o regime detectado.
+              Toda leitura retorna status operacional claro: validado, observação ou diagnóstico inconclusivo.
             </div>
           </div>
         </div>

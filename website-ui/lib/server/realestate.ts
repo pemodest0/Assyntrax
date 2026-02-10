@@ -502,6 +502,102 @@ async function loadPipelineRegimes(asset: string) {
   return [];
 }
 
+type HMMPayload = {
+  sequence?: number[];
+  probabilities?: number[][];
+  means?: number[][];
+  states?: number;
+};
+
+async function loadHMMPayload(asset: string): Promise<HMMPayload | null> {
+  const hmmDir = path.join(repoRoot(), "results", "realestate", "hmm");
+  const candidates = [
+    `${asset}_hmm.json`,
+    `${asset.toUpperCase()}_hmm.json`,
+    `${normalizeKey(asset)}_hmm.json`,
+    `${normalizeKey(asset).toUpperCase()}_hmm.json`,
+  ];
+  for (const c of candidates) {
+    try {
+      const raw = await fs.readFile(path.join(hmmDir, c), "utf-8");
+      const parsed = JSON.parse(raw) as HMMPayload;
+      if (Array.isArray(parsed.sequence) && parsed.sequence.length > 0) {
+        return parsed;
+      }
+    } catch {
+      // try next
+    }
+  }
+  return null;
+}
+
+function _hmmStateRankingByRisk(hmm: HMMPayload): number[] {
+  const means = Array.isArray(hmm.means) ? hmm.means : [];
+  const riskRows = means.map((row, idx) => {
+    const ret = Number(Array.isArray(row) ? row[0] : 0);
+    const vol = Math.abs(Number(Array.isArray(row) ? row[1] : 0));
+    // higher risk score => more unstable regime
+    const risk = vol - ret;
+    return { idx, risk };
+  });
+  if (!riskRows.length) return [];
+  riskRows.sort((a, b) => a.risk - b.risk);
+  return riskRows.map((r) => r.idx);
+}
+
+function buildDynamicLayerFromHMM(hmm: HMMPayload, dates: string[], m: number, tau: number): DynamicLayer {
+  const seq = (hmm.sequence || []).map((x) => Number(x));
+  const probs = Array.isArray(hmm.probabilities) ? hmm.probabilities : [];
+  const rank = _hmmStateRankingByRisk(hmm);
+  const n = Math.min(seq.length, dates.length);
+  if (n <= 0) return { m, tau, rows: [] };
+
+  const stableState = rank[0];
+  const unstableState = rank[rank.length - 1];
+  const transitionState = rank.length > 2 ? rank[Math.floor(rank.length / 2)] : null;
+
+  const mapLabel = (s: number) => {
+    if (s === stableState) return "STABLE";
+    if (s === unstableState) return "UNSTABLE";
+    if (transitionState != null && s === transitionState) return "TRANSITION";
+    return "TRANSITION";
+  };
+
+  const rows: DynamicRow[] = [];
+  let prev: string | null = null;
+  let persistence = 0;
+  const dateSlice = dates.slice(dates.length - n);
+  for (let i = 0; i < n; i++) {
+    const state = seq[seq.length - n + i];
+    const regime = mapLabel(state);
+    if (regime === prev) persistence += 1;
+    else persistence = 1;
+    const confidence = Number.isFinite(probs[seq.length - n + i]?.[state])
+      ? clamp01(Number(probs[seq.length - n + i]?.[state]))
+      : regime === "STABLE"
+      ? 0.68
+      : regime === "TRANSITION"
+      ? 0.56
+      : 0.62;
+    const quality = confidence;
+    const entropy = 1 - confidence;
+    const instability = clamp01((1 - confidence) + (1 - quality) + entropy);
+    rows.push({
+      date: dateSlice[i],
+      regime,
+      microstate: "UNK",
+      transition: prev != null && regime !== prev,
+      confidence: Number(confidence.toFixed(4)),
+      quality: Number(quality.toFixed(4)),
+      entropy: Number(entropy.toFixed(4)),
+      persistence,
+      instability_score: Number(instability.toFixed(4)),
+    });
+    prev = regime;
+  }
+  return { m, tau, rows };
+}
+
 function buildDynamicLayerFromPipeline(regimeRows: Array<{ date: string; regime: string; confidence: number }>, m: number, tau: number): DynamicLayer {
   const rows: DynamicRow[] = [];
   let persistence = 0;
@@ -699,7 +795,11 @@ async function loadCoreRows(asset: string): Promise<Array<{ date: string; P: num
 }
 
 export async function buildRealEstateAssetPayload(asset: string): Promise<RealEstateAssetPayload> {
-  const [coreRows, pipelineRegimes] = await Promise.all([loadCoreRows(asset), loadPipelineRegimes(asset)]);
+  const [coreRows, pipelineRegimes, hmm] = await Promise.all([
+    loadCoreRows(asset),
+    loadPipelineRegimes(asset),
+    loadHMMPayload(asset),
+  ]);
   let data: DataLayer;
 
   if (coreRows && coreRows.length) {
@@ -713,7 +813,12 @@ export async function buildRealEstateAssetPayload(asset: string): Promise<RealEs
   }
 
   const params = await inferEmbeddingParams(asset);
-  const dynamic = buildDynamicLayerFromPipeline(pipelineRegimes, params.m, params.tau);
+  const dynamic =
+    pipelineRegimes.length > 0
+      ? buildDynamicLayerFromPipeline(pipelineRegimes, params.m, params.tau)
+      : hmm
+      ? buildDynamicLayerFromHMM(hmm, data.series.P.map((p) => p.date), params.m, params.tau)
+      : buildDynamicLayerFromPipeline([], params.m, params.tau);
   const operational = buildOperationalLayer(data, dynamic);
   return { data, dynamic, operational };
 }

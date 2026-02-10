@@ -10,13 +10,21 @@
     "regime",
     "confidence",
     "quality",
+    "instability_score",
+    "status",
     "signal_status",
     "reason",
     "run_id",
     "data_adequacy",
     "source_type"
   ],
+  "status_field": "status",
   "allowed_signal_status": [
+    "validated",
+    "watch",
+    "inconclusive"
+  ],
+  "allowed_status": [
     "validated",
     "watch",
     "inconclusive"

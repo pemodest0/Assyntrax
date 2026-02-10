@@ -10,16 +10,31 @@ function inferDomain(group?: string) {
   return "unknown";
 }
 
+function normalizeDomain(value?: string, group?: string) {
+  const raw = (value || "").toLowerCase().trim();
+  if (!raw) return inferDomain(group);
+  if (raw.includes("realestate") || raw.includes("real_estate") || raw.includes("imob")) {
+    return "realestate";
+  }
+  if (raw.includes("energy") || raw.includes("logistics") || raw.includes("carga")) {
+    return "energy";
+  }
+  if (raw.includes("fin") || raw.includes("equit") || raw.includes("crypto")) {
+    return "finance";
+  }
+  return inferDomain(group);
+}
+
 function normalizeRecord(record: Record<string, unknown>, riskTruthStatus?: string) {
   const regimeFromState = (record.state as Record<string, unknown> | undefined)?.label;
-  const signalStatus = String(record.signal_status || "unknown").toLowerCase();
+  const signalStatus = String(record.status || record.signal_status || "unknown").toLowerCase();
   const fallbackRiskStatus =
     signalStatus === "validated" || signalStatus === "watch" || signalStatus === "inconclusive"
       ? signalStatus
       : "unknown";
   return {
     asset: String(record.asset || ""),
-    domain: String(record.domain || inferDomain(String(record.group || ""))),
+    domain: normalizeDomain(String(record.domain || ""), String(record.group || "")),
     timestamp: String(record.timestamp || ""),
     run_id: String(record.run_id || ""),
     data_adequacy: String(record.data_adequacy || "unknown"),
@@ -27,6 +42,8 @@ function normalizeRecord(record: Record<string, unknown>, riskTruthStatus?: stri
     regime: String(record.regime_label || record.regime || regimeFromState || "unknown"),
     confidence: Number(record.confidence ?? (record.metrics as Record<string, unknown> | undefined)?.confidence ?? 0),
     quality: Number(record.quality ?? (record.metrics as Record<string, unknown> | undefined)?.quality ?? 0),
+    instability_score: Number(record.instability_score ?? 0),
+    status: signalStatus,
     signal_status: signalStatus,
     reason: String(record.reason || record.warning_reason || ""),
     risk_truth_status: (riskTruthStatus || fallbackRiskStatus || "unknown").toLowerCase(),

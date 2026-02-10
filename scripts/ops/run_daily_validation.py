@@ -86,6 +86,8 @@ def main() -> None:
     risk_utility = _read_json(ROOT / "results/validation/risk_utility/summary.json")
     adequacy = _read_json(ROOT / "results/validation/data_adequacy/summary.json")
     hist_metrics = _read_json(ROOT / "results/validation/historical_shifts/metrics.json")
+    hist_verdict = _read_json(ROOT / "results/validation/historical_shifts/VERDICT.json")
+    realestate_offline = _read_json(ROOT / "results/validation/realestate_offline/summary.json")
 
     success_rate = 0.0
     counts = (universe.get("counts") or {})
@@ -109,6 +111,8 @@ def main() -> None:
         "risk_utility_ok": str(risk_utility.get("status", "")).lower() == "ok",
         "data_adequacy_ok": str(adequacy.get("status", "")).lower() == "ok",
         "pseudo_bifurcation_ok": not bool(hist_metrics.get("pseudo_bifurcation_flag", False)),
+        "historical_shifts_ok": str(hist_verdict.get("status", "")).lower() in {"pass", "neutral"},
+        "realestate_offline_ok": str(realestate_offline.get("status", "")).lower() == "ok",
     }
     status = "ok" if all(checks.values()) else "fail"
 
@@ -129,12 +133,16 @@ def main() -> None:
             "risk_utility_mean_dd_avoidance": risk_utility.get("mean_drawdown_avoidance"),
             "data_adequacy_ok_count": ((adequacy.get("counts") or {}).get("ok")),
             "pseudo_bifurcation_flag": bool(hist_metrics.get("pseudo_bifurcation_flag", False)),
+            "historical_status": hist_verdict.get("status"),
+            "realestate_assets_ok": realestate_offline.get("ok"),
+            "realestate_assets_fail": realestate_offline.get("fail"),
         },
         "sources": {
             "verdict": "results/validation/VERDICT.json",
             "universe_report": "results/validation/universe_mini_full/universe_report.json",
             "uncertainty": "results/validation/uncertainty_full/summary.json",
             "validated_summary": "results/validated/latest/summary.json",
+            "realestate_offline": "results/validation/realestate_offline/summary.json",
         },
     }
     (run_dir / "summary.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")

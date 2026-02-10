@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import ProofMatrix from "@/components/visuals/ProofMatrix";
 import { motion } from "framer-motion";
@@ -13,17 +13,15 @@ export default function ProofSection() {
         transition={{ duration: 0.5 }}
       >
         <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Prova e rigor</div>
-        <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">
-          Métricas transparentes, sem promessas
-        </h2>
+        <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">Métricas transparentes, sem promessas</h2>
         <p className="text-zinc-300 max-w-3xl text-base lg:text-lg">
-          Validamos com walk-forward, baselines e métricas por regime. A Assyntrax sinaliza
-          quando o mercado está sem estrutura.
+          Validação com walk-forward, baselines e métricas por regime. Quando não há estrutura,
+          o sistema sinaliza diagnóstico inconclusivo.
         </p>
       </motion.div>
       <ProofMatrix />
       <div className="text-xs text-zinc-500">
-        Resultados ilustrativos. Sem promessa de retorno financeiro ou precisão garantida.
+        Resultados ilustrativos para gestão de risco. Sem promessa de retorno financeiro.
       </div>
     </section>
   );

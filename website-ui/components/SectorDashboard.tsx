@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import DashboardFilters from "@/components/DashboardFilters";
 import RegimeChart from "@/components/RegimeChart";
 
+type Domain = "finance" | "energy" | "realestate";
+type StatusTab = "validated" | "watch" | "inconclusive";
+
 type SeriesPoint = {
   date: string;
   price: number | null;
@@ -17,7 +20,6 @@ type UniverseAsset = {
   domain?: string;
   state?: { label?: string };
   metrics?: { confidence?: number; quality?: number };
-  validation?: { status?: string; reasons?: string[] };
   confidence?: number;
   quality?: number;
   signal_status?: string;
@@ -42,24 +44,56 @@ const groupLabels: Record<string, string> = {
   commodities_broad: "Commodities",
   energy: "Energia",
   metals: "Metais",
-  bonds_rates: "Juros/Bonds",
+  bonds_rates: "Juros e Bonds",
   fx: "Moedas",
-  equities_us_broad: "Equities US Broad",
-  equities_us_sectors: "Equities US Setores",
-  equities_international: "Equities Internacionais",
+  equities_us_broad: "Ações EUA - índice amplo",
+  equities_us_sectors: "Ações EUA - setores",
+  equities_international: "Ações internacionais",
   realestate: "Imobiliário",
 };
 
-function cleanRegime(label?: string) {
+const financeGroupFilter: Array<{ value: string; label: string }> = [
+  { value: "all", label: "Todos os grupos" },
+  { value: "equities_us_broad", label: "Ações EUA - índice amplo" },
+  { value: "equities_us_sectors", label: "Ações EUA - setores" },
+  { value: "equities_international", label: "Ações internacionais" },
+  { value: "commodities_broad", label: "Commodities" },
+  { value: "metals", label: "Metais" },
+  { value: "bonds_rates", label: "Juros e Bonds" },
+  { value: "fx", label: "Câmbio" },
+  { value: "crypto", label: "Cripto" },
+  { value: "volatility", label: "Volatilidade" },
+];
+
+function normalizeRegime(label?: string) {
   if (!label) return "TRANSITION";
   if (label === "NOISY") return "UNSTABLE";
   if (label === "STABLE" || label === "TRANSITION" || label === "UNSTABLE" || label === "INCONCLUSIVE") return label;
   return "TRANSITION";
 }
 
-function mean(nums: number[]) {
-  if (!nums.length) return 0;
-  return nums.reduce((a, b) => a + b, 0) / nums.length;
+function mean(values: number[]) {
+  if (!values.length) return 0;
+  return values.reduce((acc, value) => acc + value, 0) / values.length;
+}
+
+function computeFallbackForecast(
+  lastPrice: number | null | undefined,
+  regime: string,
+  confidence: number,
+  horizon: 1 | 5 | 10
+) {
+  if (!Number.isFinite(lastPrice)) return null;
+  const safePrice = Number(lastPrice);
+  const driftByRegime: Record<string, number> = {
+    STABLE: 0.0016,
+    TRANSITION: 0.0004,
+    UNSTABLE: -0.0008,
+    INCONCLUSIVE: 0,
+  };
+  const confidenceWeight = Math.max(0.2, Math.min(1, confidence || 0));
+  const drift = (driftByRegime[regime] ?? 0) * confidenceWeight;
+  return safePrice * (1 + drift * horizon);
 }
 
 export default function SectorDashboard({
@@ -69,11 +103,11 @@ export default function SectorDashboard({
 }: {
   title: string;
   showTable?: boolean;
-  initialDomain?: "finance" | "energy" | "realestate";
+  initialDomain?: Domain;
 }) {
   const [timeframe, setTimeframe] = useState("daily");
-  const [sector, setSector] = useState(initialDomain);
-  const [statusTab, setStatusTab] = useState<"validated" | "watch" | "inconclusive">("validated");
+  const [groupFilter, setGroupFilter] = useState("all");
+  const [statusTab, setStatusTab] = useState<StatusTab>("validated");
   const [showInconclusive, setShowInconclusive] = useState(false);
   const [rangePreset, setRangePreset] = useState("180d");
   const [normalize, setNormalize] = useState(false);
@@ -88,17 +122,15 @@ export default function SectorDashboard({
   const [loading, setLoading] = useState(false);
   const [runMeta, setRunMeta] = useState<{ run_id?: string; global_verdict_status?: string } | null>(null);
   const [runSummary, setRunSummary] = useState<Record<string, unknown> | null>(null);
-  const [riskTruthCounts, setRiskTruthCounts] = useState<Record<string, number> | null>(null);
 
   useEffect(() => {
     const loadUniverse = async () => {
       const statuses = statusTab === "inconclusive" ? "inconclusive" : "validated,watch";
       const includeInconclusive = showInconclusive || statusTab === "inconclusive" ? 1 : 0;
-      const [runRes, riskRes, assetsRes] = await Promise.all([
+      const [runRes, assetsRes] = await Promise.all([
         fetch("/api/run/latest"),
-        fetch("/api/risk-truth"),
         fetch(
-          `/api/assets?domain=${encodeURIComponent(sector)}&status=${encodeURIComponent(
+          `/api/assets?domain=${encodeURIComponent(initialDomain)}&status=${encodeURIComponent(
             statuses
           )}&include_inconclusive=${includeInconclusive}`
         ),
@@ -113,30 +145,20 @@ export default function SectorDashboard({
         setRunSummary(null);
       }
 
-      if (riskRes.ok) {
-        const riskJson = await riskRes.json();
-        setRiskTruthCounts((riskJson?.counts as Record<string, number>) || null);
-      } else {
-        setRiskTruthCounts(null);
-      }
-
       const assetsJson = await assetsRes.json();
-      const data = assetsJson?.records;
-      if (!Array.isArray(data)) {
-        setUniverse([]);
-        setSelected([]);
-        return;
-      }
-      setUniverse(data);
+      const data = Array.isArray(assetsJson?.records) ? (assetsJson.records as UniverseAsset[]) : [];
+      const byGroup = groupFilter === "all" ? data : data.filter((r) => (r.group || "") === groupFilter);
+      setUniverse(byGroup);
       setSelected((prev) => {
-        const approved = data.filter((u: UniverseAsset) => (u.risk_truth_status || "validated") === "validated");
-        const preferred = approved.length ? approved : data;
-        const valid = prev.filter((a) => preferred.find((u: UniverseAsset) => u.asset === a));
-        return valid.length ? valid : preferred.slice(0, 4).map((u: UniverseAsset) => u.asset);
+        const approved = byGroup.filter((u) => (u.risk_truth_status || "validated") === "validated");
+        const preferred = approved.length ? approved : byGroup;
+        const keep = prev.filter((asset) => preferred.some((u) => u.asset === asset));
+        if (keep.length) return keep;
+        return preferred.slice(0, 4).map((u) => u.asset);
       });
     };
     loadUniverse();
-  }, [timeframe, sector, statusTab, showInconclusive]);
+  }, [initialDomain, statusTab, showInconclusive, groupFilter]);
 
   useEffect(() => {
     if (!universe.length) return;
@@ -152,6 +174,7 @@ export default function SectorDashboard({
     const loadSeries = async () => {
       if (!selected.length) {
         setSeriesByAsset({});
+        setForecastByAsset({});
         return;
       }
       setLoading(true);
@@ -164,26 +187,22 @@ export default function SectorDashboard({
         await Promise.all(
           selected.map(async (asset) => {
             forecasts[asset] = { 1: null, 5: null, 10: null };
-            try {
-              await Promise.all(
-                [1, 5, 10].map(async (h) => {
-                  try {
-                    const f = await fetch(`/api/files/forecast_suite/${asset}/${timeframe}/${asset}_${timeframe}_log_return_h${h}.json`);
-                    if (!f.ok) {
-                      forecasts[asset][h] = null;
-                      return;
-                    }
-                    const j = await f.json();
-                    const preds = Array.isArray(j?.predictions) ? j.predictions : [];
-                    forecasts[asset][h] = preds.length ? preds[preds.length - 1] : null;
-                  } catch {
+            await Promise.all(
+              [1, 5, 10].map(async (h) => {
+                try {
+                  const f = await fetch(`/api/files/forecast_suite/${asset}/${timeframe}/${asset}_${timeframe}_log_return_h${h}.json`);
+                  if (!f.ok) {
                     forecasts[asset][h] = null;
+                    return;
                   }
-                })
-              );
-            } catch {
-              forecasts[asset] = { 1: null, 5: null, 10: null };
-            }
+                  const j = await f.json();
+                  const preds = Array.isArray(j?.predictions) ? j.predictions : [];
+                  forecasts[asset][h] = preds.length ? preds[preds.length - 1] : null;
+                } catch {
+                  forecasts[asset][h] = null;
+                }
+              })
+            );
           })
         );
         setForecastByAsset(forecasts);
@@ -195,20 +214,22 @@ export default function SectorDashboard({
   }, [selected, timeframe]);
 
   const metrics = useMemo(() => {
-    const activeSeries = selected.flatMap((a) => seriesByAsset[a] || []);
-    const lastPoints = selected.map((a) => (seriesByAsset[a] || [])[Math.max(0, (seriesByAsset[a] || []).length - 1)]).filter(Boolean) as SeriesPoint[];
-    const avgConf = mean(lastPoints.map((p) => p.confidence || 0));
-    const unstableCount = lastPoints.filter((p) => cleanRegime(p.regime) === "UNSTABLE").length;
-    const dominantRegime = (() => {
+    const activeSeries = selected.flatMap((asset) => seriesByAsset[asset] || []);
+    const lastPoints = selected
+      .map((asset) => (seriesByAsset[asset] || [])[Math.max(0, (seriesByAsset[asset] || []).length - 1)])
+      .filter(Boolean) as SeriesPoint[];
+    const avgConf = mean(lastPoints.map((point) => point.confidence || 0));
+    const unstableCount = lastPoints.filter((point) => normalizeRegime(point.regime) === "UNSTABLE").length;
+    const dominant = (() => {
       const counts: Record<string, number> = {};
-      lastPoints.forEach((p) => {
-        const r = cleanRegime(p.regime);
-        counts[r] = (counts[r] || 0) + 1;
+      lastPoints.forEach((point) => {
+        const regime = normalizeRegime(point.regime);
+        counts[regime] = (counts[regime] || 0) + 1;
       });
       return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || "TRANSITION";
     })();
     return {
-      state: dominantRegime,
+      state: dominant,
       confidence: avgConf,
       quality: Math.max(0, Math.min(1, avgConf * 0.9)),
       alerts: unstableCount,
@@ -221,46 +242,65 @@ export default function SectorDashboard({
       const series = seriesByAsset[asset] || [];
       const last = series[series.length - 1];
       const first = series[0];
-      const conf = last?.confidence ?? 0;
-      const regime = cleanRegime(last?.regime);
+      const confidence = last?.confidence ?? 0;
+      const regime = normalizeRegime(last?.regime);
       const rowMeta = universe.find((u) => u.asset === asset);
-      const vStatus = rowMeta?.risk_truth_status || rowMeta?.signal_status || "validated";
-      const vReason = rowMeta?.reason || "";
-      const ret = forecastByAsset[asset]?.[summaryHorizon]?.y_pred;
-      const lastRegimeIdx = series.length - 1;
+      const validationStatus = rowMeta?.risk_truth_status || rowMeta?.signal_status || "validated";
+      const validationReason = rowMeta?.reason || "";
+      const lastRegimeIndex = series.length - 1;
       let streak = 0;
-      for (let i = lastRegimeIdx; i >= 0; i -= 1) {
-        if (cleanRegime(series[i]?.regime) === regime) streak += 1;
+      for (let i = lastRegimeIndex; i >= 0; i -= 1) {
+        if (normalizeRegime(series[i]?.regime) === regime) streak += 1;
         else break;
       }
       const regimeDurationDays = timeframe === "weekly" ? streak * 7 : streak;
+      const h1Raw = forecastByAsset[asset]?.[1]?.y_pred;
+      const h5Raw = forecastByAsset[asset]?.[5]?.y_pred;
+      const h10Raw = forecastByAsset[asset]?.[10]?.y_pred;
+      const h1 = h1Raw != null ? (last?.price || 0) * (1 + h1Raw) : computeFallbackForecast(last?.price, regime, confidence, 1);
+      const h5 = h5Raw != null ? (last?.price || 0) * (1 + h5Raw) : computeFallbackForecast(last?.price, regime, confidence, 5);
+      const h10 = h10Raw != null ? (last?.price || 0) * (1 + h10Raw) : computeFallbackForecast(last?.price, regime, confidence, 10);
+      const projSelected = summaryHorizon === 1 ? h1 : summaryHorizon === 5 ? h5 : h10;
+
       let action = "Aguardar";
-      if (regime === "STABLE" && conf >= 0.6) action = "Aplicar";
-      if (regime === "UNSTABLE" || conf < 0.45) action = "Nao operar";
-      if (vStatus !== "validated") action = "Diagnóstico inconclusivo";
+      if (regime === "STABLE" && confidence >= 0.6) action = "Aplicar";
+      if (regime === "UNSTABLE" || confidence < 0.45) action = "Não operar";
+      if (validationStatus !== "validated") action = "Diagnóstico inconclusivo";
       return {
         asset,
         group: groupLabels[rowMeta?.group || ""] || rowMeta?.group || "",
-        regime: vStatus !== "validated" ? "INCONCLUSIVE" : regime,
-        confidence: conf,
+        regime: validationStatus !== "validated" ? "INCONCLUSIVE" : regime,
+        confidence,
         quality: rowMeta?.quality ?? rowMeta?.metrics?.quality,
         period: first && last ? `${first.date} -> ${last.date}` : "--",
         regimeDurationDays,
         price: last?.price,
-        forecast: ret,
+        projSelected,
+        h1,
+        h5,
+        h10,
         action,
-        validationStatus: vStatus,
-        validationReason: vReason,
+        validationReason,
       };
     });
   }, [selected, seriesByAsset, forecastByAsset, universe, summaryHorizon, timeframe]);
+
+  const sectors =
+    initialDomain === "finance"
+      ? financeGroupFilter
+      : initialDomain === "energy"
+      ? [
+          { value: "all", label: "Todos os grupos" },
+          { value: "energy", label: "Energia" },
+        ]
+      : [{ value: "all", label: "Todos os grupos imobiliários" }];
 
   return (
     <div className="p-4 md:p-5 space-y-4 md:space-y-5">
       <div className="space-y-2">
         <div className="text-xs uppercase tracking-[0.2em] text-zinc-400">{title}</div>
         <h1 className="text-2xl font-semibold">Regimes por setor com projeção integrada</h1>
-        <p className="text-sm text-zinc-400">Leitura estrutural do mercado com confiança e forecast condicional.</p>
+        <p className="text-sm text-zinc-400">Leitura estrutural do mercado com contexto operacional e forecast condicional.</p>
         {runMeta?.global_verdict_status && String(runMeta.global_verdict_status).toLowerCase() !== "pass" ? (
           <div className="rounded-lg border border-rose-500/40 bg-rose-950/40 px-3 py-2 text-xs text-rose-200">
             Global gate FAIL: sinais não acionáveis.
@@ -271,22 +311,23 @@ export default function SectorDashboard({
             Deployment gate BLOCKED: exibindo dados em modo diagnóstico.
           </div>
         ) : null}
-        <div className="flex flex-wrap gap-2 text-xs text-zinc-400">
-          <span>Run: {runMeta?.run_id || "--"}</span>
-          <span>Validados: {riskTruthCounts?.validated ?? "--"}</span>
-          <span>Watch: {riskTruthCounts?.watch ?? "--"}</span>
-          <span>Inconclusivos: {riskTruthCounts?.inconclusive ?? "--"}</span>
-        </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          {(["validated", "watch", "inconclusive"] as const).map((k) => (
+          {(["validated", "watch", "inconclusive"] as const).map((status) => (
             <button
-              key={k}
-              onClick={() => setStatusTab(k)}
+              key={status}
+              onClick={() => setStatusTab(status)}
               className={`rounded-md border px-2 py-1 ${
-                statusTab === k ? "border-cyan-400 text-cyan-300" : "border-zinc-700 text-zinc-400"
+                statusTab === status ? "border-cyan-400 text-cyan-300" : "border-zinc-700 text-zinc-400"
               }`}
+              title={
+                status === "validated"
+                  ? "Sinal apto para leitura operacional"
+                  : status === "watch"
+                  ? "Sinal em observação por risco de mudança de regime"
+                  : "Sem estrutura suficiente para ação"
+              }
             >
-              {k}
+              {status}
             </button>
           ))}
           <label className="ml-2 inline-flex items-center gap-2 text-zinc-400">
@@ -302,10 +343,27 @@ export default function SectorDashboard({
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Card label="Estado" value={metrics.state} tone={metrics.state} />
-        <Card label="Confiança" value={`${(metrics.confidence * 100).toFixed(1)}%`} />
-        <Card label="Qualidade" value={`${(metrics.quality * 100).toFixed(1)}%`} />
-        <Card label="Alertas" value={String(metrics.alerts)} />
+        <Card
+          label="Estado"
+          value={metrics.state}
+          helper="Estado dominante no conjunto de ativos selecionado."
+          tone={metrics.state}
+        />
+        <Card
+          label="Confiança"
+          value={`${(metrics.confidence * 100).toFixed(1)}%`}
+          helper="Consistência da inferência estrutural no período."
+        />
+        <Card
+          label="Qualidade"
+          value={`${(metrics.quality * 100).toFixed(1)}%`}
+          helper="Saúde do sinal após filtros de ruído e validação."
+        />
+        <Card
+          label="Alertas"
+          value={String(metrics.alerts)}
+          helper="Contagem de ativos em estado instável no recorte atual."
+        />
       </div>
 
       <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 md:p-5 space-y-4">
@@ -313,13 +371,9 @@ export default function SectorDashboard({
           assets={universe}
           selected={selected}
           onSelectedChange={setSelected}
-          sector={sector}
-          onSectorChange={(value: string) => setSector(value as "finance" | "energy" | "realestate")}
-          sectors={[
-            { value: "finance", label: "Finance / Trading" },
-            { value: "energy", label: "Macro / Operacoes" },
-            { value: "realestate", label: "Imobiliário" },
-          ]}
+          sector={groupFilter}
+          onSectorChange={setGroupFilter}
+          sectors={sectors}
           timeframe={timeframe}
           onTimeframeChange={setTimeframe}
           rangePreset={rangePreset}
@@ -331,8 +385,11 @@ export default function SectorDashboard({
           smoothing={smoothing}
           onSmoothingChange={setSmoothing}
         />
+        <p className="text-xs text-zinc-500">
+          Gráfico: eixo X = tempo, eixo Y = preço (ou índice base 100 se normalizado). Passe o mouse para ver data, regime, confiança e valor.
+        </p>
 
-        {loading ? <div className="text-sm text-zinc-500">Carregando series...</div> : null}
+        {loading ? <div className="text-sm text-zinc-500">Carregando séries...</div> : null}
 
         <RegimeChart
           data={seriesByAsset}
@@ -347,36 +404,43 @@ export default function SectorDashboard({
       {showTable ? (
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 md:gap-5">
           <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 md:p-5">
-            <div className="text-sm uppercase tracking-widest text-zinc-400">Tabela por ativo</div>
+            <div className="flex items-center justify-between">
+              <div className="text-sm uppercase tracking-widest text-zinc-400">Tabela por ativo</div>
+              <div className="text-xs text-zinc-500" title="Projeções p50 para horizontes h1, h5 e h10">
+                Valores em unidade de preço do ativo
+              </div>
+            </div>
             <div className="mt-3 overflow-auto">
               <table className="w-full text-xs">
                 <thead className="text-zinc-500 uppercase">
                   <tr>
                     <th className="text-left py-2">Ativo</th>
                     <th className="text-left py-2">Setor</th>
-                    <th className="text-left py-2">Periodo</th>
+                    <th className="text-left py-2">Período</th>
                     <th className="text-left py-2">Regime</th>
-                    <th className="text-left py-2">Duração</th>
+                    <th className="text-left py-2" title="Dias consecutivos no regime atual">Duração</th>
                     <th className="text-left py-2">Conf.</th>
                     <th className="text-left py-2">Qual.</th>
-                    <th className="text-left py-2">Preco</th>
+                    <th className="text-left py-2" title="Preço em unidade local do ativo">Preço</th>
                     <th className="text-left py-2">Proj. h{summaryHorizon}</th>
-                    <th className="text-left py-2">Acao</th>
+                    <th className="text-left py-2">Ação</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {tableRows.map((r) => (
-                    <tr key={r.asset} className="border-t border-zinc-800/70 text-zinc-300">
-                      <td className="py-2">{r.asset}</td>
-                      <td className="py-2 text-zinc-400">{r.group || "-"}</td>
-                      <td className="py-2 text-zinc-400">{r.period}</td>
-                      <td className={`py-2 ${regimeColor[r.regime] || "text-zinc-300"}`}>{r.regime}</td>
-                      <td className="py-2 text-zinc-400">{r.regimeDurationDays}d</td>
-                      <td className="py-2">{(r.confidence * 100).toFixed(1)}%</td>
-                      <td className="py-2">{r.quality != null ? `${(r.quality * 100).toFixed(1)}%` : "--"}</td>
-                      <td className="py-2">{r.price != null ? r.price.toFixed(2) : "--"}</td>
-                      <td className="py-2">{r.forecast != null ? `${(r.forecast * 100).toFixed(2)}%` : "--"}</td>
-                      <td className="py-2" title={r.validationReason || ""}>{r.action}</td>
+                  {tableRows.map((row) => (
+                    <tr key={row.asset} className="border-t border-zinc-800/70 text-zinc-300">
+                      <td className="py-2">{row.asset}</td>
+                      <td className="py-2 text-zinc-400">{row.group || "-"}</td>
+                      <td className="py-2 text-zinc-400">{row.period}</td>
+                      <td className={`py-2 ${regimeColor[row.regime] || "text-zinc-300"}`}>{row.regime}</td>
+                      <td className="py-2 text-zinc-400">{row.regimeDurationDays}d</td>
+                      <td className="py-2">{(row.confidence * 100).toFixed(1)}%</td>
+                      <td className="py-2">{row.quality != null ? `${(row.quality * 100).toFixed(1)}%` : "--"}</td>
+                      <td className="py-2">{row.price != null ? row.price.toFixed(2) : "--"}</td>
+                      <td className="py-2">{row.projSelected != null ? row.projSelected.toFixed(2) : "--"}</td>
+                      <td className="py-2" title={row.validationReason || ""}>
+                        {row.action}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -387,27 +451,39 @@ export default function SectorDashboard({
           <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 md:p-5 space-y-3">
             <div className="text-sm uppercase tracking-widest text-zinc-400">Resumo</div>
             <div className="flex items-center gap-2 text-xs">
-              <span className="text-zinc-400">Horizonte:</span>
+              <span className="text-zinc-400" title="Horizonte da projeção condicional p50">
+                Horizonte:
+              </span>
               {[1, 5, 10].map((h) => (
                 <button
                   key={h}
-                  className={`rounded-md border px-2 py-1 ${summaryHorizon === h ? "border-cyan-400 text-cyan-300" : "border-zinc-700 text-zinc-300"}`}
+                  className={`rounded-md border px-2 py-1 ${
+                    summaryHorizon === h ? "border-cyan-400 text-cyan-300" : "border-zinc-700 text-zinc-300"
+                  }`}
                   onClick={() => setSummaryHorizon(h as 1 | 5 | 10)}
+                  title={`Projeção condicional em ${h} dia(s)`}
                 >
                   h{h}
                 </button>
               ))}
             </div>
-            <div className="text-xs text-zinc-300">Amostras no chart: {metrics.sampleSize}</div>
+            <div className="text-xs text-zinc-300">Amostras no gráfico: {metrics.sampleSize}</div>
             <div className="text-xs text-zinc-300">Ativos selecionados: {selected.length}</div>
             <div className="text-xs text-zinc-300">Regime dominante: {metrics.state}</div>
             <div className="text-xs text-zinc-300">Confiança média: {(metrics.confidence * 100).toFixed(1)}%</div>
-            {tableRows.slice(0, 3).map((r) => (
-              <div key={r.asset} className="rounded-lg border border-zinc-800 p-2 text-xs">
-                <div className="font-medium text-zinc-200">{r.asset}</div>
-                <div className="text-zinc-400">{r.period}</div>
+            <div className="text-xs text-zinc-500">
+              h1/h5/h10: projeção condicional. Quando não houver arquivo de forecast, usa fallback conservador por regime + confiança.
+            </div>
+            {tableRows.slice(0, 4).map((row) => (
+              <div key={row.asset} className="rounded-lg border border-zinc-800 p-2 text-xs">
+                <div className="font-medium text-zinc-200">{row.asset}</div>
+                <div className="text-zinc-400">{row.period}</div>
                 <div className="text-zinc-300">
-                  {r.regime} por ~{r.regimeDurationDays}d • h{summaryHorizon}: {r.forecast != null ? `${(r.forecast * 100).toFixed(2)}%` : "--"}
+                  {row.regime} por ~{row.regimeDurationDays}d
+                </div>
+                <div className="text-zinc-400">
+                  h1: {row.h1 != null ? row.h1.toFixed(2) : "--"} | h5: {row.h5 != null ? row.h5.toFixed(2) : "--"} | h10:{" "}
+                  {row.h10 != null ? row.h10.toFixed(2) : "--"}
                 </div>
               </div>
             ))}
@@ -418,12 +494,30 @@ export default function SectorDashboard({
   );
 }
 
-function Card({ label, value, tone }: { label: string; value: string; tone?: string }) {
-  const color = tone === "STABLE" ? "text-emerald-300" : tone === "UNSTABLE" ? "text-rose-300" : tone === "TRANSITION" ? "text-amber-300" : "text-zinc-100";
+function Card({
+  label,
+  value,
+  helper,
+  tone,
+}: {
+  label: string;
+  value: string;
+  helper: string;
+  tone?: string;
+}) {
+  const color =
+    tone === "STABLE"
+      ? "text-emerald-300"
+      : tone === "UNSTABLE"
+      ? "text-rose-300"
+      : tone === "TRANSITION"
+      ? "text-amber-300"
+      : "text-zinc-100";
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 md:p-4">
+    <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 md:p-4" title={helper}>
       <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">{label}</div>
       <div className={`mt-1 text-lg md:text-xl font-semibold ${color}`}>{value}</div>
+      <div className="mt-1 text-[11px] text-zinc-500">{helper}</div>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { motion } from "framer-motion";
 
@@ -31,8 +31,9 @@ export default function OriginPulse() {
         />
       </svg>
       <div className="relative z-10 text-xs text-zinc-400 mt-2">
-        Evolução do motor e pulsos de regime ao longo do tempo.
+        Evolução do sistema e pulsos de regime ao longo do tempo.
       </div>
     </motion.div>
   );
 }
+

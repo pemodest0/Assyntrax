@@ -29,7 +29,16 @@ def main() -> None:
     snapshot_path = ROOT / args.snapshot
     contract = _read_json(ROOT / args.contract)
     required = list(contract.get("required_fields") or [])
-    statuses = set(str(x).lower() for x in (contract.get("status_values") or []))
+    statuses = set(
+        str(x).lower()
+        for x in (
+            contract.get("allowed_status")
+            or contract.get("allowed_signal_status")
+            or contract.get("status_values")
+            or []
+        )
+    )
+    status_field = str(contract.get("status_field") or "status")
 
     payload: dict[str, Any] = {
         "status": "ok",
@@ -62,7 +71,7 @@ def main() -> None:
                 for k in required:
                     if k not in row:
                         missing[k] += 1
-                st = str(row.get("signal_status", "")).lower()
+                st = str(row.get(status_field, row.get("signal_status", ""))).lower()
                 if statuses and st not in statuses:
                     bad_status += 1
         payload["n_rows"] = n

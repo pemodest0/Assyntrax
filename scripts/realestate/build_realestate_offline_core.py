@@ -30,6 +30,35 @@ def _load_monthly_rate(path: Path) -> pd.DataFrame:
     return out
 
 
+def _load_bcb_monthly(path: Path, out_col: str) -> pd.DataFrame:
+    if not path.exists():
+        return pd.DataFrame(columns=["date", out_col])
+    df = pd.read_csv(path)
+    date_col = "data" if "data" in df.columns else "date" if "date" in df.columns else None
+    value_col = "valor" if "valor" in df.columns else "value" if "value" in df.columns else None
+    if date_col is None or value_col is None:
+        return pd.DataFrame(columns=["date", out_col])
+    out = df[[date_col, value_col]].copy()
+    out.columns = ["date", out_col]
+    out["date"] = pd.to_datetime(out["date"], errors="coerce", dayfirst=True)
+    out[out_col] = pd.to_numeric(out[out_col], errors="coerce")
+    out = out.dropna(subset=["date", out_col])
+    out["date"] = out["date"].dt.to_period("M").dt.to_timestamp("M")
+    return out.groupby("date", as_index=False)[out_col].mean()
+
+
+def _read_optional_monthly_series(normalized_dir: Path, raw_dir: Path, filename: str, out_col: str) -> pd.DataFrame:
+    normalized_file = normalized_dir / filename
+    if normalized_file.exists():
+        df = _load_series(normalized_file)
+        df["date"] = df["date"].dt.to_period("M").dt.to_timestamp("M")
+        out = df.groupby("date", as_index=False)["value"].mean()
+        out.columns = ["date", out_col]
+        return out
+    raw_file = raw_dir / "bcb" / filename
+    return _load_bcb_monthly(raw_file, out_col)
+
+
 def _compute_liquidity_proxy(price: pd.Series, window: int = 3) -> pd.Series:
     ret = price.pct_change().abs()
     vol = ret.rolling(window=window, min_periods=max(2, window // 2)).mean()
@@ -160,13 +189,35 @@ def main() -> None:
         return
 
     selic_path = normalized_dir / "SELIC_D_11.csv"
-    if not selic_path.exists():
-        summary = {"status": "fail", "reason": "missing_SELIC_D_11.csv", "n_assets": 0}
+    raw_selic_path = raw_dir / "bcb" / "SELIC_D_11.csv"
+    if not selic_path.exists() and not raw_selic_path.exists():
+        summary = {"status": "fail", "reason": "missing_SELIC_D_11.csv (normalized and raw)", "n_assets": 0}
         (validation_outdir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
         print("[fail] missing SELIC_D_11.csv")
         return
 
-    rate = _load_monthly_rate(selic_path)
+    j_selic = _read_optional_monthly_series(normalized_dir, raw_dir, "SELIC_D_11.csv", "J_selic")
+    j_pf_mercado = _read_optional_monthly_series(normalized_dir, raw_dir, "CRED_IMOB_PF_JUROS_MERCADO_25447.csv", "J_pf_mercado")
+    j_pf_total = _read_optional_monthly_series(normalized_dir, raw_dir, "CRED_IMOB_PF_JUROS_TOTAL_20038.csv", "J_pf_total")
+    l_credito = _read_optional_monthly_series(normalized_dir, raw_dir, "CRED_IMOB_PF_SALDO_20540.csv", "L_credito")
+    p_incc = _read_optional_monthly_series(normalized_dir, raw_dir, "INCC_M_192.csv", "P_incc")
+
+    # J(t) priority: financing market rate -> financing total rate -> Selic.
+    rate = j_selic.rename(columns={"J_selic": "J"})
+    if not j_pf_total.empty:
+        rate = rate.merge(j_pf_total, on="date", how="outer")
+    if not j_pf_mercado.empty:
+        rate = rate.merge(j_pf_mercado, on="date", how="outer")
+    rate = rate.sort_values("date")
+    if "J_pf_mercado" not in rate.columns:
+        rate["J_pf_mercado"] = np.nan
+    if "J_pf_total" not in rate.columns:
+        rate["J_pf_total"] = np.nan
+    if "J" not in rate.columns:
+        rate["J"] = np.nan
+    rate["J"] = rate["J_pf_mercado"].combine_first(rate["J_pf_total"]).combine_first(rate["J"])
+    rate = rate[["date", "J"]]
+
     global_liq = _find_liquidity_series(raw_dir)
     global_disc = _find_discount_series(raw_dir)
 
@@ -177,11 +228,17 @@ def main() -> None:
         price_df["date"] = price_df["date"].dt.to_period("M").dt.to_timestamp("M")
         price_monthly = price_df.groupby("date", as_index=False)["value"].mean()
         price_monthly.columns = ["date", "P"]
+        if not p_incc.empty:
+            price_monthly = price_monthly.merge(p_incc, on="date", how="left")
 
         frame = price_monthly.merge(rate, on="date", how="left")
         if global_liq is not None:
             frame = frame.merge(global_liq, on="date", how="left")
             liq_source = "official_proxy"
+        elif not l_credito.empty:
+            frame = frame.merge(l_credito, on="date", how="left")
+            frame["L"] = pd.to_numeric(frame["L_credito"], errors="coerce")
+            liq_source = "bcb_credit_balance_proxy"
         else:
             frame["L"] = _compute_liquidity_proxy(frame["P"])
             liq_source = "price_vol_proxy"
@@ -197,11 +254,20 @@ def main() -> None:
         frame.to_csv(outdir / f"{asset_id}_core.csv", index=False)
 
         adeq = _adequacy(frame, min_points=args.min_points)
+        j_source = "missing"
+        if not j_pf_mercado.empty:
+            j_source = "bcb_financing_market_rate"
+        elif not j_pf_total.empty:
+            j_source = "bcb_financing_total_rate"
+        elif not j_selic.empty:
+            j_source = "bcb_selic"
         adeq.update(
             {
                 "asset_id": asset_id,
+                "j_source": j_source,
                 "liquidity_source": liq_source,
                 "discount_source": disc_source,
+                "has_P_incc": bool("P_incc" in frame.columns and frame["P_incc"].notna().any()),
                 "has_D": bool(frame["D"].notna().any()),
             }
         )
@@ -222,10 +288,19 @@ def main() -> None:
         "min_points": int(args.min_points),
         "notes": [
             "P(t)=FipeZap price index (monthly).",
-            "L(t)=official liquidity proxy if found, else price volatility proxy.",
-            "J(t)=SELIC monthly mean.",
+            "L(t)=official liquidity proxy if found; else BCB credit balance; else price volatility proxy.",
+            "J(t)=BCB financing market rate if available; else financing total; else Selic.",
             "D(t)=official discount when available, otherwise missing (TODO).",
         ],
+        "source_availability": {
+            "bcb_j_financing_market_25447": bool(not j_pf_mercado.empty),
+            "bcb_j_financing_total_20038": bool(not j_pf_total.empty),
+            "bcb_j_selic_11": bool(not j_selic.empty),
+            "bcb_l_credit_balance_20540": bool(not l_credito.empty),
+            "bcb_p_incc_192": bool(not p_incc.empty),
+            "official_liquidity_proxy": bool(global_liq is not None),
+            "official_discount_proxy": bool(global_disc is not None),
+        },
     }
     (validation_outdir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(f"[ok] assets={summary['n_assets']} ok={ok_count} watch={watch_count} fail={fail_count}")

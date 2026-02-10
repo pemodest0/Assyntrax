@@ -1,4 +1,4 @@
-import ProductMock from "@/components/visuals/ProductMock";
+﻿import ProductMock from "@/components/visuals/ProductMock";
 import SignalWeave from "@/components/visuals/SignalWeave";
 import ProofMatrix from "@/components/visuals/ProofMatrix";
 
@@ -9,11 +9,11 @@ export default function ProductPage() {
         <div className="space-y-4">
           <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Produto</div>
           <h1 className="text-4xl md:text-5xl font-semibold tracking-tight">
-            Estrutura, métricas e decisão em um só fluxo
+            Estrutura, métricas e decisão em um fluxo único
           </h1>
           <p className="text-zinc-300 max-w-3xl text-lg">
-            A Assyntrax entrega diagnóstico acionável de regimes, saúde estrutural e forecast
-            condicional — com rastreabilidade, alertas e contexto técnico.
+            A Assyntrax combina diagnóstico de regime, risco estrutural e forecast condicional com
+            rastreabilidade operacional. O foco é reduzir erro de decisão, não adivinhar preço.
           </p>
         </div>
         <SignalWeave />
@@ -21,16 +21,17 @@ export default function ProductPage() {
 
       <section className="grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] gap-10 items-center">
         <div className="space-y-4">
-          <h2 className="text-3xl font-semibold">Dashboard de decisão</h2>
+          <h2 className="text-3xl font-semibold">Dashboard operacional</h2>
           <p className="text-zinc-300 text-lg">
-            Regime, confiança, qualidade e alertas em tempo real. Sem magia, com critérios claros.
+            Leitura de regime com confiança, qualidade, status de gate e motivo explícito de uso.
+            Quando o sistema está inconclusivo, a ação fica bloqueada em modo diagnóstico.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-zinc-300">
             <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-5">
-              Diagnóstico antes de previsão.
+              Estado atual: o que mudou no sistema hoje.
             </div>
             <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-5">
-              Alertas explícitos de uso e risco.
+              Regra operacional: o que evitar para não forçar decisão frágil.
             </div>
           </div>
         </div>
@@ -40,30 +41,44 @@ export default function ProductPage() {
       <section className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] gap-10 items-center">
         <ProofMatrix />
         <div className="space-y-4">
-          <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">API &amp; integração</div>
+          <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">API e integração</div>
           <h2 className="text-3xl font-semibold">Saídas prontas para produção</h2>
           <p className="text-zinc-300 text-lg">
-            Respostas em JSON com regime, confiança, métricas e sinais de alerta. Integração direta
-            com BI, alertas e pipelines internos.
+            Respostas em JSON com regime, confiança, qualidade, status, motivo e run_id para auditoria.
+            Integração direta com BI, alertas e sistemas internos.
           </p>
           <pre className="rounded-2xl border border-zinc-800 bg-black/60 p-4 text-xs text-zinc-200 overflow-x-auto">
 {`{
-  "risk_regime": "HIGH_VOL",
-  "confidence": 0.93,
-  "regime_state": "UNSTABLE",
-  "warnings": ["DIRECTION_WEAK"]
+  "regime": "transition",
+  "confidence": 0.84,
+  "quality": 0.78,
+  "status": "watch",
+  "reason": "transição persistente",
+  "run_id": "20260210_xxx"
 }`}
           </pre>
         </div>
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold">Para quem</h2>
+        <h2 className="text-2xl font-semibold">Setores de aplicação</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card title="Equipes de risco">Consciência de regime para controle de exposição.</Card>
-          <Card title="Gestores de portfólio">Decisão contextual sob mudança de volatilidade.</Card>
-          <Card title="Pesquisa quant">Diagnósticos para validar sinais e baselines.</Card>
-          <Card title="Decisão sob incerteza">Saídas transparentes e alertas explícitos.</Card>
+          <Card title="Finanças">
+            Regime diário para ativos líquidos. Útil para reduzir overtrading, evitar extrapolação em
+            transição e bloquear ação quando a estrutura degrada.
+          </Card>
+          <Card title="Imobiliário">
+            Diagnóstico por cidade e estado com preço, liquidez, juros e crédito. Separa expansão,
+            maturação, estagnação e estresse local com explicação operacional.
+          </Card>
+          <Card title="Energia e infraestrutura">
+            Leitura de estabilidade em séries de carga, custo e risco operacional, com alerta para
+            mudança estrutural antes de ajuste tático.
+          </Card>
+          <Card title="Operações e risco institucional">
+            Base para comitês e governança: status validado/observação/inconclusivo, motivo do gate
+            e trilha de decisão por execução.
+          </Card>
         </div>
       </section>
     </div>

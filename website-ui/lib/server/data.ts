@@ -1,4 +1,4 @@
-import { promises as fs } from "fs";
+﻿import { promises as fs } from "fs";
 import path from "path";
 import { readAssetStatusMap } from "@/lib/server/validated";
 
@@ -40,7 +40,6 @@ export async function readLatestFile(file: string) {
     const text = await fs.readFile(target, "utf-8");
     return JSON.parse(text);
   } catch {
-    // fallback: try other dir
     const fallback = dir === latest ? path.join(publicLatest, file) : path.join(latest, file);
     const text = await fs.readFile(fallback, "utf-8");
     return JSON.parse(text);
@@ -49,7 +48,6 @@ export async function readLatestFile(file: string) {
 
 export async function findLatestApiRecords() {
   const { results } = dataDirs();
-  // Preferred source: ops snapshots (production-gated payload).
   const snapshotsRoot = path.join(results, "ops", "snapshots");
   try {
     const runDirs = await fs.readdir(snapshotsRoot, { withFileTypes: true });
@@ -70,7 +68,6 @@ export async function findLatestApiRecords() {
     // ignore and fallback to legacy search
   }
 
-  // Legacy fallback: results/*/api_records.jsonl
   const entries = await fs.readdir(results, { withFileTypes: true });
   const candidates: { path: string; mtime: number }[] = [];
   for (const ent of entries) {
@@ -87,30 +84,52 @@ export async function findLatestApiRecords() {
   return candidates.length ? candidates[0].path : null;
 }
 
-export async function readJsonl(pathFile: string) {
+function sanitizeJsonLine(line: string) {
+  return line
+    .replace(/\bNaN\b/g, "null")
+    .replace(/\bInfinity\b/g, "null")
+    .replace(/\b-Infinity\b/g, "null");
+}
+
+function parseJsonLine(line: string): Record<string, unknown> {
+  try {
+    return JSON.parse(line);
+  } catch {
+    const fixed = sanitizeJsonLine(line);
+    return JSON.parse(fixed);
+  }
+}
+
+export async function readJsonl(pathFile: string): Promise<Record<string, unknown>[]> {
   const text = await fs.readFile(pathFile, "utf-8");
-  return text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => JSON.parse(line));
+  const out: Record<string, unknown>[] = [];
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    try {
+      out.push(parseJsonLine(line));
+    } catch {
+      // ignore malformed line instead of breaking entire snapshot read
+    }
+  }
+  return out;
 }
 
 function repairMojibake(value: string) {
   return value
-    .replace(/Ã§/g, "ç")
-    .replace(/Ã£/g, "ã")
-    .replace(/Ã¡/g, "á")
-    .replace(/Ã©/g, "é")
-    .replace(/Ãª/g, "ê")
-    .replace(/Ã­/g, "í")
-    .replace(/Ã³/g, "ó")
-    .replace(/Ã´/g, "ô")
-    .replace(/Ãº/g, "ú")
-    .replace(/Ã‰/g, "É")
-    .replace(/Ã“/g, "Ó")
-    .replace(/Ã/g, "à")
-    .replace(/Â/g, "");
+    .replace(/ÃƒÂ§/g, "ç")
+    .replace(/ÃƒÂ£/g, "ã")
+    .replace(/ÃƒÂ¡/g, "á")
+    .replace(/ÃƒÂ©/g, "é")
+    .replace(/ÃƒÂª/g, "ê")
+    .replace(/ÃƒÂ­/g, "í")
+    .replace(/ÃƒÂ³/g, "ó")
+    .replace(/ÃƒÂ´/g, "ô")
+    .replace(/ÃƒÂº/g, "ú")
+    .replace(/Ãƒâ€°/g, "É")
+    .replace(/Ãƒâ€œ/g, "Ó")
+    .replace(/Ãƒ/g, "à")
+    .replace(/Ã‚/g, "");
 }
 
 function sanitizeEncoding<T>(input: T): T {
@@ -162,7 +181,10 @@ export async function findLatestValidRun(): Promise<LatestRunInfo | null> {
     const summaryPath = path.join(snapshotsRoot, runId, "summary.json");
     const snapshotPath = path.join(snapshotsRoot, runId, "api_snapshot.jsonl");
     try {
-      const [summaryText, snapshotStat] = await Promise.all([fs.readFile(summaryPath, "utf-8"), fs.stat(snapshotPath)]);
+      const [summaryText, snapshotStat] = await Promise.all([
+        fs.readFile(summaryPath, "utf-8"),
+        fs.stat(snapshotPath),
+      ]);
       if (!snapshotStat.size) continue;
       const summary = JSON.parse(summaryText) as Record<string, unknown>;
       if (!isRunValid(summary)) continue;
@@ -219,7 +241,7 @@ export async function readJsonlWithValidationGate(pathFile: string) {
   } catch {
     return records;
   }
-  return records.map((record) => {
+  return records.map((record: Record<string, unknown>) => {
     const key = `${record.asset || ""}__${record.timeframe || ""}`;
     const gate = statusMap[key];
     if (!gate || (gate.status || "").toLowerCase() === "validated") {
@@ -249,3 +271,4 @@ export async function readDashboardOverview() {
   const text = await fs.readFile(overviewPath, "utf-8");
   return JSON.parse(text);
 }
+

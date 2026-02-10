@@ -1,89 +1,62 @@
-import OriginPulse from "@/components/visuals/OriginPulse";
+﻿import MethodLattice from "@/components/visuals/MethodLattice";
 
 export default function AboutPage() {
   return (
-    <div className="space-y-16">
-      <section className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-10 items-center">
+    <div className="space-y-12">
+      <section className="relative isolate grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-10 items-center">
         <div className="space-y-4">
           <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Sobre</div>
           <h1 className="text-4xl md:text-5xl font-semibold tracking-tight">
             Por que a Assyntrax existe
           </h1>
           <p className="text-zinc-300 max-w-3xl text-lg">
-            Mercados mudam de regime e modelos tradicionais continuam prevendo como se nada
-            tivesse mudado. A Assyntrax nasceu para diagnosticar estrutura antes de qualquer
-            projeção.
+            Mercados mudam de regime. Modelos lineares continuam extrapolando como se nada tivesse
+            mudado. A Assyntrax existe para diagnosticar estrutura, risco e confiabilidade antes da ação.
           </p>
         </div>
-        <OriginPulse />
-      </section>
-
-      <section className="rounded-[32px] border border-zinc-800 bg-zinc-950/60 p-10 hero-noise">
-        <div className="text-sm uppercase tracking-[0.3em] text-zinc-400">
-          O que fazemos de diferente
-        </div>
-        <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <ValueCard title="Forecast condicional">
-            A previsão só aparece quando o regime é estável.
-          </ValueCard>
-          <ValueCard title="Diagnóstico primeiro">
-            Estado, confiança e qualidade antes de qualquer projeção.
-          </ValueCard>
-          <ValueCard title="Transparência total">
-            Alertas, motivos e métricas explícitas.
-          </ValueCard>
+        <div className="overflow-hidden rounded-[28px]">
+          <MethodLattice />
         </div>
       </section>
 
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <section className="relative isolate rounded-[32px] border border-zinc-800 bg-zinc-950/60 p-10">
+        <div className="text-sm uppercase tracking-[0.3em] text-zinc-400">Autor e criador</div>
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-center">
+          <div>
+            <div className="text-2xl font-semibold tracking-tight">Pedro Henrique Modesto</div>
+            <p className="mt-2 text-zinc-300">
+              Pesquisa aplicada em dinâmica de regimes, risco estrutural e arquitetura de diagnóstico para decisão.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3 text-sm">
+            <a className="rounded-lg border border-zinc-700 px-3 py-2 text-zinc-300 hover:text-white hover:border-zinc-500" href="https://github.com/pemodest0/Assyntrax">GitHub</a>
+            <a className="rounded-lg border border-zinc-700 px-3 py-2 text-zinc-300 hover:text-white hover:border-zinc-500" href="https://www.linkedin.com/in/pedro-henrique-gesualdo-modesto-39a135272/">LinkedIn</a>
+            <a className="rounded-lg border border-zinc-700 px-3 py-2 text-zinc-300 hover:text-white hover:border-zinc-500" href="https://pemodest0.github.io/">Portfólio</a>
+          </div>
+        </div>
+      </section>
+
+      <section className="relative isolate grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="rounded-[28px] border border-zinc-800 bg-zinc-950/60 p-8">
           <div className="text-sm uppercase tracking-[0.3em] text-zinc-400">História</div>
           <p className="mt-3 text-zinc-300">
-            O projeto nasceu de um problema real: previsores falham quando o regime muda. O foco
-            virou identificar estrutura e disciplinar o uso de previsão.
+            O projeto começou com uma pergunta simples: por que modelos de previsão falham exatamente
+            quando o risco mais importa? A resposta levou ao foco em estrutura dinâmica e controle de decisão.
           </p>
           <p className="mt-3 text-zinc-300">
-            O motor evoluiu para um pipeline completo: embedding, microestados, grafos e regimes
-            metastáveis, com qualidade e alertas explícitos.
+            Hoje, o núcleo combina embedding, microestados, grafos, validação contínua e gates operacionais,
+            com trilha auditável por execução.
           </p>
         </div>
         <div className="rounded-[28px] border border-zinc-800 bg-zinc-950/60 p-8">
-          <div className="text-sm uppercase tracking-[0.3em] text-zinc-400">Futuro</div>
+          <div className="text-sm uppercase tracking-[0.3em] text-zinc-400">Direção</div>
           <ul className="mt-3 space-y-3 text-zinc-300">
-            <li>- API global de diagnóstico multiativos.</li>
-            <li>- Agentes setoriais (financeiro, logística e imobiliário).</li>
-            <li>- Expansão de cobertura geográfica e dados oficiais.</li>
+            <li>- Consolidar cobertura por domínio com dados rastreáveis e contrato único de saída.</li>
+            <li>- Fortalecer validação diária com detecção de drift e bloqueio automático de sinais fracos.</li>
+            <li>- Entregar API e dashboard com utilidade operacional clara para cada setor.</li>
           </ul>
         </div>
       </section>
-
-      <section className="rounded-[32px] border border-zinc-800 bg-zinc-950/60 p-10">
-        <div className="text-sm uppercase tracking-[0.3em] text-zinc-400">Fases do produto</div>
-        <div className="mt-5 grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-zinc-300">
-          <TimelineItem title="Fase 1" text="Motor base com diagnóstico em séries reais." />
-          <TimelineItem title="Fase 2" text="Graph Engine com hiper-testes multiativos." />
-          <TimelineItem title="Fase 3" text="API e dashboard de decisão." />
-          <TimelineItem title="Fase 4" text="Expansão global e setorial." />
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function ValueCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6 text-sm text-zinc-300">
-      <div className="text-lg font-semibold">{title}</div>
-      <div className="mt-2">{children}</div>
-    </div>
-  );
-}
-
-function TimelineItem({ title, text }: { title: string; text: string }) {
-  return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
-      <div className="text-sm uppercase tracking-[0.2em] text-zinc-400">{title}</div>
-      <div className="mt-2 text-zinc-300">{text}</div>
     </div>
   );
 }

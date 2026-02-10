@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import ProductMock from "@/components/visuals/ProductMock";
 import { motion } from "framer-motion";
@@ -13,19 +13,17 @@ export default function ProductSection() {
         transition={{ duration: 0.5 }}
       >
         <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Produto</div>
-        <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">
-          Dashboard + API pensados para decisão
-        </h2>
+        <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">Dashboard e API para decisão auditável</h2>
         <p className="text-zinc-300 text-base lg:text-lg">
-          Entregamos leitura de regimes, saúde estrutural e projeções condicionais. A API expõe
-          tudo com rastreabilidade de métricas e alertas claros.
+          A leitura operacional entrega regime, confiança, qualidade e motivo do gate. A API
+          publica apenas saídas válidas e separa claramente diagnóstico inconclusivo.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-zinc-300">
           <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
-            Diagnóstico confiável antes de forecast.
+            Evidência por ativo, domínio e execução.
           </div>
           <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
-            Integração rápida com BI, alertas e APIs.
+            Integração com alertas, BI e processos operacionais.
           </div>
         </div>
       </motion.div>

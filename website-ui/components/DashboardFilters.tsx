@@ -142,8 +142,9 @@ export default function DashboardFilters(props: Props) {
           value={timeframe}
           onChange={(e) => onTimeframeChange(e.target.value)}
           className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+          title="Frequência da série"
         >
-          <option value="daily">Diario</option>
+          <option value="daily">Diário</option>
           <option value="weekly">Semanal</option>
         </select>
 
@@ -151,11 +152,12 @@ export default function DashboardFilters(props: Props) {
           value={rangePreset}
           onChange={(e) => onRangePresetChange(e.target.value)}
           className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+          title="Janela temporal do gráfico"
         >
-          <option value="30d">Ultimos 30d</option>
-          <option value="90d">Ultimos 90d</option>
-          <option value="180d">Ultimos 180d</option>
-          <option value="1y">Ultimo 1y</option>
+          <option value="30d">Últimos 30d</option>
+          <option value="90d">Últimos 90d</option>
+          <option value="180d">Últimos 180d</option>
+          <option value="1y">Último 1y</option>
           <option value="all">Tudo</option>
         </select>
 
@@ -163,6 +165,7 @@ export default function DashboardFilters(props: Props) {
           value={smoothing}
           onChange={(e) => onSmoothingChange(e.target.value as "none" | "ema_short" | "ema_long")}
           className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+          title="Suavização da curva para leitura estrutural"
         >
           <option value="none">Suavização: none</option>
           <option value="ema_short">Suavização: EMA curto</option>
@@ -172,6 +175,7 @@ export default function DashboardFilters(props: Props) {
         <button
           className={`rounded-lg border px-3 py-2 text-sm ${normalize ? "border-cyan-400 text-cyan-300" : "border-zinc-700"}`}
           onClick={() => onNormalizeChange(!normalize)}
+          title="Normalizar em base 100 para comparar ativos de escalas diferentes"
         >
           {normalize ? "Normalizar: ON" : "Normalizar: OFF"}
         </button>
@@ -179,6 +183,7 @@ export default function DashboardFilters(props: Props) {
         <button
           className={`rounded-lg border px-3 py-2 text-sm ${showRegimeBands ? "border-cyan-400 text-cyan-300" : "border-zinc-700"}`}
           onClick={() => onShowRegimeBandsChange(!showRegimeBands)}
+          title="Exibir ou ocultar bandas de regime no fundo do gráfico"
         >
           {showRegimeBands ? "Bandas regime: ON" : "Bandas regime: OFF"}
         </button>

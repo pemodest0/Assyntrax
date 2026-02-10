@@ -1,7 +1,6 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 
 function resolveLang(pathname: string | null) {
@@ -46,9 +45,8 @@ export default function SiteHeader() {
 
   return (
     <header className="mx-auto max-w-7xl px-4 md:px-6 lg:px-8 py-4 md:py-5 flex items-center justify-between">
-      <Link href={labels.home} className="flex items-center gap-3 font-semibold tracking-tight text-lg">
-        <Image src="/assets/brand/logo.png" alt="Assyntrax" width={120} height={28} className="h-7 w-auto" />
-        <span className="hidden sm:inline">ASSYNTRAX</span>
+      <Link href={labels.home} className="font-semibold tracking-tight text-lg text-zinc-100">
+        ASSYNTRAX
       </Link>
       <nav className="flex items-center gap-4 text-sm text-zinc-300">
         <Link className="hover:text-white" href={labels.productHref}>

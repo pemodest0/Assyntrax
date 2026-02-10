@@ -1,45 +1,62 @@
-export default function ContactPage() {
+﻿export default function ContactPage() {
   return (
     <div className="space-y-10">
-      <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] gap-8 items-center">
-        <div className="space-y-3">
-          <h1 className="text-4xl font-semibold tracking-tight">Contato</h1>
-          <p className="text-zinc-300 max-w-3xl">
-            Interessado em colaboração, pesquisa ou integração? Descreva o cenário, os ativos e
-            os timeframes.
+      <section className="rounded-[28px] border border-zinc-800 bg-zinc-950/60 p-8 lg:p-10">
+        <div className="space-y-3 max-w-3xl">
+          <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Contato</div>
+          <h1 className="text-4xl font-semibold tracking-tight">Fale com a equipe da Assyntrax</h1>
+          <p className="text-zinc-300">
+            Descreva seu caso de uso com contexto objetivo: setor, ativos, horizonte e como a saída será usada.
+            Retornaremos com um plano de avaliação técnica.
           </p>
-          <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 text-sm text-zinc-300">
-            <div className="text-xs uppercase tracking-[0.2em] text-zinc-400">Guia rápido</div>
-            <ul className="mt-2 space-y-2">
-              <li>- Informe o setor ou universo de ativos.</li>
-              <li>- Diga as frequências necessárias (diário/semanal).</li>
-              <li>- Explique como pretende consumir as saídas (API/UI).</li>
-            </ul>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-6 space-y-4">
+          <label className="text-sm text-zinc-300" htmlFor="email">
+            E-mail para retorno
+          </label>
+          <input
+            id="email"
+            type="email"
+            placeholder="voce@empresa.com"
+            className="w-full rounded-xl border border-zinc-700 bg-black/40 px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+          />
+
+          <label className="text-sm text-zinc-300" htmlFor="contexto">
+            Contexto do pedido
+          </label>
+          <textarea
+            id="contexto"
+            rows={8}
+            placeholder="Descreva o setor, os ativos, a frequência dos dados e o objetivo operacional."
+            className="w-full rounded-xl border border-zinc-700 bg-black/40 px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+          />
+
+          <div className="text-xs text-zinc-500">
+            Canal de e-mail oficial da Assyntrax está em implantação. Use os links abaixo para contato direto temporário.
           </div>
         </div>
-        <div className="relative h-[260px] rounded-3xl border border-zinc-800 overflow-hidden">
-          <div className="absolute inset-0 bg-[url('/visuals/hero-flow.svg')] bg-cover bg-center opacity-95 animate-drift" />
-          <div className="absolute inset-0 hero-noise" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-        </div>
-      </div>
 
-      <div className="space-y-3 text-zinc-200">
-        <div>
-          Email:{" "}
-          <a className="hover:text-white" href="mailto:contact@assyntrax.ai">
-            contact@assyntrax.ai
-          </a>
-        </div>
-        <div className="flex gap-4 text-sm">
-          <a className="hover:text-white" href="https://github.com/assyntrax">
-            GitHub
-          </a>
-          <a className="hover:text-white" href="https://www.linkedin.com/company/assyntrax/">
-            LinkedIn
-          </a>
-        </div>
-      </div>
+        <aside className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-6">
+          <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Links</div>
+          <div className="mt-4 flex flex-col gap-3 text-sm">
+            <a className="rounded-lg border border-zinc-700 px-3 py-2 text-zinc-300 hover:text-white hover:border-zinc-500" href="https://github.com/pemodest0/Assyntrax">
+              GitHub do projeto
+            </a>
+            <a className="rounded-lg border border-zinc-700 px-3 py-2 text-zinc-300 hover:text-white hover:border-zinc-500" href="https://github.com/pemodest0">
+              GitHub pessoal
+            </a>
+            <a className="rounded-lg border border-zinc-700 px-3 py-2 text-zinc-300 hover:text-white hover:border-zinc-500" href="https://www.linkedin.com/in/pedro-henrique-gesualdo-modesto-39a135272/">
+              LinkedIn
+            </a>
+            <a className="rounded-lg border border-zinc-700 px-3 py-2 text-zinc-300 hover:text-white hover:border-zinc-500" href="https://pemodest0.github.io/">
+              Portfólio
+            </a>
+          </div>
+        </aside>
+      </section>
     </div>
   );
 }

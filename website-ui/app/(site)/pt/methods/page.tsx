@@ -1,87 +1,90 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
-import TransitionDiagram from "@/components/visuals/TransitionDiagram";
+import MethodLattice from "@/components/visuals/MethodLattice";
 import PipelineFlow from "@/components/visuals/PipelineFlow";
 
 const topics = [
   {
     id: "regimes",
     label: "Regimes",
-    leigo: "Um regime é o estado dinâmico do sistema: estável, em transição, instável ou ruidoso.",
+    leigo:
+      "Regime é o estado dinâmico do sistema: estável, transição, instável ou ruidoso, com persistência temporal e risco associado.",
     formal: (
       <>
-        <p>Regime = conjunto de estados com transições internas fortes.</p>
-        <CodeBlock code={`regime_t ∈ {STABLE, TRANSITION, UNSTABLE, NOISY}`} />
+        <p>Conjunto de estados com transições internas fortes e fronteiras observáveis.</p>
+        <CodeBlock code={`regime_t in {STABLE, TRANSITION, UNSTABLE, NOISY}`} />
       </>
     ),
     aplicacao:
-      "Regimes estáveis permitem previsão; transição pede cautela; regime instável bloqueia sinal.",
+      "Regime estável permite projeção condicional; transição pede cautela; instável e ruidoso acionam bloqueio operacional.",
   },
   {
     id: "embedding",
     label: "Embedding (Takens)",
-    leigo: "Transformamos a série em espaço de fase para enxergar a geometria do sistema.",
+    leigo:
+      "A série temporal é transformada em espaço de fase para expor geometria e recorrência do sistema, em vez de olhar apenas o preço.",
     formal: (
       <>
         <p>Embedding por atrasos:</p>
-        <CodeBlock code={`X_t = [x_t, x_{t-τ}, x_{t-2τ}, ..., x_{t-(m-1)τ}]`} />
-        <p className="mt-3">τ via AMI/ACF e m via Cao/FNN.</p>
+        <CodeBlock code={`X_t = [x_t, x_{t-tau}, x_{t-2tau}, ..., x_{t-(m-1)tau}]`} />
+        <p className="mt-3">tau por AMI/ACF e m por Cao/FNN, com controle de ruído em janela.</p>
       </>
     ),
-    aplicacao: "Revela estabilidade local e transições que séries cruas escondem.",
+    aplicacao:
+      "Revela perda de estrutura antes de ruptura visual no gráfico bruto.",
   },
   {
     id: "microstates",
     label: "Microestados",
-    leigo: "Dividimos o espaço em pequenos estados (clusters) para discretizar a dinâmica.",
+    leigo:
+      "Discretização do espaço dinâmico em estados locais persistentes para reduzir ruído sem destruir sinal estrutural.",
     formal: <CodeBlock code={`state_t = argmin_k || X_t - c_k ||`} />,
-    aplicacao: "Permite contar transições e montar o grafo do sistema.",
+    aplicacao: "Permite medir persistência, frequência de transições e robustez do regime dominante.",
   },
   {
     id: "graphs",
     label: "Grafos e Markov",
-    leigo: "Contamos como o sistema transita entre microestados e medimos conectividade.",
+    leigo:
+      "As transições entre estados viram uma rede temporal. Entropia e conectividade indicam estabilidade ou fragilidade.",
     formal: (
       <>
         <p>Matriz de transição:</p>
-        <CodeBlock code={`P_{ij} = count(i→j) / sum_j count(i→j)`} />
+        <CodeBlock code={`P_{ij} = count(i->j) / sum_j count(i->j)`} />
         <p className="mt-3">Entropia de Markov:</p>
-        <CodeBlock code={`H = -∑_i π_i ∑_j P_{ij} log P_{ij}`} />
+        <CodeBlock code={`H = -sum_i pi_i sum_j P_{ij} log P_{ij}`} />
       </>
     ),
-    aplicacao: "Conectividade e entropia indicam estabilidade e risco.",
+    aplicacao:
+      "Conectividade excessiva e entropia alta tendem a aparecer antes de mudança de regime relevante.",
   },
   {
     id: "metrics",
-    label: "Métricas (confiança, escape, stretch, qualidade)",
-    leigo: "Medimos confiança, risco de fuga e qualidade do grafo para decidir se há estrutura.",
+    label: "Métricas",
+    leigo:
+      "Confiança, qualidade e instabilidade dizem se há base operacional ou se a leitura deve ficar só em diagnóstico.",
     formal: (
       <>
-        <CodeBlock code={`conf_t = ∑_{j∈regime} P_{ij}`} />
-        <CodeBlock code={`escape_t = 1 - conf_t`} />
+        <CodeBlock code={`confidence_t = sum_{j in regime} P_{ij}`} />
+        <CodeBlock code={`instability_t = (1-confidence_t) + (1-quality_t) + entropy_norm`} />
       </>
     ),
-    aplicacao: "Essas métricas ligam previsão apenas quando há estrutura confiável.",
-  },
-  {
-    id: "forecast",
-    label: "Forecast (condicional)",
-    leigo: "O forecast só aparece quando regime e qualidade estão altos.",
-    formal: <CodeBlock code={`forecast_visible = (state == STABLE) && (quality ≥ q*)`} />,
-    aplicacao: "Se o sinal é fraco, bloqueamos previsão e mostramos aviso.",
+    aplicacao:
+      "Sem gate aprovado, o sistema bloqueia ação automática e preserva rastreabilidade.",
   },
   {
     id: "validation",
-    label: "Validação (sem maquiagem)",
-    leigo: "Testamos em walk-forward e sempre com baselines.",
+    label: "Validação",
+    leigo:
+      "Walk-forward, placebo, ablação e checagem de pseudo-bifurcação para separar estrutura real de ruído estatístico.",
     formal: (
       <>
-        <p>Métricas: ROC-AUC, F1, MASE e Directional Accuracy.</p>
-        <p>Sem vazamento e sem ajuste retroativo.</p>
+        <p>Métricas: ROC-AUC, F1, MCC, MASE, TPR e estabilidade por regime.</p>
+        <p>Sem vazamento temporal, sem ajuste retroativo e com auditoria por run_id.</p>
       </>
     ),
-    aplicacao: "Se o sinal é fraco, o sistema marca DIREÇÃO_FRACA ou REGIME_INSTÁVEL.",
+    aplicacao:
+      "Se robustez cai, status muda para watch ou inconclusive e o produto entra em modo conservador.",
   },
 ];
 
@@ -91,23 +94,25 @@ export default function MethodsPage() {
 
   return (
     <div className="space-y-10">
-      <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] gap-10 items-center">
+      <div className="relative isolate grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] gap-10 items-center overflow-hidden">
         <div className="space-y-3">
           <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Métodos</div>
           <h1 className="text-4xl md:text-5xl font-semibold tracking-tight">
             Fundamentos científicos com execução prática
           </h1>
           <p className="text-zinc-300 max-w-3xl text-lg">
-            Diagnóstico de estado antes de qualquer previsão. Cada tópico traz a explicação leiga,
-            o formalismo e a aplicação prática.
+            Diagnóstico de estado antes de previsão. Esta página conecta conceito, formalismo,
+            hipótese operacional e limitações de uso.
           </p>
         </div>
-        <TransitionDiagram />
+        <div className="overflow-hidden rounded-[28px]">
+          <MethodLattice />
+        </div>
       </div>
 
       <PipelineFlow />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-8">
         <aside className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 h-fit">
           <div className="text-xs uppercase tracking-[0.3em] text-zinc-500">Tópicos</div>
           <div className="mt-4 flex flex-col gap-2">
@@ -129,15 +134,18 @@ export default function MethodsPage() {
 
         <section className="space-y-6">
           <div className="space-y-3">
-            <div className="text-xs uppercase tracking-[0.3em] text-zinc-500">Detalhe do tópico</div>
+            <div className="text-xs uppercase tracking-[0.3em] text-zinc-500">Detalhe técnico</div>
+            <p className="text-sm text-zinc-400">
+              Cada bloco responde três perguntas: o que é, como é modelado e como impacta a decisão operacional.
+            </p>
           </div>
 
           <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-6">
             <div className="text-xs uppercase tracking-[0.3em] text-zinc-500">{current.label}</div>
             <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-              <InfoCard title="Para leigos" content={current.leigo} />
+              <InfoCard title="Contexto" content={current.leigo} />
               <InfoCard title="Formal" content={current.formal} />
-              <InfoCard title="Aplicação" content={current.aplicacao} />
+              <InfoCard title="Uso operacional" content={current.aplicacao} />
             </div>
           </div>
         </section>

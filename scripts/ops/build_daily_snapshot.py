@@ -79,6 +79,14 @@ def _apply_hysteresis(statuses: list[str], promote_days: int, degrade_days: int)
     return out
 
 
+def _instability_score(conf: float | None, qual: float | None) -> float | None:
+    if conf is None or qual is None:
+        return None
+    # Conservative and deterministic score in [0,1].
+    raw = ((1.0 - conf) + (1.0 - qual)) / 2.0
+    return float(max(0.0, min(1.0, raw)))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build daily API snapshot with conservative CI gate.")
     parser.add_argument("--run-id", type=str, default=datetime.now(timezone.utc).strftime("%Y%m%d"))
@@ -161,6 +169,7 @@ def main() -> None:
             signal_status = "inconclusive"
             reason = "below_production_gate"
 
+        instability = _instability_score(None if pd.isna(conf) else float(conf), None if pd.isna(qual) else float(qual))
         out_rows.append(
             {
                 "asset": asset,
@@ -171,6 +180,8 @@ def main() -> None:
                 "regime": regime,
                 "confidence": None if pd.isna(conf) else float(conf),
                 "quality": None if pd.isna(qual) else float(qual),
+                "instability_score": instability,
+                "status": signal_status,
                 "signal_status": signal_status,
                 "reason": reason,
                 "run_id": args.run_id,
@@ -200,6 +211,8 @@ def main() -> None:
             ),
             axis=1,
         )
+        # Keep legacy field and enforce canonical status field side-by-side.
+        out_df["status"] = out_df["signal_status"]
     out_df.to_csv(outdir / "snapshot.csv", index=False)
     out_rows_final = out_df.to_dict(orient="records")
 

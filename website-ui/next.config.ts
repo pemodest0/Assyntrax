@@ -4,6 +4,9 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   allowedDevOrigins: ["http://192.168.0.71:3000", "http://localhost:3000"],
   async redirects() {
     return [

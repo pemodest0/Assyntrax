@@ -144,7 +144,7 @@ export default function RegimeChart(props: Props) {
   const scaleX = (i: number, total: number) => pad + (i / Math.max(1, total - 1)) * (width - pad * 2);
   const scaleY = (v: number, ymin: number, ymax: number, h: number) => h - pad - ((v - ymin) / Math.max(1e-9, ymax - ymin)) * (h - pad * 2);
 
-  if (!prepared) return <div className="text-sm text-zinc-500">Selecione ativos para visualizar o grafico.</div>;
+  if (!prepared) return <div className="text-sm text-zinc-500">Selecione ativos para visualizar o gráfico.</div>;
 
   const h = height;
   const hover = hoverIndex != null ? Math.min(hoverIndex, prepared.count - 1) : null;
@@ -152,13 +152,16 @@ export default function RegimeChart(props: Props) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between text-xs text-zinc-400">
-        <div>Grafico principal</div>
+        <div>Gráfico principal</div>
         <button
           className="rounded border border-zinc-700 px-2 py-1 hover:border-zinc-500"
           onClick={() => setHidden({})}
         >
           Reset series
         </button>
+      </div>
+      <div className="text-xs text-zinc-500">
+        Eixo X: tempo do período selecionado. Eixo Y: {normalize ? "índice base 100" : "preço do ativo"}.
       </div>
 
       <div className="rounded-xl border border-zinc-800 p-4 md:p-5 bg-transparent">
@@ -209,12 +212,34 @@ export default function RegimeChart(props: Props) {
               </g>
             );
           })}
+          <text x={width / 2} y={h - 8} textAnchor="middle" fill="#94a3b8" fontSize="11">
+            Tempo
+          </text>
+          <text x={14} y={h / 2} textAnchor="middle" fill="#94a3b8" fontSize="11" transform={`rotate(-90 14 ${h / 2})`}>
+            {normalize ? "Índice (base 100)" : "Preço"}
+          </text>
 
           {prepared.series.map((s, idx) => {
             const d = s.values
               .map((v, i) => (Number.isFinite(v) ? `${i === 0 ? "M" : "L"} ${scaleX(i, s.values.length)} ${scaleY(v, prepared.ymin, prepared.ymax, h)}` : ""))
               .join(" ");
-            return <path key={s.asset} d={d} fill="none" stroke={lineColors[idx % lineColors.length]} strokeWidth="2.2" />;
+            return (
+              <g key={s.asset}>
+                <path d={d} fill="none" stroke={lineColors[idx % lineColors.length]} strokeWidth="2.2" />
+                {s.values.map((v, i) => {
+                  if (!Number.isFinite(v) || i % 18 !== 0) return null;
+                  return (
+                    <circle
+                      key={`${s.asset}-${i}`}
+                      cx={scaleX(i, s.values.length)}
+                      cy={scaleY(v, prepared.ymin, prepared.ymax, h)}
+                      r={1.8}
+                      fill={lineColors[idx % lineColors.length]}
+                    />
+                  );
+                })}
+              </g>
+            );
           })}
 
           {hover != null ? (

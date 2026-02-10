@@ -183,7 +183,7 @@ export default function BrMap({ selectedUF, onSelectUF }: BrMapProps) {
   }, [loading, error, geoData, selectedUF, onSelectUF]);
 
   return (
-    <div className="relative h-[420px] lg:h-[520px] w-full rounded-lg border border-zinc-800 bg-zinc-950/70 p-2">
+    <div className="relative h-[460px] lg:h-[600px] w-full rounded-lg border border-zinc-800 bg-zinc-950/70 p-2">
       {mapBlock}
       {hover ? (
         <div className="pointer-events-none absolute right-3 top-3 rounded-md border border-zinc-700 bg-black/80 px-2 py-1 text-xs text-zinc-200">

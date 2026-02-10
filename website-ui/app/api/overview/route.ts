@@ -8,19 +8,23 @@ export async function GET() {
   }
   const records = await readJsonlWithValidationGate(apiPath);
   const total = records.length || 1;
-  const useForecast = records.filter((r) => r.use_forecast_bool).length / total;
+  const toText = (value: unknown): string => (typeof value === "string" ? value : "");
+  const useForecast = records.filter((r) => Boolean(r.use_forecast_bool)).length / total;
   const validatedPct =
-    records.filter((r) => (r.signal_status || "").toLowerCase() === "validated").length / total;
+    records.filter((r) => toText(r.signal_status).toLowerCase() === "validated").length / total;
   const warnings = new Map<string, number>();
   const regimes = new Map<string, number>();
 
   for (const r of records) {
     if (Array.isArray(r.warnings)) {
       for (const w of r.warnings) {
-        warnings.set(w, (warnings.get(w) || 0) + 1);
+        const code = toText(w);
+        if (!code) continue;
+        warnings.set(code, (warnings.get(code) || 0) + 1);
       }
     }
-    const reg = r.regime_label || r.regime || r.state?.label;
+    const state = (r.state ?? {}) as { label?: unknown };
+    const reg = toText(r.regime_label) || toText(r.regime) || toText(state.label);
     if (reg) {
       regimes.set(reg, (regimes.get(reg) || 0) + 1);
     }
