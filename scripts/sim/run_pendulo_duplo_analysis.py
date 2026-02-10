@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
-"""Pipeline completo para simulação e análise do pêndulo duplo."""
+﻿#!/usr/bin/env python3
+"""Pipeline completo para simulaÃ§Ã£o e anÃ¡lise do pÃªndulo duplo."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from spa.engine.diagnostics.regime_labels import RegimeClassifier
+from engine.diagnostics.regime_labels import RegimeClassifier
 
 
 def simulate_double_pendulum(
@@ -46,7 +46,7 @@ def simulate_double_pendulum(
     try:
         from scipy.integrate import solve_ivp
     except Exception as exc:
-        raise RuntimeError("scipy é necessário para simulação do pêndulo duplo.") from exc
+        raise RuntimeError("scipy Ã© necessÃ¡rio para simulaÃ§Ã£o do pÃªndulo duplo.") from exc
 
     def pendulum_system(t, y):
         th1, w1, th2, w2 = y
@@ -69,7 +69,7 @@ def simulate_double_pendulum(
     y0 = [theta1, omega1, theta2, omega2]
     sol = solve_ivp(pendulum_system, (0.0, T), y0, t_eval=t_eval, method="RK45")
     if not sol.success:
-        raise RuntimeError("Falha na integração numérica do pêndulo duplo.")
+        raise RuntimeError("Falha na integraÃ§Ã£o numÃ©rica do pÃªndulo duplo.")
 
     df = pd.DataFrame(
         {
@@ -129,9 +129,9 @@ def plot_entropy_vs_tau(metrics: list[dict[str, float]], out_path: Path) -> None
         taus = [r["tau"] for r in rows_sorted]
         ent = [r["entropy"] for r in rows_sorted]
         ax.plot(taus, ent, marker="o", label=f"m={m}")
-    ax.set_xlabel("τ")
+    ax.set_xlabel("Ï„")
     ax.set_ylabel("Entropia")
-    ax.set_title("Entropia vs τ")
+    ax.set_title("Entropia vs Ï„")
     ax.legend(fontsize=8)
     fig.tight_layout()
     fig.savefig(out_path, dpi=150)
@@ -167,9 +167,9 @@ def generate_report_pdf(out_dir: Path, config: dict, plots: dict) -> None:
         fig, ax = plt.subplots(figsize=(11, 8.5))
         ax.axis("off")
         text = (
-            "Relatório - Pêndulo Duplo\n\n"
-            "Resumo: simulação numérica com integração RK45 e análise de regimes.\n"
-            f"Parâmetros: m1={config['m1']}, m2={config['m2']}, "
+            "RelatÃ³rio - PÃªndulo Duplo\n\n"
+            "Resumo: simulaÃ§Ã£o numÃ©rica com integraÃ§Ã£o RK45 e anÃ¡lise de regimes.\n"
+            f"ParÃ¢metros: m1={config['m1']}, m2={config['m2']}, "
             f"L1={config['L1']}, L2={config['L2']}, g={config['g']}\n"
             f"dt={config['dt']}, steps={config['steps']}\n"
         )
@@ -202,42 +202,42 @@ def generate_report_pdf(out_dir: Path, config: dict, plots: dict) -> None:
 def write_report_md(out_dir: Path, config: dict) -> None:
     md_path = out_dir / "report_pendulo_duplo.md"
     lines = [
-        "# Relatório - Pêndulo Duplo",
+        "# RelatÃ³rio - PÃªndulo Duplo",
         "",
-        "## Configuração",
+        "## ConfiguraÃ§Ã£o",
         f"- m1={config['m1']}, m2={config['m2']}, L1={config['L1']}, L2={config['L2']}, g={config['g']}",
         f"- theta1={config['theta1']}, theta2={config['theta2']}, omega1={config['omega1']}, omega2={config['omega2']}",
         f"- dt={config['dt']}, steps={config['steps']}",
-        f"- série principal: {config['series']}",
-        f"- método de clustering: {config['method']}",
+        f"- sÃ©rie principal: {config['series']}",
+        f"- mÃ©todo de clustering: {config['method']}",
         f"- melhor embedding: m={config['best_m']} tau={config['best_tau']}",
         f"- entropia global: {config['entropy']:.4f}",
         f"- recurrence rate global: {config['recurrence_rate']:.4f}",
         "",
-        "## Gráficos principais",
+        "## GrÃ¡ficos principais",
         "![labels_over_time](labels_over_time.png)",
         "![xv_regime](xv_regime.png)",
         "![entropy_vs_tau](entropy_vs_tau.png)",
         "![recurrence_plot](recurrence_plot.png)",
         "![regime_map](regime_map.png)",
         "",
-        "## Análises complementares",
+        "## AnÃ¡lises complementares",
         "",
-        "### Espaço de fase colorido por tempo",
+        "### EspaÃ§o de fase colorido por tempo",
         "![xv_colored_by_time](xv_colored_by_time.png)",
-        "Mostra a progressão temporal dos estados no espaço de fase.",
+        "Mostra a progressÃ£o temporal dos estados no espaÃ§o de fase.",
         "",
-        "### Energia cinética por regime",
+        "### Energia cinÃ©tica por regime",
         "![energy_by_regime](energy_by_regime.png)",
-        "Curvas de energia cinética separadas por regime (coerente/caótico/transição).",
+        "Curvas de energia cinÃ©tica separadas por regime (coerente/caÃ³tico/transiÃ§Ã£o).",
         "",
-        "### Recorrência de regimes",
+        "### RecorrÃªncia de regimes",
         "![regime_recurrence_plot](regime_recurrence_plot.png)",
-        "Matriz binária indicando quando o regime atual coincide com o passado.",
+        "Matriz binÃ¡ria indicando quando o regime atual coincide com o passado.",
         "",
         "### Embedding Takens 3D colorido",
         "![takens_3d_colored](takens_3d_colored.png)",
-        "Visualização da estrutura atratora no espaço reconstruído.",
+        "VisualizaÃ§Ã£o da estrutura atratora no espaÃ§o reconstruÃ­do.",
         "",
     ]
     md_path.write_text("\n".join(lines), encoding="utf-8")
@@ -500,3 +500,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

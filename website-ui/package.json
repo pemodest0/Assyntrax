@@ -6,15 +6,19 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run lint"
   },
   "dependencies": {
+    "d3-geo": "^3.1.1",
     "framer-motion": "^12.29.2",
     "next": "16.1.6",
+    "plotly.js-dist-min": "^2.30.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-plotly.js": "^2.6.0",
-    "plotly.js-dist-min": "^2.30.0"
+    "react-simple-maps": "^3.0.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

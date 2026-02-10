@@ -1,0 +1,25 @@
+{
+  "version": "v1.0.0",
+  "defaults": {
+    "min_points": 600,
+    "min_years": 3.0,
+    "max_gap_days": 14
+  },
+  "domains": {
+    "finance": {
+      "min_points": 600,
+      "min_years": 3.0,
+      "max_gap_days": 14
+    },
+    "realestate": {
+      "min_points": 200,
+      "min_years": 3.0,
+      "max_gap_days": 400
+    },
+    "energy": {
+      "min_points": 300,
+      "min_years": 2.0,
+      "max_gap_days": 31
+    }
+  }
+}

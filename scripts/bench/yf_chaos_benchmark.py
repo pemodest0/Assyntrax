@@ -1,4 +1,4 @@
-import argparse
+﻿import argparse
 import json
 import math
 import time
@@ -18,12 +18,12 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from spa.sanity import ensure_sorted_dates, safe_test_indices, split_hash, validate_time_split
+from engine.sanity import ensure_sorted_dates, safe_test_indices, split_hash, validate_time_split
 
 from scripts.finance.yf_fetch_or_load import find_local_data, load_price_series, fetch_yfinance, unify_to_daily, save_cache
-from spa.features.phase_features import compute_phase_features
-from spa.models.baselines import persistence_next, zero_mean_next, ar1_fit, ar1_predict
-from spa.api_records import PredictionRecord, save_prediction_records
+from engine.features.phase_features import compute_phase_features
+from engine.models.baselines import persistence_next, zero_mean_next, ar1_fit, ar1_predict
+from engine.api_records import PredictionRecord, save_prediction_records
 
 
 def safe_name(name):
@@ -667,7 +667,7 @@ def main():
     parser.add_argument(
         "--allow-downloads",
         action="store_true",
-        help="Permite baixar dados via rede (desativado por padrão).",
+        help="Permite baixar dados via rede (desativado por padrÃ£o).",
     )
     parser.add_argument("--emit-api-records", action="store_true", help="Gera api_records.jsonl e api_records.csv")
     args = parser.parse_args()
@@ -792,3 +792,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

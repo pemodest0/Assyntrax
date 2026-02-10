@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
@@ -8,8 +8,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from graph_engine.embedding import takens_embed
-from graph_engine.diagnostics import _rqa_metrics, estimate_tau_adaptive, estimate_embedding_dim
+from engine.graph.embedding import takens_embed
+from engine.graph.diagnostics import _rqa_metrics, estimate_tau_adaptive, estimate_embedding_dim
 
 
 def _load_series(path: Path) -> pd.Series:
@@ -57,3 +57,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

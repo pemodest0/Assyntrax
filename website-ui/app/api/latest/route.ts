@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { findLatestApiRecords, readJsonl } from "@/lib/server/data";
+import { findLatestApiRecords, readJsonlWithValidationGate } from "@/lib/server/data";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   if (!apiPath) {
     return NextResponse.json({ error: "no api_records found" }, { status: 404 });
   }
-  const records = await readJsonl(apiPath);
+  const records = await readJsonlWithValidationGate(apiPath);
   let filtered = records;
   if (asset) filtered = filtered.filter((r) => r.asset === asset);
   if (timeframe) filtered = filtered.filter((r) => r.timeframe === timeframe);

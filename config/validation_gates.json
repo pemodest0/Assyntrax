@@ -1,0 +1,28 @@
+{
+  "default": {
+    "min_quality": 0.88,
+    "min_confidence": 0.47,
+    "max_transition_rate": 0.55,
+    "max_novelty": 0.95
+  },
+  "domains": {
+    "finance": {
+      "min_quality": 0.88,
+      "min_confidence": 0.47,
+      "max_transition_rate": 0.55,
+      "max_novelty": 0.9
+    },
+    "energy": {
+      "min_quality": 0.885,
+      "min_confidence": 0.47,
+      "max_transition_rate": 0.50,
+      "max_novelty": 0.85
+    },
+    "realestate": {
+      "min_quality": 0.885,
+      "min_confidence": 0.47,
+      "max_transition_rate": 0.50,
+      "max_novelty": 0.85
+    }
+  }
+}

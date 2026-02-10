@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 
 function resolveLang(pathname: string | null) {
@@ -44,13 +45,9 @@ export default function SiteHeader() {
   const enHref = enPath;
 
   return (
-    <header className="mx-auto max-w-6xl px-6 py-6 flex items-center justify-between">
+    <header className="mx-auto max-w-7xl px-4 md:px-6 lg:px-8 py-4 md:py-5 flex items-center justify-between">
       <Link href={labels.home} className="flex items-center gap-3 font-semibold tracking-tight text-lg">
-        <img
-          src="/assets/brand/logo.png"
-          alt="Assyntrax"
-          className="h-7 w-auto"
-        />
+        <Image src="/assets/brand/logo.png" alt="Assyntrax" width={120} height={28} className="h-7 w-auto" />
         <span className="hidden sm:inline">ASSYNTRAX</span>
       </Link>
       <nav className="flex items-center gap-4 text-sm text-zinc-300">
@@ -73,7 +70,7 @@ export default function SiteHeader() {
             }`}
             href={ptHref}
           >
-            🇧🇷 PT
+            PT
           </Link>
           <Link
             className={`rounded-full border px-2 py-1 ${
@@ -81,7 +78,7 @@ export default function SiteHeader() {
             }`}
             href={enHref}
           >
-            🇺🇸 EN
+            EN
           </Link>
         </div>
         <Link

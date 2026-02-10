@@ -1,11 +1,12 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
+from __future__ import annotations
+
 import os
 import sys
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from __future__ import annotations
 
 import argparse
 import json
@@ -21,7 +22,7 @@ from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error,
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from spa.sanity import ensure_sorted_dates, split_hash, validate_time_split
+from engine.sanity import ensure_sorted_dates, split_hash, validate_time_split
 
 def load_metrics(path: Path) -> pd.DataFrame:
     df = pd.read_csv(path, parse_dates=["date"])
@@ -95,13 +96,13 @@ def _baseline_metrics(target_kind: str, df_test: pd.DataFrame, y_test: pd.Series
 
 def main() -> None:
     np.random.seed(42)
-    parser = argparse.ArgumentParser(description="Treina regressões tradicionais para corrigir previsões clássicas/quânticas.")
-    parser.add_argument("metrics", type=str, help="Arquivo daily_forecast_metrics.csv (modo clássico).")
-    parser.add_argument("--target", type=str, choices=("price", "return"), default="price", help="Seleciona o alvo (preço ou retorno log).")
+    parser = argparse.ArgumentParser(description="Treina regressÃµes tradicionais para corrigir previsÃµes clÃ¡ssicas/quÃ¢nticas.")
+    parser.add_argument("metrics", type=str, help="Arquivo daily_forecast_metrics.csv (modo clÃ¡ssico).")
+    parser.add_argument("--target", type=str, choices=("price", "return"), default="price", help="Seleciona o alvo (preÃ§o ou retorno log).")
     parser.add_argument("--train-end", type=str, default="2023-12-31", help="Data de corte para treino (inclusive).")
     parser.add_argument("--start", type=str, default=None, help="Data inicial filtrada (opcional).")
     parser.add_argument("--end", type=str, default=None, help="Data final filtrada (opcional).")
-    parser.add_argument("--output", type=str, default="results/ml_forecast", help="Diretório de saída.")
+    parser.add_argument("--output", type=str, default="results/ml_forecast", help="DiretÃ³rio de saÃ­da.")
     args = parser.parse_args()
 
     metrics_path = Path(args.metrics)
@@ -118,7 +119,7 @@ def main() -> None:
 
     target_col = "price_real" if args.target == "price" else "actual_return"
     if target_col not in df.columns:
-        raise ValueError(f"Coluna alvo {target_col} não encontrada.")
+        raise ValueError(f"Coluna alvo {target_col} nÃ£o encontrada.")
 
     features_df, feature_cols = _select_feature_columns(df, target_col, args.target)
     y = df[target_col].astype(float)
@@ -173,8 +174,9 @@ def main() -> None:
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     predictions.to_csv(prediction_path, index=False)
     print(f"Resumo salvo em {summary_path}")
-    print(f"Predições salvas em {prediction_path}")
+    print(f"PrediÃ§Ãµes salvas em {prediction_path}")
 
 
 if __name__ == "__main__":
     main()
+

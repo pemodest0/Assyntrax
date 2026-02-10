@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import LoadingSkeleton from "./LoadingSkeleton";
@@ -45,7 +46,13 @@ export default function PlotsGallery() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {payload.walkforward.files.slice(0, 6).map((f) => (
                     <div key={f} className="rounded-xl border border-zinc-800 p-2">
-                      <img src={`${payload.walkforward.base}/${f}`} alt={f} className="rounded-lg" />
+                      <Image
+                        src={`${payload.walkforward.base}/${f}`}
+                        alt={f}
+                        width={960}
+                        height={540}
+                        className="rounded-lg h-auto w-full"
+                      />
                       <div className="text-xs text-zinc-500 mt-2 truncate">{f}</div>
                     </div>
                   ))}
@@ -56,7 +63,13 @@ export default function PlotsGallery() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {payload.risk.files.slice(0, 6).map((f) => (
                     <div key={f} className="rounded-xl border border-zinc-800 p-2">
-                      <img src={`${payload.risk.base}/${f}`} alt={f} className="rounded-lg" />
+                      <Image
+                        src={`${payload.risk.base}/${f}`}
+                        alt={f}
+                        width={960}
+                        height={540}
+                        className="rounded-lg h-auto w-full"
+                      />
                       <div className="text-xs text-zinc-500 mt-2 truncate">{f}</div>
                     </div>
                   ))}

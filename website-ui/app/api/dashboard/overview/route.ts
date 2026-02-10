@@ -5,7 +5,7 @@ export async function GET() {
   try {
     const data = await readDashboardOverview();
     return NextResponse.json(data);
-  } catch (err) {
+  } catch {
     return NextResponse.json({ error: "dashboard overview not found" }, { status: 404 });
   }
 }

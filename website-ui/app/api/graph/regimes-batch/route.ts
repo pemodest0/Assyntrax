@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
 import { resultsRoot } from "@/lib/server/results";
+import { readAssetStatusMap } from "@/lib/server/validated";
 
 function parseCsv(text: string) {
   const lines = text.trim().split("\n");
@@ -26,8 +27,20 @@ export async function GET(request: Request) {
   }
   const assets = assetsParam.split(",").map((s) => s.trim()).filter(Boolean);
   const out: Record<string, { t: number; regime: string; confidence: number }[]> = {};
+  let statusMap: Record<string, Record<string, string>> = {};
+  try {
+    statusMap = await readAssetStatusMap();
+  } catch {
+    statusMap = {};
+  }
   await Promise.all(
     assets.map(async (asset) => {
+      const sKey = `${asset}__${tf}`;
+      const gateStatus = statusMap[sKey]?.status || "";
+      if (gateStatus && gateStatus !== "validated") {
+        out[asset] = [{ t: 0, regime: "INCONCLUSIVE", confidence: 0 }];
+        return;
+      }
       const file = path.join(resultsRoot(), "latest_graph", "assets", `${asset}_${tf}_regimes.csv`);
       try {
         const raw = await fs.readFile(file, "utf-8");

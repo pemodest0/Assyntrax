@@ -1,4 +1,4 @@
-import argparse
+﻿import argparse
 import json
 import os
 import sys
@@ -22,7 +22,7 @@ from scripts.finance.yf_fetch_or_load import (
     unify_to_daily,
     save_cache,
 )
-from spa.finance_utils import (
+from engine.finance_utils import (
     FinancialDatasetSpec,
     prepare_financial_series,
     split_train_test,
@@ -31,7 +31,7 @@ from spa.finance_utils import (
     compute_confidence_finance,
     plot_master_finance,
 )
-from spa.api_records import PredictionRecord, save_prediction_records
+from engine.api_records import PredictionRecord, save_prediction_records
 
 
 def load_or_fetch(ticker, base_dir, start="2010-01-01", end="2025-12-31", allow_downloads=False):
@@ -272,3 +272,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

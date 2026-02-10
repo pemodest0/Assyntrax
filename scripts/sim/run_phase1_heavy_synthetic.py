@@ -1,4 +1,4 @@
-"""Gera séries sintéticas pesadas para balancear classes raras."""
+﻿"""Gera sÃ©ries sintÃ©ticas pesadas para balancear classes raras."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from spa.engine.diagnostics.regime_labels import RegimeClassifier
+from engine.diagnostics.regime_labels import RegimeClassifier
 
 
 def write_summary_for_label(series: np.ndarray, label: str, out_dir: Path, name: str) -> None:
@@ -86,10 +86,10 @@ def logistic_map(r: float, n: int, x0: float = 0.2, discard: int = 500) -> np.nd
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Gerar séries sintéticas pesadas.")
+    parser = argparse.ArgumentParser(description="Gerar sÃ©ries sintÃ©ticas pesadas.")
     parser.add_argument("--outdir", type=str, default="results/phase1_heavy_synthetic")
-    parser.add_argument("--n", type=int, default=5000, help="Tamanho de cada série.")
-    parser.add_argument("--per-class", type=int, default=20, help="Qtd de séries por classe.")
+    parser.add_argument("--n", type=int, default=5000, help="Tamanho de cada sÃ©rie.")
+    parser.add_argument("--per-class", type=int, default=20, help="Qtd de sÃ©ries por classe.")
     parser.add_argument("--noise", type=float, default=0.01)
     args = parser.parse_args()
 
@@ -153,3 +153,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

@@ -101,7 +101,7 @@ export default function ForecastDemo() {
       }
     };
     loadUniverse();
-  }, [timeframe]);
+  }, [timeframe, selected.length]);
 
   useEffect(() => {
     if (!selected.length) return;

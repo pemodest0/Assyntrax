@@ -1,157 +1,44 @@
-# Stochastic Process Analyzer (SPA) — Energia
+﻿# Assyntrax Engine + Product Platform
 
-## Idea Principal
-- Regime first, then confidence
-- Forecast is optional and gated
-- Not a promise to predict markets; it is a filter for structure
+Este repositorio contem o motor de deteccao de regimes e risco, os pipelines de validacao/auditoria e o frontend operacional.
 
-## Base Teorica (Regimes)
-Para a fundamentacao matematica detalhada do motor de regimes (Takens, MSM,
-clustering espectral, classificacao de regimes), veja:
-- `docs/REGIME_METHODS_STUDY.md`
+## Estado atual
+- Motor unificado em `engine/` com wrappers de compatibilidade em `spa/` e `graph_engine/`.
+- Pipelines operacionais em `scripts/ops/`.
+- Validacoes cientificas e operacionais em `scripts/bench/validation/`.
+- Site/API em `website-ui/` consumindo snapshots validados.
+- Artefatos canonicos em `results/ops/snapshots/<run_id>/` e `results/validation/`.
 
-SPA e um produto demo tecnico para analisar series temporais reais (tempo + metrica)
-como processos estocasticos efetivos em tempo discreto. Nesta fase, o foco e energia
-com uma vertical slice minima (sem drift/difusao).
+## Estrutura principal
+- `engine/`: API estavel do motor (camada oficial para novos imports).
+- `scripts/ops/`: rotina diaria, snapshot, contrato, drift e auditoria.
+- `scripts/bench/validation/`: testes de robustez, placebo, adequacao e utilidade.
+- `config/`: contrato de saida e gates versionados.
+- `website-ui/`: frontend e rotas API para consumo dos artefatos.
+- `legacy/`: arquivos antigos ou fora do fluxo atual.
 
-## Estrutura
+## Fluxo oficial (alto nivel)
+1. Rodar jobs diarios (`scripts/ops/run_daily_jobs.ps1`).
+2. Validar contrato e gates.
+3. Publicar snapshot com `api_snapshot.jsonl` + `summary.json` + `audit_pack.json`.
+4. Frontend consome apenas ultimo run valido.
 
-- `spa/` pipeline principal do motor (IO, preprocess, features, diagnosticos, relatorio).
-- `spa/engine/` motor de regimes (antigo `temporal_engine/`).
-- `scripts/` organizado por area:
-  - `scripts/data/` ingestao e checagens de dados
-  - `scripts/finance/` pipelines financeiros
-  - `scripts/sim/` simulacoes e sinteticos
-  - `scripts/bench/` benchmarks e avaliacao
-  - `scripts/report/` geracao de relatorios/figuras
-  - `scripts/engine/` execucoes do motor
-  - `scripts/maintenance/` limpeza/manutencao
-  - `scripts/lab/` experimentos locais
-  - `scripts/utils/` utilitarios comuns
-- `data/raw/` dados brutos baixados.
-- `tests/` testes simples (opcionais).
+## Criterio de pronto para producao
+- Contrato de saida valido.
+- Data adequacy gate aprovado.
+- Drift diario sem bloqueio de deployment.
+- Global verdict em estado aceitavel para publicacao.
 
-## Baixar dados do ONS
+## Comandos uteis
+- Pipeline diario:
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\ops\\run_daily_jobs.ps1 -Seed 17 -MaxAssets 80`
+- Frontend local:
+  - `cd website-ui`
+  - `npm run dev`
 
-Exemplo (curva de carga horaria 2024):
-
-```bash
-python scripts/data/fetch_datasets.py --source ONS --dataset ons_curva_carga_horaria --year 2024
-```
-
-O CSV sera salvo em `data/raw/ONS/ons_curva_carga_horaria/`.
-
-## Rodar o SPA em CSV real
-
-Alguns CSVs do ONS possuem multiplos registros por timestamp (ex: por subsistema).
-Use `--source ONS` com `--ons-mode` para normalizar a serie 1D antes das features.
-
-Modo `sum` agrega por timestamp (carga total). Modo `select` filtra um subsistema
-com `--ons-filter`.
-
-Exemplo real (CARGA_ENERGIA_2025.csv, soma por timestamp):
-
-```bash
-python -m spa.run \
-  --source ONS \
-  --input data/raw/ONS/ons_carga_diaria/CARGA_ENERGIA_2025.csv \
-  --time-col din_instante \
-  --value-col val_cargaenergiamwmed \
-  --ons-mode sum \
-  --outdir results/ons_2025
-```
-
-Exemplo real (selecionar subsistema SE/CO):
-
-```bash
-python -m spa.run \
-  --source ONS \
-  --input data/raw/ONS/ons_carga_diaria/CARGA_ENERGIA_2025.csv \
-  --time-col din_instante \
-  --value-col val_cargaenergiamwmed \
-  --ons-mode select \
-  --ons-filter subsistema=SE/CO \
-  --outdir results/ons_2025_seco
-```
-
-Exemplo (carga diaria 2025):
-
-```bash
-python -m spa.run \
-  --source ONS \
-  --dataset ons_carga_diaria \
-  --year 2025 \
-  --time-col din_instante \
-  --value-col val_cargaenergiamwmed \
-  --ons-mode sum \
-  --outdir results/ons_2025
-```
-
-Saidas:
-
-- `processed.csv`
-- `summary.json`
-- `report.pdf`
-
-## Rodar em um CSV local
-
-```bash
-python -m spa.run \
-  --input path/para/arquivo.csv \
-  --time-col sua_coluna_tempo \
-  --value-col sua_coluna_valor \
-  --outdir results/minha_serie
-```
-
-## Testar o website localmente
-
-Alguns navegadores bloqueiam `fetch()` em `file://`. Para testar o dashboard:
-
-```bash
-cd website
-python -m http.server 8000
-```
-
-Depois abra `http://localhost:8000/index.html`.
-
-## Gerar atrator 3D e horizonte de previsibilidade
-
-Os JSONs sao gerados a partir de `results/_tmp/processed_*.csv` e ficam em `website/assets/spa_energy/`.
-
-Teste rapido:
-
-```bash
-python -m pytest tests/test_predictability.py
-```
-
-## Gerar dados do Lorenz Lab
-
-Gera os JSONs usados na pagina `website/lab_lorenz.html`:
-
-```bash
-python scripts/sim/lab_generate_lorenz.py
-```
-
-## Gerar figuras em PNG (energia)
-
-Gera figuras em `results/_figs/energy/`:
-
-```bash
-python scripts/report/generate_figures.py
-```
-
-## Diagnostico visual por subsistema (fase/embedding)
-
-Exemplo com ONS (carga diaria):
-
-```bash
-python -m spa.diagnostics_phase \
-  --input data/external/ONS/carga-energia/raw.csv \
-  --time-col din_instante \
-  --value-col val_cargaenergiamwmed \
-  --group-col nom_subsistema \
-  --tau 4 \
-  --m 4 \
-  --k 10 \
-  --outdir results/phase
-```
+## Documentacao recomendada
+- `docs/OPS_EXECUTION_FLOW.md`
+- `docs/ENGINE_GUIDE.md`
+- `docs/DAILY_PIPELINE.md`
+- `docs/REPO_REFACTOR_PLAN.md`
+- `MAC_HANDOFF.md`

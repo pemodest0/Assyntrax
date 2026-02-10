@@ -1,0 +1,21 @@
+{
+  "/(site)/about/page": "app/(site)/about/page.js",
+  "/(site)/contact/page": "app/(site)/contact/page.js",
+  "/(site)/methods/page": "app/(site)/methods/page.js",
+  "/(site)/page": "app/(site)/page.js",
+  "/(site)/product/page": "app/(site)/product/page.js",
+  "/api/assets/route": "app/api/assets/route.js",
+  "/api/files/[...path]/route": "app/api/files/[...path]/route.js",
+  "/api/graph/series-batch/route": "app/api/graph/series-batch/route.js",
+  "/api/realestate/series/route": "app/api/realestate/series/route.js",
+  "/api/realestate/summary/route": "app/api/realestate/summary/route.js",
+  "/api/risk-truth/route": "app/api/risk-truth/route.js",
+  "/api/run/latest/route": "app/api/run/latest/route.js",
+  "/app/casos/page": "app/app/casos/page.js",
+  "/app/dashboard/page": "app/app/dashboard/page.js",
+  "/app/finance/page": "app/app/finance/page.js",
+  "/app/macro/page": "app/app/macro/page.js",
+  "/app/metodologia/page": "app/app/metodologia/page.js",
+  "/app/real-estate/page": "app/app/real-estate/page.js",
+  "/app/sobre/page": "app/app/sobre/page.js"
+}

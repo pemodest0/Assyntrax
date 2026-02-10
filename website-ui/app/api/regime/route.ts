@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   try {
     const raw = await fs.readFile(file, "utf-8");
     return NextResponse.json(JSON.parse(raw));
-  } catch (err: any) {
+  } catch {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 }

@@ -16,7 +16,7 @@ const topics = [
       </>
     ),
     aplicacao:
-      "Regimes estáveis permitem previsão; transição pede cautela; instável bloqueia sinal.",
+      "Regimes estáveis permitem previsão; transição pede cautela; regime instável bloqueia sinal.",
   },
   {
     id: "embedding",
@@ -40,7 +40,7 @@ const topics = [
   },
   {
     id: "graphs",
-    label: "Grafos & Markov",
+    label: "Grafos e Markov",
     leigo: "Contamos como o sistema transita entre microestados e medimos conectividade.",
     formal: (
       <>
@@ -68,11 +68,7 @@ const topics = [
     id: "forecast",
     label: "Forecast (condicional)",
     leigo: "O forecast só aparece quando regime e qualidade estão altos.",
-    formal: (
-      <CodeBlock
-        code={`forecast_visible = (state == STABLE) && (quality ≥ q*)`}
-      />
-    ),
+    formal: <CodeBlock code={`forecast_visible = (state == STABLE) && (quality ≥ q*)`} />,
     aplicacao: "Se o sinal é fraco, bloqueamos previsão e mostramos aviso.",
   },
   {
@@ -81,8 +77,8 @@ const topics = [
     leigo: "Testamos em walk-forward e sempre com baselines.",
     formal: (
       <>
-        <p>Métricas: ROC-AUC, F1, MASE, Directional Accuracy.</p>
-        <p>Sem vazamento. Sem ajuste retroativo.</p>
+        <p>Métricas: ROC-AUC, F1, MASE e Directional Accuracy.</p>
+        <p>Sem vazamento e sem ajuste retroativo.</p>
       </>
     ),
     aplicacao: "Se o sinal é fraco, o sistema marca DIREÇÃO_FRACA ou REGIME_INSTÁVEL.",
@@ -112,39 +108,39 @@ export default function MethodsPage() {
       <PipelineFlow />
 
       <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-8">
-      <aside className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 h-fit">
-        <div className="text-xs uppercase tracking-[0.3em] text-zinc-500">Tópicos</div>
-        <div className="mt-4 flex flex-col gap-2">
-          {topics.map((t) => (
-            <button
-              key={t.id}
-              className={`text-left rounded-xl px-3 py-2 text-sm transition ${
-                t.id === active
-                  ? "bg-zinc-100 text-black"
-                  : "text-zinc-300 hover:bg-zinc-900/60"
-              }`}
-              onClick={() => setActive(t.id)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </aside>
-
-      <section className="space-y-6">
-        <div className="space-y-3">
-          <div className="text-xs uppercase tracking-[0.3em] text-zinc-500">Detalhe do tópico</div>
-        </div>
-
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-6">
-          <div className="text-xs uppercase tracking-[0.3em] text-zinc-500">{current.label}</div>
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <InfoCard title="Para leigos" content={current.leigo} />
-            <InfoCard title="Formal" content={current.formal} />
-            <InfoCard title="Aplicação" content={current.aplicacao} />
+        <aside className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 h-fit">
+          <div className="text-xs uppercase tracking-[0.3em] text-zinc-500">Tópicos</div>
+          <div className="mt-4 flex flex-col gap-2">
+            {topics.map((t) => (
+              <button
+                key={t.id}
+                className={`text-left rounded-xl px-3 py-2 text-sm transition ${
+                  t.id === active
+                    ? "bg-zinc-100 text-black"
+                    : "text-zinc-300 hover:bg-zinc-900/60"
+                }`}
+                onClick={() => setActive(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
-        </div>
-      </section>
+        </aside>
+
+        <section className="space-y-6">
+          <div className="space-y-3">
+            <div className="text-xs uppercase tracking-[0.3em] text-zinc-500">Detalhe do tópico</div>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-6">
+            <div className="text-xs uppercase tracking-[0.3em] text-zinc-500">{current.label}</div>
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+              <InfoCard title="Para leigos" content={current.leigo} />
+              <InfoCard title="Formal" content={current.formal} />
+              <InfoCard title="Aplicação" content={current.aplicacao} />
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   );

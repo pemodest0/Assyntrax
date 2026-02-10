@@ -29,14 +29,14 @@ export default function UseCasesSection() {
   const Visual = current.Visual;
 
   return (
-    <section className="space-y-10">
+    <section className="space-y-6 py-10 md:py-12 lg:py-14 xl:py-16">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <div className="text-sm uppercase tracking-[0.3em] text-zinc-400">Casos de uso</div>
-          <h2 className="mt-3 text-3xl md:text-4xl font-semibold tracking-tight">
+          <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Casos de uso</div>
+          <h2 className="mt-2 text-3xl md:text-4xl font-semibold tracking-tight">
             {current.title}
           </h2>
-          <p className="mt-3 text-zinc-300 max-w-3xl text-lg">{current.description}</p>
+          <p className="mt-2 text-zinc-300 max-w-3xl text-base lg:text-lg">{current.description}</p>
         </div>
         <div className="flex gap-2">
           {tabs.map((t) => (
@@ -62,14 +62,14 @@ export default function UseCasesSection() {
       >
         <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] gap-6">
           <Visual />
-          <div className="rounded-3xl border border-zinc-800 bg-zinc-950/60 p-6 space-y-4">
-            <div className="text-sm uppercase tracking-[0.2em] text-zinc-400">
+          <div className="rounded-3xl border border-zinc-800 bg-zinc-950/60 p-5 space-y-3">
+            <div className="text-xs uppercase tracking-[0.2em] text-zinc-400">
               O que observar
             </div>
-            <ul className="space-y-3 text-sm text-zinc-300">
-              <li>• Estabilidade do regime e qualidade do grafo.</li>
-              <li>• Alertas de transição e mudanças de volatilidade.</li>
-              <li>• Forecast condicional apenas quando há estrutura.</li>
+            <ul className="space-y-2 text-sm text-zinc-300">
+              <li>- Estabilidade do regime e qualidade do grafo.</li>
+              <li>- Alertas de transição e mudanças de volatilidade.</li>
+              <li>- Forecast condicional apenas quando há estrutura.</li>
             </ul>
             <div className="text-xs text-zinc-500">
               A leitura de risco muda conforme o regime detectado.

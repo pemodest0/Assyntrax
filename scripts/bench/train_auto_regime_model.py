@@ -1,4 +1,4 @@
-"""Treina o modelo automático de rotulagem de regimes."""
+﻿"""Treina o modelo automÃ¡tico de rotulagem de regimes."""
 
 from __future__ import annotations
 
@@ -10,27 +10,27 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from spa.engine.diagnostics.auto_regime_model import train_auto_regime_model
+from engine.diagnostics.auto_regime_model import train_auto_regime_model
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Treino do modelo automático de regimes.")
+    parser = argparse.ArgumentParser(description="Treino do modelo automÃ¡tico de regimes.")
     parser.add_argument("--results", type=str, default="results", help="Pasta de resultados.")
     parser.add_argument("--model-dir", type=str, default="models", help="Pasta para salvar o modelo.")
     parser.add_argument("--no-balance", action="store_true", help="Desativa balanceamento das classes.")
-    parser.add_argument("--min-count", type=int, default=2, help="Mínimo de exemplos por regime.")
+    parser.add_argument("--min-count", type=int, default=2, help="MÃ­nimo de exemplos por regime.")
     parser.add_argument(
         "--balance-mode",
         type=str,
         default="oversample",
         choices=("oversample", "downsample", "none"),
-        help="Estratégia de balanceamento.",
+        help="EstratÃ©gia de balanceamento.",
     )
     parser.add_argument(
         "--max-per-class",
         type=int,
         default=None,
-        help="Limite máximo de amostras por classe após balanceamento.",
+        help="Limite mÃ¡ximo de amostras por classe apÃ³s balanceamento.",
     )
     args = parser.parse_args()
 
@@ -54,3 +54,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

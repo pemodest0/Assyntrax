@@ -1,4 +1,4 @@
-"""Avalia o modelo automatico de regimes com metrics e matriz de confusao."""
+﻿"""Avalia o modelo automatico de regimes com metrics e matriz de confusao."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from spa.engine.diagnostics.auto_regime_model import (
+from engine.diagnostics.auto_regime_model import (
     build_training_dataset,
     build_training_dataset_with_meta,
     load_auto_regime_model,
@@ -27,7 +27,7 @@ def _safe_import_sklearn():
         from sklearn.model_selection import train_test_split
         return classification_report, confusion_matrix, train_test_split
     except Exception as exc:  # pragma: no cover - optional dependency
-        raise RuntimeError("scikit-learn é necessário para avaliação.") from exc
+        raise RuntimeError("scikit-learn Ã© necessÃ¡rio para avaliaÃ§Ã£o.") from exc
 
 
 def write_confusion_csv(path: Path, labels: list[str], matrix: np.ndarray) -> None:
@@ -46,8 +46,8 @@ def main() -> None:
     parser.add_argument("--test-size", type=float, default=0.25)
     parser.add_argument("--min-count", type=int, default=2)
     parser.add_argument("--kfold", type=int, default=5)
-    parser.add_argument("--group-kfold", action="store_true", help="K-fold por série (GroupKFold).")
-    parser.add_argument("--group-holdout", action="store_true", help="Holdout por série (GroupShuffleSplit).")
+    parser.add_argument("--group-kfold", action="store_true", help="K-fold por sÃ©rie (GroupKFold).")
+    parser.add_argument("--group-holdout", action="store_true", help="Holdout por sÃ©rie (GroupShuffleSplit).")
     args = parser.parse_args()
 
     results_root = Path(args.results)
@@ -110,7 +110,7 @@ def main() -> None:
     )
     conf_holdout = confusion_matrix(y_test, preds_test, labels=unique_labels)
 
-    # Cross-validation (quando possível)
+    # Cross-validation (quando possÃ­vel)
     cv_scores: dict[str, float] | None = None
     if args.kfold >= 2 and min_count >= args.kfold:
         from sklearn.metrics import f1_score
@@ -191,3 +191,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

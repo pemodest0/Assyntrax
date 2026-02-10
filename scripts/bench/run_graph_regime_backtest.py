@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
@@ -16,16 +16,16 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from graph_engine.core import local_divergence  # noqa: E402
-from graph_engine.embedding import estimate_embedding_params, takens_embed  # noqa: E402
-from graph_engine.graph_builder import knn_edges, normalize_counts, transition_counts  # noqa: E402
-from graph_engine.labels import (
+from engine.graph.core import local_divergence  # noqa: E402
+from engine.graph.embedding import estimate_embedding_params, takens_embed  # noqa: E402
+from engine.graph.graph_builder import knn_edges, normalize_counts, transition_counts  # noqa: E402
+from engine.graph.labels import (
     compute_confidence,
     compute_graph_quality,
     compute_thresholds,
     label_state,
 )  # noqa: E402
-from graph_engine.metastable import metastable_regimes  # noqa: E402
+from engine.graph.metastable import metastable_regimes  # noqa: E402
 
 
 def load_series(path: Path, timeframe: str) -> Tuple[pd.Series, pd.DatetimeIndex]:
@@ -206,7 +206,7 @@ def main() -> None:
     parser.add_argument("--auto-embed", action="store_true")
     parser.add_argument("--tau-method", default="ami", choices=["ami", "acf"])
     parser.add_argument("--m-method", default="cao", choices=["cao", "fnn"])
-    parser.add_argument("--purge", type=int, default=0, help="Remove últimas N amostras do treino para evitar leakage")
+    parser.add_argument("--purge", type=int, default=0, help="Remove Ãºltimas N amostras do treino para evitar leakage")
     parser.add_argument("--embargo", type=int, default=0, help="Ignora primeiras N amostras do teste")
     args = parser.parse_args()
 
@@ -253,3 +253,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

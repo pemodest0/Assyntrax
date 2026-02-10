@@ -3,6 +3,8 @@
 :root {
   --background: #05060b;
   --foreground: #eef1f7;
+  --font-geist-sans: "Segoe UI", "Inter", system-ui, -apple-system, sans-serif;
+  --font-geist-mono: "Consolas", "Menlo", "Monaco", monospace;
   --ax-surface: #0b0f16;
   --ax-panel: #0f141c;
   --ax-card: #121826;

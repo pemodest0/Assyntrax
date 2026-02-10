@@ -3,7 +3,7 @@ import Link from "next/link";
 const sectors = [
   { id: "finance", label: "Financeiro" },
   { id: "logistics", label: "Logistico" },
-  { id: "realestate", label: "Imobiliario" },
+  { id: "realestate", label: "Imobiliário" },
 ];
 
 export default function DashboardLayout({

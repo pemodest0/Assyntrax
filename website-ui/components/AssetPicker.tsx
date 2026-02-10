@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAsset } from "@/lib/asset-context";
 
 export default function AssetPicker() {
@@ -36,7 +36,7 @@ export default function AssetPicker() {
       .catch(() => {
         setOptions(["SPY", "QQQ", "GLD"]);
       });
-  }, [asset, setAsset]);
+  }, [asset, timeframe, setAsset, setTimeframe]);
 
   return (
     <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 px-4 py-3 text-sm shadow-lg backdrop-blur">

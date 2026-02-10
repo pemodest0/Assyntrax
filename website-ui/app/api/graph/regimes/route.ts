@@ -32,7 +32,7 @@ export async function GET(request: Request) {
       confidence: Number(r.confidence),
     }));
     return NextResponse.json(rows);
-  } catch (err: any) {
+  } catch {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 }

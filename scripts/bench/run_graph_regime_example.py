@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,9 +8,9 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from graph_engine.schema import GraphAsset, GraphConfig, GraphLinks, GraphMetrics, GraphState, iso_now  # noqa: E402
-from graph_engine.export import write_asset_bundle, write_universe  # noqa: E402
-from graph_engine.core import run_graph_engine  # noqa: E402
+from engine.graph.schema import GraphAsset, GraphConfig, GraphLinks, GraphMetrics, GraphState, iso_now  # noqa: E402
+from engine.graph.export import write_asset_bundle, write_universe  # noqa: E402
+from engine.graph.core import run_graph_engine  # noqa: E402
 
 
 def build_example(asset: str, timeframe: str, outdir: Path) -> GraphAsset:
@@ -76,3 +76,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

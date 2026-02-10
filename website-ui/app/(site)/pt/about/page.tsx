@@ -10,8 +10,9 @@ export default function AboutPage() {
             Por que a Assyntrax existe
           </h1>
           <p className="text-zinc-300 max-w-3xl text-lg">
-            Mercados mudam de regime e modelos tradicionais continuam prevendo como se nada tivesse
-            mudado. A Assyntrax nasceu para diagnosticar estrutura antes de qualquer projeção.
+            Mercados mudam de regime e modelos tradicionais continuam prevendo como se nada
+            tivesse mudado. A Assyntrax nasceu para diagnosticar estrutura antes de qualquer
+            projeção.
           </p>
         </div>
         <OriginPulse />
@@ -19,11 +20,11 @@ export default function AboutPage() {
 
       <section className="rounded-[32px] border border-zinc-800 bg-zinc-950/60 p-10 hero-noise">
         <div className="text-sm uppercase tracking-[0.3em] text-zinc-400">
-          O que fazemos diferente
+          O que fazemos de diferente
         </div>
         <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
           <ValueCard title="Forecast condicional">
-            Previsão só aparece quando o regime é estável.
+            A previsão só aparece quando o regime é estável.
           </ValueCard>
           <ValueCard title="Diagnóstico primeiro">
             Estado, confiança e qualidade antes de qualquer projeção.
@@ -49,9 +50,9 @@ export default function AboutPage() {
         <div className="rounded-[28px] border border-zinc-800 bg-zinc-950/60 p-8">
           <div className="text-sm uppercase tracking-[0.3em] text-zinc-400">Futuro</div>
           <ul className="mt-3 space-y-3 text-zinc-300">
-            <li>• API global de diagnóstico multiativos.</li>
-            <li>• Agentes setoriais (financeiro, logística, imobiliário).</li>
-            <li>• Expandir cobertura geográfica e dados oficiais.</li>
+            <li>- API global de diagnóstico multiativos.</li>
+            <li>- Agentes setoriais (financeiro, logística e imobiliário).</li>
+            <li>- Expansão de cobertura geográfica e dados oficiais.</li>
           </ul>
         </div>
       </section>
@@ -59,8 +60,8 @@ export default function AboutPage() {
       <section className="rounded-[32px] border border-zinc-800 bg-zinc-950/60 p-10">
         <div className="text-sm uppercase tracking-[0.3em] text-zinc-400">Fases do produto</div>
         <div className="mt-5 grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-zinc-300">
-          <TimelineItem title="Fase 1" text="Motor base + diagnóstico em séries reais." />
-          <TimelineItem title="Fase 2" text="Graph Engine + hiper-testes multi-ativos." />
+          <TimelineItem title="Fase 1" text="Motor base com diagnóstico em séries reais." />
+          <TimelineItem title="Fase 2" text="Graph Engine com hiper-testes multiativos." />
           <TimelineItem title="Fase 3" text="API e dashboard de decisão." />
           <TimelineItem title="Fase 4" text="Expansão global e setorial." />
         </div>

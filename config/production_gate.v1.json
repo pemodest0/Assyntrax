@@ -1,0 +1,56 @@
+{
+  "version": "v1.0.0",
+  "description": "Official production gate by domain for API snapshots.",
+  "defaults": {
+    "validated": {
+      "min_confidence": 0.6,
+      "min_quality": 0.7
+    },
+    "watch": {
+      "min_confidence": 0.45,
+      "min_quality": 0.55
+    },
+    "hysteresis": {
+      "promote_days": 2,
+      "degrade_days": 2
+    }
+  },
+  "domains": {
+    "finance": {
+      "validated": {
+        "min_confidence": 0.6,
+        "min_quality": 0.7
+      },
+      "watch": {
+        "min_confidence": 0.45,
+        "min_quality": 0.55
+      }
+    },
+    "energy": {
+      "validated": {
+        "min_confidence": 0.62,
+        "min_quality": 0.72
+      },
+      "watch": {
+        "min_confidence": 0.48,
+        "min_quality": 0.58
+      }
+    },
+    "realestate": {
+      "validated": {
+        "min_confidence": 0.6,
+        "min_quality": 0.7
+      },
+      "watch": {
+        "min_confidence": 0.45,
+        "min_quality": 0.55
+      }
+    }
+  },
+  "source_type_by_domain": {
+    "finance": "proxy",
+    "energy": "proxy",
+    "realestate": "official"
+  }
+}
+

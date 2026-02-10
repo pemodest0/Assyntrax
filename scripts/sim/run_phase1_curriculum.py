@@ -1,4 +1,4 @@
-"""Fase 1: gera séries sintéticas + dados reais para treinamento/benchmark."""
+﻿"""Fase 1: gera sÃ©ries sintÃ©ticas + dados reais para treinamento/benchmark."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from spa.engine.diagnostics.regime_labels import RegimeClassifier
+from engine.diagnostics.regime_labels import RegimeClassifier
 from scripts.finance.yf_fetch_or_load import fetch_yfinance, unify_to_daily, save_cache
 
 
@@ -153,3 +153,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

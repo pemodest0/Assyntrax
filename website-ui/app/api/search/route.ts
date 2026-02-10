@@ -11,12 +11,19 @@ export async function GET(request: Request) {
 
   try {
     const index = await readIndex();
-    let files = Array.isArray(index?.files) ? index.files : [];
-    if (asset) files = files.filter((f) => f.asset === asset);
-    if (run) files = files.filter((f) => f.run_id === run);
-    if (freq) files = files.filter((f) => (f.freq || "unknown") === freq);
-    if (tag) files = files.filter((f) => (f.tags || []).includes(tag));
-    if (type) files = files.filter((f) => f.artifact_type === type);
+    type IndexFile = {
+      asset?: string;
+      run_id?: string;
+      freq?: string;
+      tags?: string[];
+      artifact_type?: string;
+    };
+    let files: IndexFile[] = Array.isArray(index?.files) ? (index.files as IndexFile[]) : [];
+    if (asset) files = files.filter((f: IndexFile) => f.asset === asset);
+    if (run) files = files.filter((f: IndexFile) => f.run_id === run);
+    if (freq) files = files.filter((f: IndexFile) => (f.freq || "unknown") === freq);
+    if (tag) files = files.filter((f: IndexFile) => (f.tags || []).includes(tag));
+    if (type) files = files.filter((f: IndexFile) => f.artifact_type === type);
     return NextResponse.json({ files });
   } catch {
     return NextResponse.json({ error: "results_index_not_found" }, { status: 404 });

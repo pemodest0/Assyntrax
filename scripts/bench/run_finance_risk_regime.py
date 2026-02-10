@@ -1,4 +1,4 @@
-
+﻿
 import argparse
 from pathlib import Path
 import json
@@ -20,8 +20,8 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from spa.engine.diagnostics.regime_labels import RegimeClassifier
-from spa.engine.diagnostics.macro_context import load_macro_events
+from engine.diagnostics.regime_labels import RegimeClassifier
+from engine.diagnostics.macro_context import load_macro_events
 
 
 def _load_local_csv(ticker: str) -> pd.DataFrame | None:
@@ -569,3 +569,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

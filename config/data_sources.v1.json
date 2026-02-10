@@ -1,0 +1,44 @@
+{
+  "version": "v1.0.0",
+  "defaults": {
+    "source_type": "proxy",
+    "source_name": "unclassified"
+  },
+  "rules": [
+    {
+      "pattern": "data/raw/realestate/fipezap",
+      "source_type": "official",
+      "source_name": "fipezap"
+    },
+    {
+      "pattern": "data/raw/realestate/abrainc",
+      "source_type": "official",
+      "source_name": "abrainc_fipe"
+    },
+    {
+      "pattern": "data/raw/realestate/bcb",
+      "source_type": "official",
+      "source_name": "bcb_sgs"
+    },
+    {
+      "pattern": "data/raw/finance/yfinance_daily",
+      "source_type": "official",
+      "source_name": "yfinance_daily"
+    },
+    {
+      "pattern": "data/raw/finance/fred",
+      "source_type": "official",
+      "source_name": "fred"
+    },
+    {
+      "pattern": "data/raw/energy/ons",
+      "source_type": "official",
+      "source_name": "ons"
+    },
+    {
+      "pattern": "data/raw/energy/eia",
+      "source_type": "official",
+      "source_name": "eia"
+    }
+  ]
+}

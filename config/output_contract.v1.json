@@ -1,0 +1,25 @@
+{
+  "version": "v1.0.0",
+  "entity": "api_snapshot_record",
+  "required_fields": [
+    "asset",
+    "group",
+    "domain",
+    "timeframe",
+    "timestamp",
+    "regime",
+    "confidence",
+    "quality",
+    "signal_status",
+    "reason",
+    "run_id",
+    "data_adequacy",
+    "source_type"
+  ],
+  "allowed_signal_status": [
+    "validated",
+    "watch",
+    "inconclusive"
+  ]
+}
+

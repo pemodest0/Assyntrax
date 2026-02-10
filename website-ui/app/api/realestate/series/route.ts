@@ -1,10 +1,5 @@
 import { NextResponse } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
-
-function repoRoot() {
-  return path.resolve(process.cwd(), "..");
-}
+import { buildRealEstateAssetPayload } from "@/lib/server/realestate";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -12,16 +7,16 @@ export async function GET(request: Request) {
   if (!asset) {
     return NextResponse.json({ error: "missing_asset" }, { status: 400 });
   }
-  const target = path.join(repoRoot(), "data", "realestate", "normalized", `${asset}.csv`);
   try {
-    const text = await fs.readFile(target, "utf-8");
-    const lines = text.trim().split("\n");
-    const rows = lines.slice(1).map((line) => {
-      const [date, value] = line.split(",");
-      return { date, value: value ? Number(value) : null };
-    });
-    return NextResponse.json(rows);
-  } catch {
-    return NextResponse.json({ error: "series_not_found" }, { status: 404 });
+    const payload = await buildRealEstateAssetPayload(asset);
+    return NextResponse.json(payload.data.series.P);
+  } catch (err) {
+    return NextResponse.json(
+      {
+        error: "series_not_found",
+        reason: err instanceof Error ? err.message : "unknown_error",
+      },
+      { status: 404 }
+    );
   }
 }

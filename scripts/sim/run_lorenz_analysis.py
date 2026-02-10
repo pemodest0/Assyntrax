@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from spa.engine.diagnostics.regime_labels import RegimeClassifier
+from engine.diagnostics.regime_labels import RegimeClassifier
 from scripts.sim.simulate_lorenz import generate_lorenz_series
 
 
@@ -259,3 +259,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

@@ -1,11 +1,12 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
+from __future__ import annotations
+
 import os
 import sys
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from __future__ import annotations
 
 import argparse
 import json
@@ -16,7 +17,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from spa.sanity import ensure_sorted_dates, split_hash, validate_time_split
+from engine.sanity import ensure_sorted_dates, split_hash, validate_time_split
 
 try:
     import seaborn as sns
@@ -74,7 +75,7 @@ def _plot_confusion_matrix(confusion: np.ndarray, output: Path) -> None:
         fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     ax.set_xlabel("Predito")
     ax.set_ylabel("Real")
-    ax.set_title("Matriz de confusão — direção")
+    ax.set_title("Matriz de confusÃ£o â€” direÃ§Ã£o")
     fig.tight_layout()
     fig.savefig(output, dpi=200)
     plt.close(fig)
@@ -89,8 +90,8 @@ def _plot_feature_importance(importances: dict, output: Path) -> None:
         sns.barplot(x=values, y=names, ax=ax, palette="viridis")
     else:
         ax.barh(names, values, color="steelblue")
-    ax.set_title("Importância das features")
-    ax.set_xlabel("Importância (RandomForest)")
+    ax.set_title("ImportÃ¢ncia das features")
+    ax.set_xlabel("ImportÃ¢ncia (RandomForest)")
     fig.tight_layout()
     fig.savefig(output, dpi=200)
     plt.close(fig)
@@ -99,14 +100,14 @@ def _plot_feature_importance(importances: dict, output: Path) -> None:
 def _plot_probability_distributions(proba: np.ndarray, y_true: np.ndarray, output: Path) -> None:
     fig, ax = plt.subplots(figsize=(8, 4))
     if sns is not None:
-        sns.kdeplot(proba[y_true == 1], label="Acertou direção", fill=True, alpha=0.4, ax=ax)
-        sns.kdeplot(proba[y_true == 0], label="Errou direção", fill=True, alpha=0.4, ax=ax)
+        sns.kdeplot(proba[y_true == 1], label="Acertou direÃ§Ã£o", fill=True, alpha=0.4, ax=ax)
+        sns.kdeplot(proba[y_true == 0], label="Errou direÃ§Ã£o", fill=True, alpha=0.4, ax=ax)
     else:
-        ax.hist(proba[y_true == 1], bins=15, density=True, alpha=0.5, label="Acertou direção")
-        ax.hist(proba[y_true == 0], bins=15, density=True, alpha=0.5, label="Errou direção")
+        ax.hist(proba[y_true == 1], bins=15, density=True, alpha=0.5, label="Acertou direÃ§Ã£o")
+        ax.hist(proba[y_true == 0], bins=15, density=True, alpha=0.5, label="Errou direÃ§Ã£o")
     ax.set_xlabel("Probabilidade predita (classe=1)")
     ax.set_ylabel("Densidade")
-    ax.set_title("Distribuição das probabilidades previstas")
+    ax.set_title("DistribuiÃ§Ã£o das probabilidades previstas")
     ax.legend()
     fig.tight_layout()
     fig.savefig(output, dpi=200)
@@ -141,7 +142,7 @@ def _compute_rolling_metrics(test_df: pd.DataFrame, freq: str = "M") -> pd.DataF
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Treina classificador de direção (acerto vs erro) usando features diárias.")
+    parser = argparse.ArgumentParser(description="Treina classificador de direÃ§Ã£o (acerto vs erro) usando features diÃ¡rias.")
     parser.add_argument(
         "--metrics",
         nargs="+",
@@ -149,7 +150,7 @@ def main() -> None:
             "results/benchmark_2023/spy_stooq/daily_forecast_metrics.csv",
             "results/benchmark_2023/ibov_reconstructed/daily_forecast_metrics.csv",
         ],
-        help="Arquivos CSV de métricas diárias.",
+        help="Arquivos CSV de mÃ©tricas diÃ¡rias.",
     )
     parser.add_argument("--start", type=str, default="2019-01-01", help="Data inicial (YYYY-MM-DD).")
     parser.add_argument("--end", type=str, default="2023-12-31", help="Data final (YYYY-MM-DD).")
@@ -159,10 +160,10 @@ def main() -> None:
         default="2023-01-01",
         help="Data de corte para teste (tudo a partir dessa data vai para o conjunto de teste).",
     )
-    parser.add_argument("--output", type=str, default="results/classifier_finance", help="Diretório de saída.")
+    parser.add_argument("--output", type=str, default="results/classifier_finance", help="DiretÃ³rio de saÃ­da.")
     parser.add_argument("--features", nargs="+", default=DEFAULT_FEATURES, help="Lista de colunas de features.")
-    parser.add_argument("--trees", type=int, default=400, help="Número de árvores no RandomForest.")
-    parser.add_argument("--max-depth", type=int, default=None, help="Profundidade máxima do RandomForest.")
+    parser.add_argument("--trees", type=int, default=400, help="NÃºmero de Ã¡rvores no RandomForest.")
+    parser.add_argument("--max-depth", type=int, default=None, help="Profundidade mÃ¡xima do RandomForest.")
     parser.add_argument(
         "--model", type=str, default="rf", choices=("rf", "gb", "logistic"), help="Modelo supervisionado a utilizar."
     )
@@ -178,13 +179,13 @@ def main() -> None:
         help="Peso adicional para amostras onde direction_match=0 (erros).",
     )
     parser.add_argument("--difusiva-weight", type=float, default=1.2, help="Peso extra para regime difusivo.")
-    parser.add_argument("--transicao-weight", type=float, default=1.0, help="Peso extra para regime de transição.")
+    parser.add_argument("--transicao-weight", type=float, default=1.0, help="Peso extra para regime de transiÃ§Ã£o.")
     parser.add_argument("--coerente-weight", type=float, default=1.0, help="Peso extra para regime coerente.")
     parser.add_argument(
         "--rolling-freq",
         type=str,
         default="M",
-        help="Frequência para métricas agregadas (ex: 'M' mensal, 'W' semanal).",
+        help="FrequÃªncia para mÃ©tricas agregadas (ex: 'M' mensal, 'W' semanal).",
     )
     args = parser.parse_args()
 
@@ -284,3 +285,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

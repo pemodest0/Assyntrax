@@ -30,7 +30,7 @@ export async function GET() {
         USREC: r.USREC ? Number(r.USREC) : undefined,
       }));
     return NextResponse.json(rows);
-  } catch (err: any) {
+  } catch {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 }

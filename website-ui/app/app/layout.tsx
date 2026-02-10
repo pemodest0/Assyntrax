@@ -1,4 +1,4 @@
-import "@/app/globals.css";
+﻿import "@/app/globals.css";
 import Link from "next/link";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -21,6 +21,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <nav className="mt-6 space-y-1 text-sm">
                 <NavItem href="/app/dashboard" label="Dashboard" />
                 <NavItem href="/app/setores" label="Setores" />
+                <NavItem href="/app/metodologia" label="Metodologia" />
                 <NavItem href="/app/sobre" label="Sobre" />
               </nav>
 

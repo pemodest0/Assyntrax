@@ -5,20 +5,20 @@ import { motion } from "framer-motion";
 
 export default function ProofSection() {
   return (
-    <section className="space-y-10">
+    <section className="space-y-6 py-10 md:py-12 lg:py-14 xl:py-16">
       <motion.div
-        className="space-y-3"
+        className="space-y-2"
         initial={{ opacity: 0, y: 8 }}
         whileInView={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <div className="text-sm uppercase tracking-[0.3em] text-zinc-400">Prova &amp; rigor</div>
+        <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Prova e rigor</div>
         <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">
           Métricas transparentes, sem promessas
         </h2>
-        <p className="text-zinc-300 max-w-3xl text-lg">
-          Validamos com walk-forward, baselines e métricas por regime. A Assyntrax sinaliza quando o
-          mercado está sem estrutura.
+        <p className="text-zinc-300 max-w-3xl text-base lg:text-lg">
+          Validamos com walk-forward, baselines e métricas por regime. A Assyntrax sinaliza
+          quando o mercado está sem estrutura.
         </p>
       </motion.div>
       <ProofMatrix />

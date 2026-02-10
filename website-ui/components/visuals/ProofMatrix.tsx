@@ -1,10 +1,12 @@
+"use client";
+
 import { motion } from "framer-motion";
 
 const metrics = [
   { label: "F1", value: "0.71", note: "Regimes" },
-  { label: "MCC", value: "0.63", note: "Transições" },
+  { label: "MCC", value: "0.63", note: "Transicoes" },
   { label: "MASE", value: "0.88", note: "Forecast condicional" },
-  { label: "TPR", value: "0.79", note: "Alertas críticos" },
+  { label: "TPR", value: "0.79", note: "Alertas criticos" },
 ];
 
 export default function ProofMatrix() {

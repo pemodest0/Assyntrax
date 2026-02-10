@@ -1,3 +1,5 @@
+"use client";
+
 import { motion } from "framer-motion";
 
 export default function SignalWeave() {
@@ -35,7 +37,7 @@ export default function SignalWeave() {
         <circle cx="380" cy="80" r="4" fill="#ff7a18" />
       </svg>
       <div className="relative z-10 text-xs text-zinc-400 mt-2">
-        Estrutura dinâmica com camadas de regime e ruído.
+        Estrutura dinamica com camadas de regime e ruido.
       </div>
     </motion.div>
   );

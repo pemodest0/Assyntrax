@@ -1,11 +1,12 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
+from __future__ import annotations
+
 import os
 import sys
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from __future__ import annotations
 
 import argparse
 import json
@@ -14,7 +15,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from spa.sanity import ensure_sorted_dates, split_hash, validate_time_split
+from engine.sanity import ensure_sorted_dates, split_hash, validate_time_split
 
 from hybrid_forecast import (
     DEFAULT_FEATURES,
@@ -28,25 +29,25 @@ from hybrid_forecast import (
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Treina modelo residual para ajustar previsões de preço.")
+    parser = argparse.ArgumentParser(description="Treina modelo residual para ajustar previsÃµes de preÃ§o.")
     parser.add_argument(
         "--metrics",
         type=str,
         default="results/benchmark_2023/ibov_reconstructed/daily_forecast_metrics.csv",
-        help="CSV com métricas diárias (previsto/real).",
+        help="CSV com mÃ©tricas diÃ¡rias (previsto/real).",
     )
-    parser.add_argument("--start", type=str, default="2016-01-01", help="Início da janela de treino.")
+    parser.add_argument("--start", type=str, default="2016-01-01", help="InÃ­cio da janela de treino.")
     parser.add_argument("--train-end", type=str, default="2023-12-31", help="Data limite para treino.")
-    parser.add_argument("--test-start", type=str, default="2024-01-01", help="Início da janela de teste.")
+    parser.add_argument("--test-start", type=str, default="2024-01-01", help="InÃ­cio da janela de teste.")
     parser.add_argument("--model", choices=("gbr", "rf"), default="gbr", help="Regressor residual.")
-    parser.add_argument("--output", type=str, default="results/hybrid_residual", help="Diretório de saída.")
-    parser.add_argument("--tune", action="store_true", help="Efetua busca em grade com validação temporal antes do treino.")
-    parser.add_argument("--tune-splits", type=int, default=3, help="Número de divisões de TimeSeriesSplit ao tunar.")
+    parser.add_argument("--output", type=str, default="results/hybrid_residual", help="DiretÃ³rio de saÃ­da.")
+    parser.add_argument("--tune", action="store_true", help="Efetua busca em grade com validaÃ§Ã£o temporal antes do treino.")
+    parser.add_argument("--tune-splits", type=int, default=3, help="NÃºmero de divisÃµes de TimeSeriesSplit ao tunar.")
     parser.add_argument(
         "--calibration-days",
         type=int,
         default=252,
-        help="Número de dias mais recentes do período de treino usados para calibrar o peso do residual.",
+        help="NÃºmero de dias mais recentes do perÃ­odo de treino usados para calibrar o peso do residual.",
     )
     parser.add_argument(
         "--target-mode",
@@ -121,7 +122,7 @@ def main() -> None:
         best_params, tune_score = time_series_grid_search(
             dataset, param_grid, model_type=args.model, n_splits=args.tune_splits
         )
-        print(f"Melhor conjunto de parâmetros: {best_params} (MAE={tune_score:.4f})")
+        print(f"Melhor conjunto de parÃ¢metros: {best_params} (MAE={tune_score:.4f})")
 
     reg, scaler, metrics = train_residual_model(
         dataset, train_mask=mask_values, model=args.model, model_params=best_params
@@ -183,3 +184,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import json
@@ -7,11 +7,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from graph_engine.core import run_graph_engine
-from graph_engine.embedding import estimate_embedding_params, takens_embed
-from graph_engine.diagnostics import estimate_tau_adaptive, estimate_embedding_dim, estimate_lle_rosenstein, _rqa_metrics
-from graph_engine.export import write_asset_bundle
-from graph_engine.schema import GraphAsset, GraphConfig, GraphLinks, GraphMetrics, GraphState, iso_now
+from engine.graph.core import run_graph_engine
+from engine.graph.embedding import estimate_embedding_params, takens_embed
+from engine.graph.diagnostics import estimate_tau_adaptive, estimate_embedding_dim, estimate_lle_rosenstein, _rqa_metrics
+from engine.graph.export import write_asset_bundle
+from engine.graph.schema import GraphAsset, GraphConfig, GraphLinks, GraphMetrics, GraphState, iso_now
 
 
 def _load_series(path: Path) -> pd.Series:
@@ -140,3 +140,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

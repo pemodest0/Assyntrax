@@ -122,7 +122,7 @@ export default function RecentDiagnostics() {
         )}
       </div>
       <div className="text-xs text-zinc-500">
-        O que voce esta vendo: mapas do embedding, linha temporal do regime e matriz de transicao.
+        O que você está vendo: mapas do embedding, linha temporal do regime e matriz de transição.
       </div>
     </div>
   );

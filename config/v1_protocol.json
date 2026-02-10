@@ -1,0 +1,33 @@
+{
+  "version": "v1",
+  "goals": {
+    "min_universe_success_rate": 0.8,
+    "min_stability_score": 0.55
+  },
+  "domain_targets": {
+    "finance": {
+      "micro_switch_rate_per_year": [30, 80],
+      "transition_block_rate_per_year": [2, 10]
+    },
+    "realestate": {
+      "micro_switch_rate_per_year": [4, 24],
+      "transition_block_rate_per_year": [1, 6]
+    },
+    "energy": {
+      "micro_switch_rate_per_year": [10, 40],
+      "transition_block_rate_per_year": [1, 8]
+    }
+  },
+  "production_gate": {
+    "use_ci_lower_bound": true,
+    "confidence_floor_source": "uncertainty.conservative_overall_metrics.mean_confidence.conservative_value",
+    "quality_floor_source": "uncertainty.conservative_overall_metrics.mean_quality.conservative_value",
+    "fallback_min_confidence": 0.45,
+    "fallback_min_quality": 0.35
+  },
+  "drift_guardrails": {
+    "max_stability_drop": 0.08,
+    "max_success_rate_drop": 0.1,
+    "max_valid_signal_ratio_drop": 0.15
+  }
+}

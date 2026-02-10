@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from spa.finance_utils import (
+from engine.finance_utils import (
     ExperimentSpec,
     FinancialDatasetSpec,
     compute_confidence_finance,
@@ -26,11 +26,11 @@ from spa.finance_utils import (
     prepare_financial_series,
     standardize_train_test,
 )
-from spa.api_records import PredictionRecord, save_prediction_records
-from spa.forecasting.forecasters import ARIMAForecaster, NaivePersistenceForecaster, XGBoostForecaster
-from spa.forecasting.regime_gating import select_model_for_regime
-from spa.models.takens_knn import TakensKNN
-from spa.sanity import ensure_sorted_dates, split_hash, validate_time_split
+from engine.api_records import PredictionRecord, save_prediction_records
+from engine.forecasting.forecasters import ARIMAForecaster, NaivePersistenceForecaster, XGBoostForecaster
+from engine.forecasting.regime_gating import select_model_for_regime
+from engine.models.takens_knn import TakensKNN
+from engine.sanity import ensure_sorted_dates, split_hash, validate_time_split
 from scripts.finance.yf_fetch_or_load import find_local_data, load_price_series, unify_to_daily
 
 
@@ -682,3 +682,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

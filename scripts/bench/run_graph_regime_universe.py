@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
@@ -16,22 +16,22 @@ import json
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from graph_engine.core import run_graph_engine  # noqa: E402
-from graph_engine.embedding import estimate_embedding_params  # noqa: E402
-from graph_engine.diagnostics import compute_diagnostics  # noqa: E402
-from graph_engine.plots import (  # noqa: E402
+from engine.graph.core import run_graph_engine  # noqa: E402
+from engine.graph.embedding import estimate_embedding_params  # noqa: E402
+from engine.graph.diagnostics import compute_diagnostics  # noqa: E402
+from engine.graph.plots import (  # noqa: E402
     plot_embedding_2d,
     plot_stretch_hist,
     plot_timeline_regime,
     plot_transition_matrix,
 )
-from graph_engine.schema import GraphAsset, GraphConfig, GraphLinks, GraphMetrics, GraphState, iso_now  # noqa: E402
-from graph_engine.version import ENGINE_VERSION  # noqa: E402
-from graph_engine.export import write_asset_bundle, write_universe  # noqa: E402
-from graph_engine.merge_existing import merge_forecast_risk  # noqa: E402
-from graph_engine.sanity import sanity_alerts  # noqa: E402
-from graph_engine.report import write_asset_report  # noqa: E402
-from graph_engine.risk_thresholds import get_risk_thresholds  # noqa: E402
+from engine.graph.schema import GraphAsset, GraphConfig, GraphLinks, GraphMetrics, GraphState, iso_now  # noqa: E402
+from engine.graph.version import ENGINE_VERSION  # noqa: E402
+from engine.graph.export import write_asset_bundle, write_universe  # noqa: E402
+from engine.graph.merge_existing import merge_forecast_risk  # noqa: E402
+from engine.graph.sanity import sanity_alerts  # noqa: E402
+from engine.graph.report import write_asset_report  # noqa: E402
+from engine.graph.risk_thresholds import get_risk_thresholds  # noqa: E402
 
 
 def _load_asset_groups(path: Path = Path("data/asset_groups.csv")) -> dict:
@@ -299,7 +299,7 @@ def build_asset_output(
     )
 
     # Recompute thresholds with timeframe-specific calibration
-    from graph_engine.labels import compute_thresholds  # local import to avoid cycles
+    from engine.graph.labels import compute_thresholds  # local import to avoid cycles
     conf_smoothed = result.confidence
     escape_series = 1.0 - conf_smoothed
     thresholds = compute_thresholds(
@@ -943,21 +943,21 @@ def main() -> None:
             "trend_down": trend_down,
             "stress_high": stress_count,
             "status": "WATCH" if drift_high / max(1, len(audit_rows)) > 0.25 else "OK",
-            "notes": "Governança camada 2/3: drift + tendência. Sem bloqueio de forecast.",
+            "notes": "GovernanÃ§a camada 2/3: drift + tendÃªncia. Sem bloqueio de forecast.",
         }
         (outdir / "governance_summary.json").write_text(
             json.dumps(governance, indent=2),
             encoding="utf-8",
         )
-        # Camada 5: relatório automático do run (técnico + executivo)
+        # Camada 5: relatÃ³rio automÃ¡tico do run (tÃ©cnico + executivo)
         reliable_rate = counts["reliable"] / max(1, counts["total"])
         stress_rate = stress_count / max(1, counts["total"])
-        exec_verdict = "Confiável hoje: SIM" if reliable_rate >= 0.4 and stress_rate < 0.2 else "Confiável hoje: NÃO"
+        exec_verdict = "ConfiÃ¡vel hoje: SIM" if reliable_rate >= 0.4 and stress_rate < 0.2 else "ConfiÃ¡vel hoje: NÃƒO"
         exec_reasons = []
         if reliable_rate < 0.4:
-            exec_reasons.append("poucos ativos com confiança alta")
+            exec_reasons.append("poucos ativos com confianÃ§a alta")
         if stress_rate >= 0.2:
-            exec_reasons.append("muitos ativos em modo instável")
+            exec_reasons.append("muitos ativos em modo instÃ¡vel")
         if drift_high / max(1, counts["total"]) > 0.25:
             exec_reasons.append("drift elevado em parte do universo")
         report = {
@@ -977,32 +977,32 @@ def main() -> None:
             },
         }
         (outdir / "report_run.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
-        report_md = f"""# Relatório do Run — {run_meta.get('run_id')}
+        report_md = f"""# RelatÃ³rio do Run â€” {run_meta.get('run_id')}
 
 ## Resumo executivo
 - {exec_verdict}
-- Razões: {", ".join(exec_reasons) if exec_reasons else "sem alertas críticos"}
-- Taxa de confiança alta: {reliable_rate:.2f}
+- RazÃµes: {", ".join(exec_reasons) if exec_reasons else "sem alertas crÃ­ticos"}
+- Taxa de confianÃ§a alta: {reliable_rate:.2f}
 - Taxa de stress: {stress_rate:.2f}
 
-## Resumo técnico
+## Resumo tÃ©cnico
 - Total de ativos: {counts["total"]}
-- Mudanças recentes: {counts["changed"]}
+- MudanÃ§as recentes: {counts["changed"]}
 - Low confidence: {counts["low_conf"]}
 - Low quality: {counts["low_quality"]}
 - Unstable: {counts["unstable"]}
 - Noisy: {counts["noisy"]}
 - Drift alto: {drift_high}
-- Tendência de confiança em queda: {trend_down}
+- TendÃªncia de confianÃ§a em queda: {trend_down}
 - Stress alto (MODE_UNSTABLE): {stress_count}
 """
         (outdir / "report_run.md").write_text(report_md, encoding="utf-8")
 
         # Camada 6: mensagem com "personalidade" para o front-end
         if reliable_rate >= 0.4 and stress_rate < 0.2:
-            message = "Motor diz: Estrutura confiável detectada. Forecast liberado."
+            message = "Motor diz: Estrutura confiÃ¡vel detectada. Forecast liberado."
         else:
-            message = "Motor diz: NÃO operar hoje. Estrutura fraca ou instável."
+            message = "Motor diz: NÃƒO operar hoje. Estrutura fraca ou instÃ¡vel."
         (outdir / "engine_message.json").write_text(
             json.dumps(
                 {
@@ -1041,3 +1041,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

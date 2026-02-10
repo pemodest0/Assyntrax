@@ -1,3 +1,5 @@
+"use client";
+
 import { motion } from "framer-motion";
 
 export default function ProductMock() {
@@ -16,20 +18,22 @@ export default function ProductMock() {
           <div className="text-[10px] text-zinc-500">Live</div>
         </div>
         <div className="grid grid-cols-3 gap-3">
-          {["Regime", "Confiança", "Qualidade"].map((label) => (
+          {[
+            { label: "Regime", value: "Estavel" },
+            { label: "Confiança", value: "0.82" },
+            { label: "Qualidade", value: "0.76" },
+          ].map((item) => (
             <div
-              key={label}
+              key={item.label}
               className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-3 transition hover:-translate-y-1 hover:border-zinc-600"
             >
-              <div className="text-[10px] uppercase text-zinc-500">{label}</div>
-              <div className="mt-2 text-lg font-semibold text-zinc-100">
-                {label === "Regime" ? "Estável" : label === "Confiança" ? "0.82" : "0.76"}
-              </div>
+              <div className="text-[10px] uppercase text-zinc-500">{item.label}</div>
+              <div className="mt-2 text-lg font-semibold text-zinc-100">{item.value}</div>
             </div>
           ))}
         </div>
         <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
-          <div className="text-xs text-zinc-500">Série principal</div>
+          <div className="text-xs text-zinc-500">Serie principal</div>
           <svg viewBox="0 0 420 140" className="mt-2 w-full h-28">
             <defs>
               <linearGradient id="mock-line" x1="0" x2="1">

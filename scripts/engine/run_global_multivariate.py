@@ -1,4 +1,4 @@
-"""Pipeline global multivariado: espaço de fase, compressão, cluster e novidade."""
+﻿"""Pipeline global multivariado: espaÃ§o de fase, compressÃ£o, cluster e novidade."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from spa.engine.diagnostics.regime_labels import RegimeClassifier
+from engine.diagnostics.regime_labels import RegimeClassifier
 from scripts.finance.yf_fetch_or_load import fetch_yfinance, unify_to_daily, save_cache
 
 
@@ -68,7 +68,7 @@ def build_multivariate_matrix(
         frames.append(df)
         tickers.append(ticker)
     if not frames:
-        raise RuntimeError("Nenhuma série válida encontrada.")
+        raise RuntimeError("Nenhuma sÃ©rie vÃ¡lida encontrada.")
     merged = pd.concat(frames, axis=1, join="inner").dropna()
     return merged, tickers
 
@@ -214,3 +214,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

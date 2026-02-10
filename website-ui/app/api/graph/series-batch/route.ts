@@ -16,22 +16,99 @@ function parseCsv(text: string) {
   });
 }
 
-function toWeeklyDates(dates: string[]) {
-  const out: string[] = [];
+function toWeeklyIndices(dates: string[]) {
+  const out: number[] = [];
   let lastKey = "";
-  for (const d of dates) {
+  for (let i = 0; i < dates.length; i += 1) {
+    const d = dates[i];
     const dt = new Date(d + "T00:00:00Z");
     const year = dt.getUTCFullYear();
     const week = Math.ceil(((dt.getTime() - Date.UTC(year, 0, 1)) / 86400000 + 1) / 7);
     const key = `${year}-W${week}`;
     if (key !== lastKey) {
-      out.push(d);
+      out.push(i);
       lastKey = key;
     } else {
-      out[out.length - 1] = d;
+      out[out.length - 1] = i;
     }
   }
   return out;
+}
+
+function std(values: number[]) {
+  if (!values.length) return 0;
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  const varSum = values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length;
+  return Math.sqrt(varSum);
+}
+
+function quantile(values: number[], q: number) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const pos = (sorted.length - 1) * q;
+  const base = Math.floor(pos);
+  const rest = pos - base;
+  if (sorted[base + 1] !== undefined) {
+    return sorted[base] + rest * (sorted[base + 1] - sorted[base]);
+  }
+  return sorted[base];
+}
+
+function computeRegime(vol: number, q1: number, q2: number) {
+  if (vol <= q1) return "STABLE";
+  if (vol <= q2) return "TRANSITION";
+  return "UNSTABLE";
+}
+
+function computeConfidence(vol: number, minVol: number, maxVol: number) {
+  if (!Number.isFinite(vol) || maxVol <= minVol) return 0.6;
+  const rel = (vol - minVol) / (maxVol - minVol);
+  const conf = 0.6 + 0.3 * Math.abs(rel - 0.5) * 2;
+  return Math.max(0.55, Math.min(0.9, conf));
+}
+
+async function loadFallbackSeries(asset: string, tf: string, limit: number, step: number) {
+  const priceFile = path.join(resultsRoot(), "..", "data", "raw", "finance", "yfinance_daily", `${asset}.csv`);
+  const rawPrice = await fs.readFile(priceFile, "utf-8");
+  const priceRows = parseCsv(rawPrice);
+  const dates = priceRows.map((r) => r.date).filter(Boolean);
+  const returns = priceRows.map((r) => Number(r.r)).filter((v) => Number.isFinite(v));
+
+  const window = 20;
+  const volSeries: number[] = [];
+  for (let i = window; i < returns.length; i += 1) {
+    const slice = returns.slice(i - window, i);
+    volSeries.push(std(slice));
+  }
+
+  const q1 = quantile(volSeries, 0.33);
+  const q2 = quantile(volSeries, 0.66);
+  const minVol = Math.min(...volSeries, q1);
+  const maxVol = Math.max(...volSeries, q2);
+
+  const seriesRaw = priceRows.map((row, idx) => {
+    const vol = volSeries[idx - window] ?? volSeries[volSeries.length - 1] ?? 0;
+    const regime = computeRegime(vol, q1, q2);
+    const confidence = computeConfidence(vol, minVol, maxVol);
+    return {
+      date: row.date,
+      confidence,
+      regime,
+      price: Number(row.price ?? NaN) || null,
+    };
+  });
+
+  let indices: number[] = [];
+  if (tf === "weekly") {
+    indices = toWeeklyIndices(dates);
+  } else {
+    indices = seriesRaw.map((_, idx) => idx);
+  }
+
+  const sliced = indices.map((i) => seriesRaw[i]).filter((r) => r && r.date);
+  const total = sliced.length;
+  const n = limit ? Math.min(limit, total) : total;
+  return sliced.slice(-n).filter((_, idx) => idx % step === 0);
 }
 
 export async function GET(request: Request) {
@@ -62,24 +139,30 @@ export async function GET(request: Request) {
         const rawPrice = await fs.readFile(priceFile, "utf-8");
         const priceRows = parseCsv(rawPrice);
         const dates = priceRows.map((r) => r.date).filter(Boolean);
-        const alignedDates = tf === "weekly" ? toWeeklyDates(dates) : dates;
+        const indices = tf === "weekly" ? toWeeklyIndices(dates) : priceRows.map((_, idx) => idx);
 
         const total = regRows.length;
         const n = limit ? Math.min(limit, total) : total;
-        const sliceDates = alignedDates.slice(-n);
         const sliceRegs = regRows.slice(-n);
-        const slicePrices = priceRows.slice(-n);
+        const sliceIdx = indices.slice(-n);
         const series = sliceRegs
           .filter((_, idx) => idx % step === 0)
-          .map((r, i) => ({
-            date: sliceDates[i] || "",
-            confidence: Number(r.confidence),
-            regime: r.regime,
-            price: Number(slicePrices[i]?.price ?? NaN) || null,
-          }));
+          .map((r, i) => {
+            const priceRow = priceRows[sliceIdx[i] ?? 0];
+            return {
+              date: priceRow?.date || "",
+              confidence: Number(r.confidence),
+              regime: r.regime,
+              price: Number(priceRow?.price ?? NaN) || null,
+            };
+          });
         out[asset] = series;
       } catch {
-        out[asset] = [];
+        try {
+          out[asset] = await loadFallbackSeries(asset, tf, limit, step);
+        } catch {
+          out[asset] = [];
+        }
       }
     })
   );

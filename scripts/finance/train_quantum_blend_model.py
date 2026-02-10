@@ -1,11 +1,12 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
+from __future__ import annotations
+
 import os
 import sys
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from __future__ import annotations
 
 import argparse
 import json
@@ -18,7 +19,7 @@ from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-from spa.sanity import ensure_sorted_dates, split_hash, validate_time_split
+from engine.sanity import ensure_sorted_dates, split_hash, validate_time_split
 
 def load_metrics(path: Path) -> pd.DataFrame:
     df = pd.read_csv(path, parse_dates=["date"])
@@ -47,7 +48,7 @@ def prepare_dataset(
     col_pred = f"{mode}_price_pred"
     if col_pred not in df.columns:
         raise ValueError(
-            f"Coluna {col_pred} não encontrada. Reexecute run_daily_forecast.py com backend quântico."
+            f"Coluna {col_pred} nÃ£o encontrada. Reexecute run_daily_forecast.py com backend quÃ¢ntico."
         )
 
     df = df[(df["date"] >= start) & (df["date"] <= end)].copy()
@@ -148,16 +149,16 @@ def evaluate_blend(alpha_pred: np.ndarray, meta: pd.DataFrame, mode: str) -> Dic
 
 def main() -> None:
     np.random.seed(42)
-    parser = argparse.ArgumentParser(description="Treina regressão para blend quântico dinâmico.")
+    parser = argparse.ArgumentParser(description="Treina regressÃ£o para blend quÃ¢ntico dinÃ¢mico.")
     parser.add_argument("metrics", type=str, help="Arquivo daily_forecast_metrics.csv.")
-    parser.add_argument("--mode", type=str, default="quantum_hadamard", help="Modo quântico (quantum_hadamard ou quantum_grover).")
+    parser.add_argument("--mode", type=str, default="quantum_hadamard", help="Modo quÃ¢ntico (quantum_hadamard ou quantum_grover).")
     parser.add_argument("--start", type=str, default="2015-01-01", help="Data inicial.")
     parser.add_argument("--end", type=str, default="2025-12-31", help="Data final.")
     parser.add_argument("--train-end", type=str, default="2023-12-31", help="Data limite do treino.")
-    parser.add_argument("--output", type=str, default="results/crypto_blend", help="Diretório de saída.")
-    parser.add_argument("--n-estimators", type=int, default=400, help="Número de árvores do Gradient Boosting.")
+    parser.add_argument("--output", type=str, default="results/crypto_blend", help="DiretÃ³rio de saÃ­da.")
+    parser.add_argument("--n-estimators", type=int, default=400, help="NÃºmero de Ã¡rvores do Gradient Boosting.")
     parser.add_argument("--learning-rate", type=float, default=0.05, help="Learning rate do Gradient Boosting.")
-    parser.add_argument("--max-depth", type=int, default=3, help="Profundidade máxima das árvores.")
+    parser.add_argument("--max-depth", type=int, default=3, help="Profundidade mÃ¡xima das Ã¡rvores.")
     args = parser.parse_args()
 
     metrics_path = Path(args.metrics)
@@ -185,7 +186,7 @@ def main() -> None:
     )
 
     if meta_train.empty or meta_test.empty:
-        raise ValueError("Conjunto de treino ou teste vazio após os filtros selecionados; ajuste --train-end ou período.")
+        raise ValueError("Conjunto de treino ou teste vazio apÃ³s os filtros selecionados; ajuste --train-end ou perÃ­odo.")
 
     reg = GradientBoostingRegressor(
         random_state=42,
@@ -272,3 +273,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

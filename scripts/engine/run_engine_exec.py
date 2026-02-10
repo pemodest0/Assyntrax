@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
@@ -27,11 +27,11 @@ except Exception:
     plt = None
     PdfPages = None
 
-from spa.sanity import ensure_sorted_dates, safe_test_indices, split_hash, validate_time_split
+from engine.sanity import ensure_sorted_dates, safe_test_indices, split_hash, validate_time_split
 from scripts.finance.yf_fetch_or_load import find_local_data, load_price_series, fetch_yfinance, unify_to_daily, save_cache
-from spa.models.takens_knn import TakensKNN
-from spa.engine.diagnostics.predictability import compute_acf, hurst_exponent_rs, lyapunov_proxy
-from spa.engine.temporal_engine import (
+from engine.models.takens_knn import TakensKNN
+from engine.diagnostics.predictability import compute_acf, hurst_exponent_rs, lyapunov_proxy
+from engine.temporal.temporal_engine import (
     TemporalConfig,
     YearResult,
     build_temporal_report,
@@ -168,8 +168,8 @@ def plot_error_by_horizon(rows: pd.DataFrame, out_path: Path) -> None:
         grouped = group.groupby("horizon")["mae"].mean()
         ax.plot(grouped.index, grouped.values, marker="o", label=model)
     ax.set_xlabel("Horizonte")
-    ax.set_ylabel("MAE médio")
-    ax.set_title("Erro por horizonte (média dos anos)")
+    ax.set_ylabel("MAE mÃ©dio")
+    ax.set_title("Erro por horizonte (mÃ©dia dos anos)")
     ax.legend()
     fig.tight_layout()
     fig.savefig(out_path, dpi=150)
@@ -332,7 +332,7 @@ def main() -> None:
     overview_md = outdir / "overview.md"
     overview_md.write_text(
         "# Motor de Analise de Serie Temporal - Overview\n\n"
-        f"Total de execuções: {len(overview)}\n",
+        f"Total de execuÃ§Ãµes: {len(overview)}\n",
         encoding="utf-8",
     )
 
@@ -342,7 +342,7 @@ def main() -> None:
             if overview.empty:
                 fig, ax = plt.subplots(figsize=(8, 4))
                 ax.axis("off")
-                ax.text(0.1, 0.5, "Sem resultados para gerar relatório.", fontsize=12)
+                ax.text(0.1, 0.5, "Sem resultados para gerar relatÃ³rio.", fontsize=12)
                 pdf.savefig(fig)
                 plt.close(fig)
             else:
@@ -387,3 +387,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

@@ -8,7 +8,7 @@ import CTASection from "@/components/sections/CTASection";
 
 export default function HomePage() {
   return (
-    <div className="py-12 space-y-24">
+    <div className="py-10 md:py-12 lg:py-14 xl:py-16">
       <HeroSection />
       <ProblemSection />
       <HowItWorksSection />

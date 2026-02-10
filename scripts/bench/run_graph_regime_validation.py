@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
@@ -11,7 +11,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-from graph_engine.core import run_graph_engine  # noqa: E402
+from engine.graph.core import run_graph_engine  # noqa: E402
 
 
 def synth_regimes(n: int = 1500, seed: int = 42) -> tuple[np.ndarray, np.ndarray]:
@@ -127,3 +127,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

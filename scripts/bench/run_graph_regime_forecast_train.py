@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
@@ -19,11 +19,11 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from graph_engine.core import local_divergence  # noqa: E402
-from graph_engine.embedding import estimate_embedding_params, takens_embed  # noqa: E402
-from graph_engine.graph_builder import knn_edges, normalize_counts, transition_counts  # noqa: E402
-from graph_engine.labels import compute_confidence, compute_graph_quality, compute_thresholds, label_state  # noqa: E402
-from graph_engine.metastable import metastable_regimes  # noqa: E402
+from engine.graph.core import local_divergence  # noqa: E402
+from engine.graph.embedding import estimate_embedding_params, takens_embed  # noqa: E402
+from engine.graph.graph_builder import knn_edges, normalize_counts, transition_counts  # noqa: E402
+from engine.graph.labels import compute_confidence, compute_graph_quality, compute_thresholds, label_state  # noqa: E402
+from engine.graph.metastable import metastable_regimes  # noqa: E402
 
 
 def load_series(path: Path, timeframe: str) -> pd.Series:
@@ -497,7 +497,7 @@ def main() -> None:
         "--purge",
         type=int,
         default=-1,
-        help="Remove últimas N amostras do treino (default -1 = horizon).",
+        help="Remove Ãºltimas N amostras do treino (default -1 = horizon).",
     )
     parser.add_argument(
         "--embargo",
@@ -657,3 +657,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

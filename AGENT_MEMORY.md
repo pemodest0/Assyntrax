@@ -1,78 +1,33 @@
-# AGENT_MEMORY — Stochastic Process Analyzer (SPA)
+﻿# Agent Memory (Atual)
 
-## Projeto
-Nome: Stochastic Process Analyzer (SPA)
+## Nome do projeto
+- Marca alvo: `Assyntrax`
+- Repo atual: `A-firma` (planejado rename)
 
-Objetivo:
-Analisar series temporais reais (tempo + metrica) como processos estocasticos
-efetivos em tempo discreto. Nesta fase, o foco e a vertical de ENERGIA.
+## Motor oficial
+- `engine/` e a API estavel.
+- `spa/` e `graph_engine/` ficam como wrappers de compatibilidade e legado controlado.
 
----
+## Fluxo oficial
+- `scripts/ops/run_daily_jobs.ps1`
+- outputs em `results/ops/snapshots/<run_id>/`
+- frontend le ultimo run valido
 
-## Escopo atual (congelado)
-- Series temporais 1D
-- Pipeline minimo: leitura, preprocessamento, features, diagnosticos e relatorio
-- Dados reais do ONS via CSV (download e normalizacao)
-- Stack enxuta: numpy, scipy, pandas, matplotlib
-- Saidas: CSV processado, JSON de resumo, PDF simples
+## Artefatos canonicos por run
+- `api_snapshot.jsonl`
+- `summary.json`
+- `audit_pack.json`
 
----
+## Gates
+- status por ativo: `validated/watch/inconclusive`
+- gate global e drift influenciam publicacao
+- data adequacy e obrigatorio
 
-## Localizacao dos dados (materia-prima)
-- ONS (energia): `data/raw/ONS/ons_carga_diaria/ons_carga_diaria_2000_2026.csv`
-- Geo (mapa): `data/geo/br_uf.geojson`
-- Financeiro (cache local, yfinance): `data/raw/finance/yfinance_daily/*.csv`
+## Frontend
+- consumir apenas artefatos validados
+- ocultar acao para `inconclusive`
+- exibir motivo do gate e caveats
 
-## Motor e features principais
-- Motor principal: `spa/` e `spa/engine/`
-- Regimes (auto-model): `spa/engine/diagnostics/auto_regime_model.py`
-- Features do auto-model:
-  mean_x, std_x, abs_mean_x, mean_v, std_v, abs_mean_v, mean_energy, std_energy,
-  energy_p10, energy_p90, percent, transitions_out, segments, mean_local_entropy,
-  mean_local_rr, mean_local_skew, mean_local_kurtosis, mean_acf1..mean_acf5,
-  kinetic_mean, potential_mean
-
----
-
-## Restricoes importantes
-- Nao implementar drift/difusao fisica ainda
-- Evitar overengineering e dependencias extras
-- Codigo simples, legivel e reutilizavel
-
----
-
-## Nota sobre DEV_LOG
-DEV_LOG.md e historico e nao normativo.
-
----
-
-## Website / Dashboard (SPA Energy Visual Intelligence)
-- Dashboard principal em `website/case_spa_energy.html` com controles de subsistema, resolucao e periodo.
-- Toggle de previsao 2025 com linha tracejada e marcador de inicio de 2025.
-- Mapa estilizado por subsistema (N, NE, SE/CO, S) com clique para selecionar.
-- Dados e downloads em `website/assets/spa_energy/`:
-  - `series_full.json` (series diaria/mensal/anual, real 2000-2024 + previsao 2025).
-  - `metrics_2024.json` (MAE/RMSE/MAPE por subsistema e Brasil).
-  - `daily_2000_2024.csv`, `monthly_2000_2024.csv`, `annual_2000_2024.csv`.
-  - `forecast_2025_daily.csv`, `forecast_2025_monthly.csv`, `forecast_2025_annual.csv`.
-  - `report.pdf`, `engine_summary.pdf`, `spa_energy_outputs.zip`.
-  - `manifest.json` com paths e metadados.
-  - `forecast_2025_knn.json`, `forecast_2025_lstm.json`, `metrics_models.json`.
-  - `attractor_{res}_{sub}.json` (atrator 3D por embedding Takens).
-  - `predictability_{res}_{sub}.json` (erro vs horizonte h em 2024).
-
----
-
-## Website / Lorenz Lab (validacao do motor)
-- Pagina `website/lab_lorenz.html` para explorar embedding e previsibilidade em sistema caotico.
-- Dados em `website/assets/lab_lorenz/`:
-  - `lorenz_true.json` (t, x, y, z) e `lorenz_observed.json` (t, obs = x).
-  - `data_bundle_lorenz.js` para abrir via `file://` sem CORS.
-
----
-
-## Repo cleanup (commit)
-- Objetivo: reduzir o repo ao motor SPA e preparar para commit.
-- Pastas a manter: `spa/`, `scripts/` (apenas utilitarios do motor), `experiments/`, `data/`, `tests/`, `config/`.
-- Pastas candidatas a remocao: `website/`, `results/`, `dados/`, `legado/`, `api/`, `venv/`.
-- Scripts de limpeza: `scripts/cleanup_repo.ps1` e `scripts/cleanup_repo.sh`.
+## Legado
+- mover itens nao operacionais para `legacy/`
+- remover duplicidade gradual mantendo wrappers

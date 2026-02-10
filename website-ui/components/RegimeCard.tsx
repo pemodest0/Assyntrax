@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
@@ -29,10 +29,11 @@ export default function RegimeCard() {
     fetch(`/api/assets?file=${file}`)
       .then((r) => r.json())
       .then((data) => {
-        const metrics = data.metrics || {};
-        const best = Object.entries(metrics).sort((a: any, b: any) => (b[1]?.roc_auc ?? 0) - (a[1]?.roc_auc ?? 0))[0];
+        const metrics = (data?.metrics ?? {}) as Record<string, { roc_auc?: number }>;
+        const best = Object.entries(metrics).sort((a, b) => (b[1]?.roc_auc ?? 0) - (a[1]?.roc_auc ?? 0))[0];
         const bestModel = best ? best[0] : "model";
-        const bestAuc = best ? best[1].roc_auc ?? 0.5 : 0.5;
+        const bestAuc = best ? best[1]?.roc_auc ?? 0.5 : 0.5;
+
         setState({
           risk_regime: "HIGH_VOL",
           risk_conf: Number(bestAuc) || 0.5,
@@ -53,19 +54,19 @@ export default function RegimeCard() {
         <CardHeader className="space-y-1">
           <CardTitle className="text-lg">Risco / Regime Atual</CardTitle>
           <div className="flex flex-wrap gap-2">
-            <Badge variant="secondary">Risk: {demo.risk_regime}</Badge>
-            <Badge variant="outline">Regime: {demo.regime_state}</Badge>
-            <Badge variant="outline">Model: {demo.model}</Badge>
+            <Badge variant="secondary">Risk: {state.risk_regime}</Badge>
+            <Badge variant="outline">Regime: {state.regime_state}</Badge>
+            <Badge variant="outline">Model: {state.model}</Badge>
           </div>
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-4">
           <div className="rounded-xl border border-zinc-800 p-4">
             <div className="text-xs text-zinc-500">Confiança (Risco)</div>
-            <div className="text-2xl font-semibold mt-1 text-zinc-100">{pct(demo.risk_conf)}</div>
+            <div className="text-2xl font-semibold mt-1 text-zinc-100">{pct(state.risk_conf)}</div>
           </div>
           <div className="rounded-xl border border-zinc-800 p-4">
             <div className="text-xs text-zinc-500">Confiança (Regime)</div>
-            <div className="text-2xl font-semibold mt-1 text-zinc-100">{pct(demo.regime_conf)}</div>
+            <div className="text-2xl font-semibold mt-1 text-zinc-100">{pct(state.regime_conf)}</div>
           </div>
         </CardContent>
       </Card>

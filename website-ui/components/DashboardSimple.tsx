@@ -68,21 +68,19 @@ export default function DashboardSimple() {
     const base = category === "all" ? universe : universe.filter((u) => list.includes(u.asset));
     return base;
   }, [universe, category]);
+  const effectiveSelectedAssets = useMemo(() => {
+    if (selectedAssets.length) return selectedAssets;
+    return tableAssets.slice(0, 3).map((r) => r.asset);
+  }, [selectedAssets, tableAssets]);
 
   useEffect(() => {
-    if (!selectedAssets.length && tableAssets.length) {
-      setSelectedAssets(tableAssets.slice(0, 3).map((r) => r.asset));
-    }
-  }, [tableAssets, selectedAssets.length]);
-
-  useEffect(() => {
-    if (!selectedAssets.length) return;
-    const assets = selectedAssets.slice(0, 3).join(",");
+    if (!effectiveSelectedAssets.length) return;
+    const assets = effectiveSelectedAssets.slice(0, 3).join(",");
     fetch(`/api/graph/series-batch?assets=${encodeURIComponent(assets)}&tf=weekly&limit=260&step=2`)
       .then((r) => r.json())
       .then((j) => setSeriesMap(j || {}))
       .catch(() => setSeriesMap({}));
-  }, [selectedAssets]);
+  }, [effectiveSelectedAssets]);
 
   return (
     <div className="p-6 space-y-6">
@@ -108,7 +106,7 @@ export default function DashboardSimple() {
       <section className="rounded-3xl border border-zinc-800 bg-zinc-950/70 p-6">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-stretch">
           <div className="w-full h-[70vh] min-h-[520px]">
-            <SimpleChart assets={selectedAssets.slice(0, 3)} seriesMap={seriesMap} />
+            <SimpleChart assets={effectiveSelectedAssets.slice(0, 3)} seriesMap={seriesMap} />
           </div>
           <div className="space-y-4">
             <div className="rounded-2xl border border-zinc-800 bg-black/40 p-4">
@@ -116,7 +114,7 @@ export default function DashboardSimple() {
               <select
                 multiple
                 className="mt-2 w-full rounded-lg border border-zinc-800 bg-black/40 px-3 py-2 text-xs text-zinc-200 min-h-[140px]"
-                value={selectedAssets}
+                value={effectiveSelectedAssets}
                 onChange={(e) => {
                   const options = Array.from(e.target.selectedOptions).map((o) => o.value);
                   setSelectedAssets(options);
