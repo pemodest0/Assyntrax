@@ -1,2 +1,1 @@
-﻿"""Compatibility facade for graph module: version.py"""
-from graph_engine.version import *
+ENGINE_VERSION = "2026.02.06-sector-risk-v1"

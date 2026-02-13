@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from spa.engine.diagnostics.auto_regime_model import FEATURE_NAMES
-from spa.engine.diagnostics.regime_labels import RegimeClassifier
+from engine.diagnostics.auto_regime_model import FEATURE_NAMES
+from engine.diagnostics.regime_labels import RegimeClassifier
 
 
 class _DummyModel:

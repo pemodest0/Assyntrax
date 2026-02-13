@@ -316,8 +316,8 @@ def main() -> None:
     engine_available = True
     engine_err = None
     try:
-        import graph_engine.core  # noqa: F401
-        import graph_engine.embedding  # noqa: F401
+        import engine.graph.core  # noqa: F401
+        import engine.graph.embedding  # noqa: F401
     except Exception as exc:
         engine_available = False
         engine_err = str(exc)

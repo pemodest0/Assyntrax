@@ -1,0 +1,41 @@
+{
+  "latest_date": "2026-02-12",
+  "latest_events": [
+    "DISPERSION_CONFIRM",
+    "SIGNAL_UNCONFIRMED"
+  ],
+  "n_events_total": 561,
+  "n_events_last_60d": 42,
+  "event_counts": {
+    "DISPERSION_CONFIRM": 364,
+    "TRANSITION_SPIKE": 102,
+    "REGIME_CHANGE": 86,
+    "STRESS_ENTER": 4,
+    "STRESS_EXIT": 4,
+    "SIGNAL_UNCONFIRMED": 1
+  },
+  "latest_event_rows": [
+    {
+      "date": "2026-02-12",
+      "event_code": "DISPERSION_CONFIRM",
+      "severity": 0.6170883199927395,
+      "regime": "dispersion",
+      "message": "dispersao confirmada: priorizar rotacao e selecao.",
+      "p1": 0.15048526628427678,
+      "deff": 24.681961516413985,
+      "dp1_5": 0.00020314355584347132,
+      "ddeff_5": 0.05546342105030533
+    },
+    {
+      "date": "2026-02-12",
+      "event_code": "SIGNAL_UNCONFIRMED",
+      "severity": 1.0,
+      "regime": "dispersion",
+      "message": "direcao recente ainda sem confirmacao entre janelas.",
+      "p1": 0.15048526628427678,
+      "deff": 24.681961516413985,
+      "dp1_5": 0.00020314355584347132,
+      "ddeff_5": 0.05546342105030533
+    }
+  ]
+}

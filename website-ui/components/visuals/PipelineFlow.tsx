@@ -36,7 +36,7 @@ const steps = [
 export default function PipelineFlow() {
   return (
     <div className="rounded-3xl border border-zinc-800 bg-zinc-950/60 p-8">
-      <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Pipeline Assyntrax</div>
+      <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Pipeline Eigen Engine</div>
       <div className="mt-6 grid grid-cols-1 lg:grid-cols-5 gap-4">
         {steps.map((s, idx) => (
           <motion.div
@@ -61,3 +61,4 @@ export default function PipelineFlow() {
     </div>
   );
 }
+

@@ -1,0 +1,938 @@
+﻿{
+  "status": "ok",
+  "root": "results\\validation",
+  "global_validation_status": "pass",
+  "adaptive_thresholds_available": true,
+  "data_adequacy_available": true,
+  "hybrid_risk_available": true,
+  "counts": {
+    "assets": 21,
+    "validated": 5,
+    "watch": 15,
+    "inconclusive": 1
+  },
+  "entries": [
+    {
+      "asset_id": "^VIX",
+      "scope": "universe_mini_full",
+      "micro": {
+        "mean_confidence": 0.5235017301507203,
+        "mean_quality": 0.8746496006373256,
+        "pct_transition": 0.3637496883570182
+      },
+      "macro": {
+        "hit_rate_macro": 0.3333333333333333,
+        "density_ratio_macro": 0.884145320609409,
+        "macro_block_rate_per_year": 1.5054095826893354,
+        "micro_switch_rate": 94.65262751159196,
+        "pseudo_bifurcation_flag": false
+      },
+      "operational": {},
+      "gates": {
+        "status_reason": "validated_gate_ok",
+        "changepoint_flag": false,
+        "regime_age_days": 8.0,
+        "hazard_score": 0.8371284313607636,
+        "hybrid_status": "inconclusive",
+        "hybrid_reason": "ews=0.404 (q80=0.524), var95=-0.1295 (q20=-0.1274), sigma=0.0645 (q80=0.0913)",
+        "hybrid_ews_score": 0.4044908759846798,
+        "hybrid_var95_hist": -0.1295241140376714,
+        "hybrid_ewma_sigma": 0.0645087643136467,
+        "thresholds": {
+          "thr_conf": 0.0,
+          "thr_quality": 0.8746496006373256,
+          "thr_transition": 0.5,
+          "thr_instability": 0.1587303592193982,
+          "thr_changepoint_delta": 0.028426112020713,
+          "history_points": 8
+        },
+        "data_adequacy": {
+          "status": "ok",
+          "coverage_years": 15.980835044490076,
+          "n_points": 4021,
+          "max_gap_days": 5,
+          "inferred_freq": "daily",
+          "source_type": "official",
+          "source_name": "yfinance_daily",
+          "reason": ""
+        },
+        "source_type": "official",
+        "source_name": "yfinance_daily"
+      },
+      "risk_truth_status": "validated",
+      "status_raw": "validated"
+    },
+    {
+      "asset_id": "BTC-USD",
+      "scope": "universe_mini_full",
+      "micro": {
+        "mean_confidence": 0.7805894796729788,
+        "mean_quality": 0.8716157576395831,
+        "pct_transition": 0.2820574740400869
+      },
+      "macro": {},
+      "operational": {},
+      "gates": {
+        "status_reason": "validated_gate_ok",
+        "changepoint_flag": false,
+        "regime_age_days": 8.0,
+        "hazard_score": 0.8371284313607636,
+        "hybrid_status": "validated",
+        "hybrid_reason": "ews=0.201 (q80=0.489), var95=-0.0290 (q20=-0.0642), sigma=0.0179 (q80=0.0423)",
+        "hybrid_ews_score": 0.2006005100526742,
+        "hybrid_var95_hist": -0.0289729494424884,
+        "hybrid_ewma_sigma": 0.0178934813877673,
+        "thresholds": {
+          "thr_conf": 0.0,
+          "thr_quality": 0.8716157576395831,
+          "thr_transition": 0.5,
+          "thr_instability": 0.1591611821581235,
+          "thr_changepoint_delta": 0.0283275121232864,
+          "history_points": 8
+        },
+        "data_adequacy": {
+          "status": "ok",
+          "coverage_years": 11.36208076659822,
+          "n_points": 4151,
+          "max_gap_days": 1,
+          "inferred_freq": "daily",
+          "source_type": "official",
+          "source_name": "yfinance_daily",
+          "reason": ""
+        },
+        "source_type": "official",
+        "source_name": "yfinance_daily"
+      },
+      "risk_truth_status": "validated",
+      "status_raw": "validated"
+    },
+    {
+      "asset_id": "DBA",
+      "scope": "universe_mini_full",
+      "micro": {
+        "mean_confidence": 0.7168473351949397,
+        "mean_quality": 0.8951771196097874,
+        "pct_transition": 0.316651904340124
+      },
+      "macro": {},
+      "operational": {},
+      "gates": {
+        "status_reason": "watch_transition_or_instability",
+        "changepoint_flag": false,
+        "regime_age_days": 3.0,
+        "hazard_score": 0.9355069850316178,
+        "hybrid_status": "validated",
+        "hybrid_reason": "ews=0.281 (q80=0.475), var95=-0.0108 (q20=-0.0195), sigma=0.0087 (q80=0.0120)",
+        "hybrid_ews_score": 0.2807439826493181,
+        "hybrid_var95_hist": -0.0108474646771377,
+        "hybrid_ewma_sigma": 0.0087029378369988,
+        "thresholds": {
+          "thr_conf": 0.0,
+          "thr_quality": 0.8951771196097874,
+          "thr_transition": 0.8,
+          "thr_instability": 0.1892388695414467,
+          "thr_changepoint_delta": 0.0003288476407856,
+          "history_points": 8
+        },
+        "data_adequacy": {
+          "status": "ok",
+          "coverage_years": 17.976728268309376,
+          "n_points": 4526,
+          "max_gap_days": 5,
+          "inferred_freq": "daily",
+          "source_type": "official",
+          "source_name": "yfinance_daily",
+          "reason": ""
+        },
+        "source_type": "official",
+        "source_name": "yfinance_daily"
+      },
+      "risk_truth_status": "watch",
+      "status_raw": "validated"
+    },
+    {
+      "asset_id": "DBC",
+      "scope": "universe_mini_full",
+      "micro": {
+        "mean_confidence": 0.736802300429335,
+        "mean_quality": 0.892650273237924,
+        "pct_transition": 0.320480404551201
+      },
+      "macro": {},
+      "operational": {},
+      "gates": {
+        "status_reason": "validated_gate_ok",
+        "changepoint_flag": false,
+        "regime_age_days": 8.0,
+        "hazard_score": 0.8371284313607636,
+        "hybrid_status": "validated",
+        "hybrid_reason": "ews=0.251 (q80=0.495), var95=-0.0163 (q20=-0.0224), sigma=0.0076 (q80=0.0141)",
+        "hybrid_ews_score": 0.2510522710600186,
+        "hybrid_var95_hist": -0.0162922125059681,
+        "hybrid_ewma_sigma": 0.0075741371462638,
+        "thresholds": {
+          "thr_conf": 0.0,
+          "thr_quality": 0.892650273237924,
+          "thr_transition": 0.5,
+          "thr_instability": 0.1468138896364602,
+          "thr_changepoint_delta": 0.0290111338802325,
+          "history_points": 8
+        },
+        "data_adequacy": {
+          "status": "ok",
+          "coverage_years": 18.89390828199863,
+          "n_points": 4756,
+          "max_gap_days": 5,
+          "inferred_freq": "daily",
+          "source_type": "official",
+          "source_name": "yfinance_daily",
+          "reason": ""
+        },
+        "source_type": "official",
+        "source_name": "yfinance_daily"
+      },
+      "risk_truth_status": "validated",
+      "status_raw": "validated"
+    },
+    {
+      "asset_id": "DIA",
+      "scope": "universe_mini_full",
+      "micro": {
+        "mean_confidence": 0.7564621219565014,
+        "mean_quality": 0.8875974548426648,
+        "pct_transition": 0.2883543093834634
+      },
+      "macro": {},
+      "operational": {},
+      "gates": {
+        "status_reason": "watch_transition_or_instability",
+        "changepoint_flag": false,
+        "regime_age_days": 3.0,
+        "hazard_score": 0.9355069850316178,
+        "hybrid_status": "inconclusive",
+        "hybrid_reason": "ews=0.535 (q80=0.462), var95=-0.0097 (q20=-0.0208), sigma=0.0083 (q80=0.0128)",
+        "hybrid_ews_score": 0.5345416999346745,
+        "hybrid_var95_hist": -0.009714044082501,
+        "hybrid_ewma_sigma": 0.0083428041481875,
+        "thresholds": {
+          "thr_conf": 0.0,
+          "thr_quality": 0.8875974548426648,
+          "thr_transition": 0.2,
+          "thr_instability": 0.1045216119329789,
+          "thr_changepoint_delta": 0.000211627463122,
+          "history_points": 8
+        },
+        "data_adequacy": {
+          "status": "ok",
+          "coverage_years": 24.98836413415469,
+          "n_points": 6287,
+          "max_gap_days": 7,
+          "inferred_freq": "daily",
+          "source_type": "official",
+          "source_name": "yfinance_daily",
+          "reason": ""
+        },
+        "source_type": "official",
+        "source_name": "yfinance_daily"
+      },
+      "risk_truth_status": "watch",
+      "status_raw": "validated"
+    },
+    {
+      "asset_id": "EEM",
+      "scope": "universe_mini_full",
+      "micro": {
+        "mean_confidence": 0.665442906602294,
+        "mean_quality": 0.9002371689242893,
+        "pct_transition": 0.3136571952337305
+      },
+      "macro": {},
+      "operational": {},
+      "gates": {
+        "status_reason": "watch_transition_or_instability",
+        "changepoint_flag": false,
+        "regime_age_days": 3.0,
+        "hazard_score": 0.9355069850316178,
+        "hybrid_status": "validated",
+        "hybrid_reason": "ews=0.195 (q80=0.480), var95=-0.0216 (q20=-0.0293), sigma=0.0088 (q80=0.0170)",
+        "hybrid_ews_score": 0.1947621574865681,
+        "hybrid_var95_hist": -0.0215593316368148,
+        "hybrid_ewma_sigma": 0.0088414563642168,
+        "thresholds": {
+          "thr_conf": 0.0,
+          "thr_quality": 0.9002371689242893,
+          "thr_transition": 0.8,
+          "thr_instability": 0.1865401765737123,
+          "thr_changepoint_delta": 0.000132710399919,
+          "history_points": 8
+        },
+        "data_adequacy": {
+          "status": "ok",
+          "coverage_years": 21.711156741957563,
+          "n_points": 5465,
+          "max_gap_days": 5,
+          "inferred_freq": "daily",
+          "source_type": "official",
+          "source_name": "yfinance_daily",
+          "reason": ""
+        },
+        "source_type": "official",
+        "source_name": "yfinance_daily"
+      },
+      "risk_truth_status": "watch",
+      "status_raw": "validated"
+    },
+    {
+      "asset_id": "EFA",
+      "scope": "universe_mini_full",
+      "micro": {
+        "mean_confidence": 0.7237102524610257,
+        "mean_quality": 0.8994194571179127,
+        "pct_transition": 0.3132571233577887
+      },
+      "macro": {},
+      "operational": {},
+      "gates": {
+        "status_reason": "watch_transition_or_instability",
+        "changepoint_flag": false,
+        "regime_age_days": 3.0,
+        "hazard_score": 0.9355069850316178,
+        "hybrid_status": "validated",
+        "hybrid_reason": "ews=0.326 (q80=0.493), var95=-0.0147 (q20=-0.0222), sigma=0.0076 (q80=0.0139)",
+        "hybrid_ews_score": 0.3258853263539887,
+        "hybrid_var95_hist": -0.0146726514103771,
+        "hybrid_ewma_sigma": 0.007639242624527,
+        "thresholds": {
+          "thr_conf": 0.0,
+          "thr_quality": 0.8994194571179127,
+          "thr_transition": 0.2,
+          "thr_instability": 0.0970343438253219,
+          "thr_changepoint_delta": 2.204093983238091e-05,
+          "history_points": 8
+        },
+        "data_adequacy": {
+          "status": "ok",
+          "coverage_years": 23.34017796030116,
+          "n_points": 5871,
+          "max_gap_days": 7,
+          "inferred_freq": "daily",
+          "source_type": "official",
+          "source_name": "yfinance_daily",
+          "reason": ""
+        },
+        "source_type": "official",
+        "source_name": "yfinance_daily"
+      },
+      "risk_truth_status": "watch",
+      "status_raw": "validated"
+    },
+    {
+      "asset_id": "ETH-USD",
+      "scope": "universe_mini_full",
+      "micro": {
+        "mean_confidence": 0.7708968642239519,
+        "mean_quality": 0.8757003633458333,
+        "pct_transition": 0.281370284834488
+      },
+      "macro": {},
+      "operational": {},
+      "gates": {
+        "status_reason": "watch_transition_or_instability",
+        "changepoint_flag": false,
+        "regime_age_days": 3.0,
+        "hazard_score": 0.9355069850316178,
+        "hybrid_status": "validated",
+        "hybrid_reason": "ews=0.457 (q80=0.479), var95=-0.0480 (q20=-0.0900), sigma=0.0336 (q80=0.0541)",
+        "hybrid_ews_score": 0.457368855572451,
+        "hybrid_var95_hist": -0.0479688663441907,
+        "hybrid_ewma_sigma": 0.0335520570084788,
+        "thresholds": {
+          "thr_conf": 0.0,
+          "thr_quality": 0.8757003633458333,
+          "thr_transition": 0.5,
+          "thr_instability": 0.1558414547149305,
+          "thr_changepoint_delta": 0.0005547998184839,
+          "history_points": 8
+        },
+        "data_adequacy": {
+          "status": "ok",
+          "coverage_years": 7.137577002053388,
+          "n_points": 2608,
+          "max_gap_days": 1,
+          "inferred_freq": "daily",
+          "source_type": "official",
+          "source_name": "yfinance_daily",
+          "reason": ""
+        },
+        "source_type": "official",
+        "source_name": "yfinance_daily"
+      },
+      "risk_truth_status": "watch",
+      "status_raw": "validated"
+    },
+    {
+      "asset_id": "EWJ",
+      "scope": "universe_mini_full",
+      "micro": {
+        "mean_confidence": 0.7044075629096853,
+        "mean_quality": 0.9000745107684611,
+        "pct_transition": 0.3042854866974669
+      },
+      "macro": {},
+      "operational": {},
+      "gates": {
+        "status_reason": "watch_transition_or_instability",
+        "changepoint_flag": false,
+        "regime_age_days": 3.0,
+        "hazard_score": 0.9355069850316178,
+        "hybrid_status": "validated",
+        "hybrid_reason": "ews=0.369 (q80=0.526), var95=-0.0169 (q20=-0.0255), sigma=0.0100 (q80=0.0153)",
+        "hybrid_ews_score": 0.3687239489446008,
+        "hybrid_var95_hist": -0.0168768230587351,
+        "hybrid_ewma_sigma": 0.0099629853146475,
+        "thresholds": {
+          "thr_conf": 0.0,
+          "thr_quality": 0.9000745107684611,
+          "thr_transition": 0.8,
+          "thr_instability": 0.1866269275901541,
+          "thr_changepoint_delta": 0.0001025599993831,
+          "history_points": 8
+        },
+        "data_adequacy": {
+          "status": "ok",
+          "coverage_years": 24.98836413415469,
+          "n_points": 6287,
+          "max_gap_days": 7,
+          "inferred_freq": "daily",
+          "source_type": "official",
+          "source_name": "yfinance_daily",
+          "reason": ""
+        },
+        "source_type": "official",
+        "source_name": "yfinance_daily"
+      },
+      "risk_truth_status": "watch",
+      "status_raw": "validated"
+    },
+    {
+      "asset_id": "EWZ",
+      "scope": "universe_mini_full",
+      "micro": {
+        "mean_confidence": 0.6573937578706244,
+        "mean_quality": 0.9004343041492718,
+        "pct_transition": 0.3223180856259157
+      },
+      "macro": {},
+      "operational": {},
+      "gates": {
+        "status_reason": "validated_gate_ok",
+        "changepoint_flag": false,
+        "regime_age_days": 8.0,
+        "hazard_score": 0.8371284313607636,
+        "hybrid_status": "validated",
+        "hybrid_reason": "ews=0.409 (q80=0.500), var95=-0.0302 (q20=-0.0433), sigma=0.0212 (q80=0.0260)",
+        "hybrid_ews_score": 0.4092170504160852,
+        "hybrid_var95_hist": -0.0301797267066461,
+        "hybrid_ewma_sigma": 0.0212035362776564,
+        "thresholds": {
+          "thr_conf": 0.0,
+          "thr_quality": 0.9004343041492718,
+          "thr_transition": 0.5,
+          "thr_instability": 0.142290430455151,
+          "thr_changepoint_delta": 0.0292641148848513,
+          "history_points": 8
+        },
+        "data_adequacy": {
+          "status": "ok",
+          "coverage_years": 24.45448323066393,
+          "n_points": 6153,
+          "max_gap_days": 7,
+          "inferred_freq": "daily",
+          "source_type": "official",
+          "source_name": "yfinance_daily",
+          "reason": ""
+        },
+        "source_type": "official",
+        "source_name": "yfinance_daily"
+      },
+      "risk_truth_status": "validated",
+      "status_raw": "validated"
+    },
+    {
+      "asset_id": "FXE",
+      "scope": "universe_mini_full",
+      "micro": {
+        "mean_confidence": 0.6303686250915774,
+        "mean_quality": 0.8984487804019997,
+        "pct_transition": 0.3173740330336609
+      },
+      "macro": {},
+      "operational": {},
+      "gates": {
+        "status_reason": "watch_transition_or_instability",
+        "changepoint_flag": true,
+        "regime_age_days": 3.0,
+        "hazard_score": 0.9355069850316178,
+        "hybrid_status": "validated",
+        "hybrid_reason": "ews=0.412 (q80=0.555), var95=-0.0062 (q20=-0.0107), sigma=0.0046 (q80=0.0066)",
+        "hybrid_ews_score": 0.4124011480896365,
+        "hybrid_var95_hist": -0.0061805637090066,
+        "hybrid_ewma_sigma": 0.0045586574869263,
+        "thresholds": {
+          "thr_conf": 0.0,
+          "thr_quality": 0.8984487804019997,
+          "thr_transition": 0.8,
+          "thr_instability": 0.1874939837856001,
+          "thr_changepoint_delta": 0.0,
+          "history_points": 8
+        },
+        "data_adequacy": {
+          "status": "ok",
+          "coverage_years": 19.04722792607803,
+          "n_points": 4793,
+          "max_gap_days": 5,
+          "inferred_freq": "daily",
+          "source_type": "official",
+          "source_name": "yfinance_daily",
+          "reason": ""
+        },
+        "source_type": "official",
+        "source_name": "yfinance_daily"
+      },
+      "risk_truth_status": "watch",
+      "status_raw": "watch"
+    },
+    {
+      "asset_id": "FXY",
+      "scope": "universe_mini_full",
+      "micro": {
+        "mean_confidence": 0.7466638321751133,
+        "mean_quality": 0.8958600175370404,
+        "pct_transition": 0.3064587973273942
+      },
+      "macro": {},
+      "operational": {},
+      "gates": {
+        "status_reason": "watch_transition_or_instability",
+        "changepoint_flag": true,
+        "regime_age_days": 3.0,
+        "hazard_score": 0.9355069850316178,
+        "hybrid_status": "validated",
+        "hybrid_reason": "ews=0.234 (q80=0.500), var95=-0.0103 (q20=-0.0116), sigma=0.0067 (q80=0.0077)",
+        "hybrid_ews_score": 0.2335677095920584,
+        "hybrid_var95_hist": -0.0103213680328687,
+        "hybrid_ewma_sigma": 0.0067405556235879,
+        "thresholds": {
+          "thr_conf": 0.0,
+          "thr_quality": 0.8958600175370404,
+          "thr_transition": 0.8,
+          "thr_instability": 0.1888746573135784,
+          "thr_changepoint_delta": 0.0,
+          "history_points": 8
+        },
+        "data_adequacy": {
+          "status": "ok",
+          "coverage_years": 17.87542778918549,
+          "n_points": 4500,
+          "max_gap_days": 5,
+          "inferred_freq": "daily",
+          "source_type": "official",
+          "source_name": "yfinance_daily",
+          "reason": ""
+        },
+        "source_type": "official",
+        "source_name": "yfinance_daily"
+      },
+      "risk_truth_status": "watch",
+      "status_raw": "watch"
+    },
+    {
+      "asset_id": "GLD",
+      "scope": "universe_mini_full",
+      "micro": {
+        "mean_confidence": 0.6858727392005054,
+        "mean_quality": 0.8879613457317106,
+        "pct_transition": 0.3269230769230769
+      },
+      "macro": {},
+      "operational": {},
+      "gates": {
+        "status_reason": "watch_transition_or_instability",
+        "changepoint_flag": true,
+        "regime_age_days": 3.0,
+        "hazard_score": 0.9355069850316178,
+        "hybrid_status": "watch",
+        "hybrid_reason": "ews=0.702 (q80=0.537), var95=-0.0195 (q20=-0.0188), sigma=0.0146 (q80=0.0118)",
+        "hybrid_ews_score": 0.7016781553329227,
+        "hybrid_var95_hist": -0.0194582516072539,
+        "hybrid_ewma_sigma": 0.0146378931946638,
+        "thresholds": {
+          "thr_conf": 0.0,
+          "thr_quality": 0.8879613457317106,
+          "thr_transition": 0.8,
+          "thr_instability": 0.193087282276421,
+          "thr_changepoint_delta": 0.0,
+          "history_points": 8
+        },
+        "data_adequacy": {
+          "status": "ok",
+          "coverage_years": 16.982888432580424,
+          "n_points": 4274,
+          "max_gap_days": 5,
+          "inferred_freq": "daily",
+          "source_type": "official",
+          "source_name": "yfinance_daily",
+          "reason": ""
+        },
+        "source_type": "official",
+        "source_name": "yfinance_daily"
+      },
+      "risk_truth_status": "watch",
+      "status_raw": "watch"
+    },
+    {
+      "asset_id": "HYG",
+      "scope": "universe_mini_full",
+      "micro": {
+        "mean_confidence": 0.8040491551947851,
+        "mean_quality": 0.8951611181171824,
+        "pct_transition": 0.2891485059537182
+      },
+      "macro": {},
+      "operational": {},
+      "gates": {
+        "status_reason": "watch_transition_or_instability",
+        "changepoint_flag": true,
+        "regime_age_days": 3.0,
+        "hazard_score": 0.9355069850316178,
+        "hybrid_status": "validated",
+        "hybrid_reason": "ews=0.409 (q80=0.472), var95=-0.0040 (q20=-0.0108), sigma=0.0033 (q80=0.0067)",
+        "hybrid_ews_score": 0.4086670384610225,
+        "hybrid_var95_hist": -0.0040185808183226,
+        "hybrid_ewma_sigma": 0.0032913093959548,
+        "thresholds": {
+          "thr_conf": 0.0,
+          "thr_quality": 0.8951611181171824,
+          "thr_transition": 0.5,
+          "thr_instability": 0.144489347764977,
+          "thr_changepoint_delta": 0.0,
+          "history_points": 8
+        },
+        "data_adequacy": {
+          "status": "ok",
+          "coverage_years": 17.71937029431896,
+          "n_points": 4461,
+          "max_gap_days": 5,
+          "inferred_freq": "daily",
+          "source_type": "official",
+          "source_name": "yfinance_daily",
+          "reason": ""
+        },
+        "source_type": "official",
+        "source_name": "yfinance_daily"
+      },
+      "risk_truth_status": "watch",
+      "status_raw": "watch"
+    },
+    {
+      "asset_id": "IEF",
+      "scope": "universe_mini_full",
+      "micro": {
+        "mean_confidence": 0.7646209702303751,
+        "mean_quality": 0.90116230429687,
+        "pct_transition": 0.3026806319900585
+      },
+      "macro": {},
+      "operational": {},
+      "gates": {
+        "status_reason": "watch_transition_or_instability",
+        "changepoint_flag": true,
+        "regime_age_days": 3.0,
+        "hazard_score": 0.9355069850316178,
+        "hybrid_status": "validated",
+        "hybrid_reason": "ews=0.244 (q80=0.502), var95=-0.0077 (q20=-0.0082), sigma=0.0037 (q80=0.0052)",
+        "hybrid_ews_score": 0.2444790676587857,
+        "hybrid_var95_hist": -0.0077439462711754,
+        "hybrid_ewma_sigma": 0.0037052708586401,
+        "thresholds": {
+          "thr_conf": 0.0,
+          "thr_quality": 0.90116230429687,
+          "thr_transition": 0.8,
+          "thr_instability": 0.1860467710416693,
+          "thr_changepoint_delta": 0.0,
+          "history_points": 8
+        },
+        "data_adequacy": {
+          "status": "ok",
+          "coverage_years": 22.417522245037645,
+          "n_points": 5643,
+          "max_gap_days": 5,
+          "inferred_freq": "daily",
+          "source_type": "official",
+          "source_name": "yfinance_daily",
+          "reason": ""
+        },
+        "source_type": "official",
+        "source_name": "yfinance_daily"
+      },
+      "risk_truth_status": "watch",
+      "status_raw": "watch"
+    },
+    {
+      "asset_id": "IWM",
+      "scope": "universe_mini_full",
+      "micro": {
+        "mean_confidence": 0.7435147804723554,
+        "mean_quality": 0.8960579544520106,
+        "pct_transition": 0.3118145563310069
+      },
+      "macro": {},
+      "operational": {},
+      "gates": {
+        "status_reason": "watch_transition_or_instability",
+        "changepoint_flag": true,
+        "regime_age_days": 3.0,
+        "hazard_score": 0.9355069850316178,
+        "hybrid_status": "validated",
+        "hybrid_reason": "ews=0.282 (q80=0.491), var95=-0.0201 (q20=-0.0255), sigma=0.0106 (q80=0.0153)",
+        "hybrid_ews_score": 0.28178595120692,
+        "hybrid_var95_hist": -0.0201356610499651,
+        "hybrid_ewma_sigma": 0.0106136487841179,
+        "thresholds": {
+          "thr_conf": 0.0,
+          "thr_quality": 0.8960579544520106,
+          "thr_transition": 0.8,
+          "thr_instability": 0.1887690909589276,
+          "thr_changepoint_delta": 0.0,
+          "history_points": 8
+        },
+        "data_adequacy": {
+          "status": "ok",
+          "coverage_years": 15.983572895277208,
+          "n_points": 4022,
+          "max_gap_days": 5,
+          "inferred_freq": "daily",
+          "source_type": "official",
+          "source_name": "yfinance_daily",
+          "reason": ""
+        },
+        "source_type": "official",
+        "source_name": "yfinance_daily"
+      },
+      "risk_truth_status": "watch",
+      "status_raw": "watch"
+    },
+    {
+      "asset_id": "KRE",
+      "scope": "universe_mini_full",
+      "micro": {
+        "mean_confidence": 0.675250596803927,
+        "mean_quality": 0.8938582269408221,
+        "pct_transition": 0.3160610621371748
+      },
+      "macro": {},
+      "operational": {},
+      "gates": {
+        "status_reason": "watch_transition_or_instability",
+        "changepoint_flag": true,
+        "regime_age_days": 3.0,
+        "hazard_score": 0.9355069850316178,
+        "hybrid_status": "inconclusive",
+        "hybrid_reason": "ews=0.581 (q80=0.462), var95=-0.0241 (q20=-0.0354), sigma=0.0190 (q80=0.0227)",
+        "hybrid_ews_score": 0.580565497387887,
+        "hybrid_var95_hist": -0.0240862713041488,
+        "hybrid_ewma_sigma": 0.0190315869620753,
+        "thresholds": {
+          "thr_conf": 0.0,
+          "thr_quality": 0.8938582269408221,
+          "thr_transition": 0.8,
+          "thr_instability": 0.1899422789648949,
+          "thr_changepoint_delta": 0.0,
+          "history_points": 8
+        },
+        "data_adequacy": {
+          "status": "ok",
+          "coverage_years": 18.521560574948666,
+          "n_points": 4661,
+          "max_gap_days": 5,
+          "inferred_freq": "daily",
+          "source_type": "official",
+          "source_name": "yfinance_daily",
+          "reason": ""
+        },
+        "source_type": "official",
+        "source_name": "yfinance_daily"
+      },
+      "risk_truth_status": "watch",
+      "status_raw": "watch"
+    },
+    {
+      "asset_id": "LQD",
+      "scope": "universe_mini_full",
+      "micro": {
+        "mean_confidence": 0.7691850216505949,
+        "mean_quality": 0.8972758464188391,
+        "pct_transition": 0.3041008343688975
+      },
+      "macro": {},
+      "operational": {},
+      "gates": {
+        "status_reason": "validated_gate_ok",
+        "changepoint_flag": false,
+        "regime_age_days": 8.0,
+        "hazard_score": 0.8371284313607636,
+        "hybrid_status": "inconclusive",
+        "hybrid_reason": "ews=0.298 (q80=0.459), var95=-0.0091 (q20=-0.0083), sigma=0.0047 (q80=0.0050)",
+        "hybrid_ews_score": 0.298111987957153,
+        "hybrid_var95_hist": -0.0091296777234254,
+        "hybrid_ewma_sigma": 0.0047212096997892,
+        "thresholds": {
+          "thr_conf": 0.0,
+          "thr_quality": 0.8972758464188391,
+          "thr_transition": 0.5,
+          "thr_instability": 0.1432557562556772,
+          "thr_changepoint_delta": 0.0291614650086122,
+          "history_points": 8
+        },
+        "data_adequacy": {
+          "status": "ok",
+          "coverage_years": 22.417522245037645,
+          "n_points": 5643,
+          "max_gap_days": 5,
+          "inferred_freq": "daily",
+          "source_type": "official",
+          "source_name": "yfinance_daily",
+          "reason": ""
+        },
+        "source_type": "official",
+        "source_name": "yfinance_daily"
+      },
+      "risk_truth_status": "validated",
+      "status_raw": "validated"
+    },
+    {
+      "asset_id": "QQQ",
+      "scope": "universe_mini_full",
+      "micro": {
+        "mean_confidence": 0.7835906060697635,
+        "mean_quality": 0.8916789513059721,
+        "pct_transition": 0.2839794488556749
+      },
+      "macro": {
+        "hit_rate_macro": 0.3333333333333333,
+        "density_ratio_macro": 2.460405156537753,
+        "macro_block_rate_per_year": 1.2331591639871382,
+        "micro_switch_rate": 68.99819131832797,
+        "pseudo_bifurcation_flag": false
+      },
+      "operational": {},
+      "gates": {
+        "status_reason": "watch_transition_or_instability",
+        "changepoint_flag": true,
+        "regime_age_days": 3.0,
+        "hazard_score": 0.9355069850316178,
+        "hybrid_status": "validated",
+        "hybrid_reason": "ews=0.294 (q80=0.487), var95=-0.0205 (q20=-0.0268), sigma=0.0090 (q80=0.0160)",
+        "hybrid_ews_score": 0.2938772338749214,
+        "hybrid_var95_hist": -0.0205128960117587,
+        "hybrid_ewma_sigma": 0.0090153923191412,
+        "thresholds": {
+          "thr_conf": 0.0,
+          "thr_quality": 0.8916789513059721,
+          "thr_transition": 0.8,
+          "thr_instability": 0.1911045593034815,
+          "thr_changepoint_delta": 0.0,
+          "history_points": 8
+        },
+        "data_adequacy": {
+          "status": "ok",
+          "coverage_years": 17.059548254620122,
+          "n_points": 4292,
+          "max_gap_days": 5,
+          "inferred_freq": "daily",
+          "source_type": "official",
+          "source_name": "yfinance_daily",
+          "reason": ""
+        },
+        "source_type": "official",
+        "source_name": "yfinance_daily"
+      },
+      "risk_truth_status": "watch",
+      "status_raw": "watch"
+    },
+    {
+      "asset_id": "RSP",
+      "scope": "universe_mini_full",
+      "micro": {
+        "mean_confidence": 0.7356573543130351,
+        "mean_quality": 0.8925681967155707,
+        "pct_transition": 0.2913834282564762
+      },
+      "macro": {},
+      "operational": {},
+      "gates": {
+        "status_reason": "watch_transition_or_instability",
+        "changepoint_flag": true,
+        "regime_age_days": 3.0,
+        "hazard_score": 0.9355069850316178,
+        "hybrid_status": "validated",
+        "hybrid_reason": "ews=0.441 (q80=0.458), var95=-0.0086 (q20=-0.0219), sigma=0.0086 (q80=0.0129)",
+        "hybrid_ews_score": 0.4407469594929503,
+        "hybrid_var95_hist": -0.0086373556671594,
+        "hybrid_ewma_sigma": 0.0086179946659482,
+        "thresholds": {
+          "thr_conf": 0.0,
+          "thr_quality": 0.8925681967155707,
+          "thr_transition": 0.8,
+          "thr_instability": 0.1906302950850289,
+          "thr_changepoint_delta": 0.0,
+          "history_points": 8
+        },
+        "data_adequacy": {
+          "status": "ok",
+          "coverage_years": 21.66461327857632,
+          "n_points": 5453,
+          "max_gap_days": 5,
+          "inferred_freq": "daily",
+          "source_type": "official",
+          "source_name": "yfinance_daily",
+          "reason": ""
+        },
+        "source_type": "official",
+        "source_name": "yfinance_daily"
+      },
+      "risk_truth_status": "watch",
+      "status_raw": "watch"
+    },
+    {
+      "asset_id": "SPY",
+      "scope": "historical_shifts_spy",
+      "micro": {},
+      "macro": {
+        "hit_rate_macro": 0.5,
+        "density_ratio_macro": 2.39864003399915,
+        "macro_block_rate_per_year": 0.9447138700290979,
+        "micro_switch_rate": 77.76176042677012,
+        "pseudo_bifurcation_flag": false
+      },
+      "operational": {
+        "max_drawdown_A": -0.33717259238647235,
+        "max_drawdown_C": -0.18585787013966182,
+        "sharpe_A": 0.7548943012703712,
+        "sharpe_C": 0.7287736665174553,
+        "time_in_market_C": 0.5113409770687937
+      },
+      "risk_truth_status": "inconclusive",
+      "source_type": "proxy"
+    }
+  ],
+  "source_counts": {
+    "official": 20,
+    "proxy": 1
+  },
+  "notes": [
+    "Risk truth status uses adaptive gates with hysteresis when available.",
+    "Macro and operational evidence are attached when available.",
+    "API/dashboard should expose only validated/watch by default."
+  ]
+}

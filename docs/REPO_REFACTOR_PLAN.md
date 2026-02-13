@@ -26,6 +26,7 @@ Objetivo: consolidar a base em torno do pacote `engine/` sem quebrar compatibili
 ## Documentacao relacionada
 - `docs/OPS_EXECUTION_FLOW.md`
 - `docs/ENGINE_GUIDE.md`
+- `docs/CORE_PURE_MIGRATION_PLAN.md`
 - `docs/LEGACY_CANDIDATES.md`
 - `docs/REGRESSION_CHECKLIST_PRECOMMIT.md`
 - `docs/COMMIT_CHECKLIST_FINAL.md`

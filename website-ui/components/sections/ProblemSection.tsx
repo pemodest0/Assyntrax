@@ -15,7 +15,7 @@ export default function ProblemSection() {
         <div className="text-xs uppercase tracking-[0.2em] text-zinc-400">O problema</div>
         <h2 className="mt-3 text-3xl md:text-4xl font-semibold tracking-tight">Modelos falham quando o regime muda.</h2>
         <p className="mt-3 text-zinc-300 text-base lg:text-lg">
-          Modelos tradicionais tendem a extrapolar o último estado observado. A Assyntrax detecta
+          Modelos tradicionais tendem a extrapolar o último estado observado. O Eigen Engine detecta
           transição estrutural, mede estabilidade e informa quando não há base para ação.
         </p>
       </motion.div>
@@ -23,3 +23,4 @@ export default function ProblemSection() {
     </section>
   );
 }
+

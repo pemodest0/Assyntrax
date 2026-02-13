@@ -1,9 +1,9 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 
 const sectors = [
   { id: "finance", label: "Financeiro" },
   { id: "logistics", label: "Logistico" },
-  { id: "realestate", label: "Imobiliário" },
+  { id: "realestate", label: "ImobiliÃ¡rio" },
 ];
 
 export default function DashboardLayout({
@@ -19,7 +19,7 @@ export default function DashboardLayout({
         <div className="flex items-center justify-between">
           <div>
             <div className="text-lg font-semibold tracking-tight">Assyntrax</div>
-            <div className="text-xs text-zinc-400">Global Regime Dashboard</div>
+            <div className="text-xs text-zinc-400">Eigen Engine Dashboard</div>
           </div>
           <span className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">Live</span>
         </div>
@@ -58,3 +58,4 @@ export default function DashboardLayout({
     </div>
   );
 }
+

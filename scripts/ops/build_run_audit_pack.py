@@ -61,7 +61,9 @@ def main() -> None:
     snap_summary = _read_json(snap_dir / "summary.json", {})
     daily_summary = _read_json(daily_dir / "summary.json", {})
     diff_summary = _read_json(ROOT / "results/ops/diff/summary.json", {})
-    verdict = _read_json(ROOT / "results/validation/VERDICT.json", {})
+    global_status = _read_json(ROOT / "results/validation/STATUS.json", {})
+    if not global_status:
+        global_status = _read_json(ROOT / "results/validation/VERDICT.json", {})
     adequacy = _read_json(ROOT / "results/validation/data_adequacy/summary.json", {})
     gates_cfg = _read_json(ROOT / "config/validation_gates.json", {})
     prod_cfg = _read_json(ROOT / "config/production_gate.v1.json", {})
@@ -103,14 +105,14 @@ def main() -> None:
             "snapshot_summary": snap_summary,
             "daily_summary": daily_summary,
             "diff_summary": diff_summary,
-            "global_verdict_status": verdict.get("status", "unknown"),
+            "global_status": global_status.get("status", "unknown"),
         },
         "sources": {
             "snapshot": str(snap_dir / "api_snapshot.jsonl"),
             "snapshot_summary": str(snap_dir / "summary.json"),
             "daily_summary": str(daily_dir / "summary.json"),
             "diff_summary": "results/ops/diff/summary.json",
-            "verdict": "results/validation/VERDICT.json",
+            "status": "results/validation/STATUS.json",
         },
         "caveats": caveats,
     }

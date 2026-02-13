@@ -1,0 +1,25 @@
+{
+  "status": "ok",
+  "run_id": "20260210_contractfix",
+  "n_assets": 41,
+  "validated_signals": 0,
+  "watch_signals": 13,
+  "inconclusive_signals": 28,
+  "validated_ratio": 0.0,
+  "conservative_floors": {
+    "confidence_asset_gate": 0.45,
+    "quality_asset_gate": 0.35,
+    "confidence_ci_lower": 0.6932201154803691,
+    "quality_ci_lower": 0.8890821487496554,
+    "ci_health_ok": true
+  },
+  "data_adequacy": {
+    "status": "ok",
+    "assets_ok": 41,
+    "assets_fail": 0
+  },
+  "contract": {
+    "name": "output_contract.v1",
+    "version": "v1.0.0"
+  }
+}

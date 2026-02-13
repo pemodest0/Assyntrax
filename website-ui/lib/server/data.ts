@@ -1,9 +1,19 @@
 ﻿import { promises as fs } from "fs";
 import path from "path";
 import { readAssetStatusMap } from "@/lib/server/validated";
+import { existsSync } from "node:fs";
 
 function repoRoot() {
   return path.resolve(process.cwd(), "..");
+}
+
+function resolveResultsDir() {
+  if (process.env.RESULTS_DIR) return process.env.RESULTS_DIR;
+  const candidates = [path.join(process.cwd(), "results"), path.join(repoRoot(), "results")];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return candidates[1];
 }
 
 export function dataDirs() {
@@ -11,39 +21,23 @@ export function dataDirs() {
   return {
     latest: process.env.DATA_DIR || path.join(root, "results", "latest"),
     publicLatest: path.join(process.cwd(), "public", "data", "latest"),
-    results: path.join(root, "results"),
+    results: resolveResultsDir(),
   };
 }
 
 export async function listLatestFiles() {
-  const { latest, publicLatest } = dataDirs();
-  let dir = latest;
-  try {
-    await fs.access(dir);
-  } catch {
-    dir = publicLatest;
-  }
+  const { latest } = dataDirs();
+  const dir = latest;
+  await fs.access(dir);
   const files = await fs.readdir(dir);
   return files.filter((f) => f.endsWith(".json"));
 }
 
 export async function readLatestFile(file: string) {
-  const { latest, publicLatest } = dataDirs();
-  let dir = latest;
-  try {
-    await fs.access(dir);
-  } catch {
-    dir = publicLatest;
-  }
-  const target = path.join(dir, file);
-  try {
-    const text = await fs.readFile(target, "utf-8");
-    return JSON.parse(text);
-  } catch {
-    const fallback = dir === latest ? path.join(publicLatest, file) : path.join(latest, file);
-    const text = await fs.readFile(fallback, "utf-8");
-    return JSON.parse(text);
-  }
+  const { latest } = dataDirs();
+  const target = path.join(latest, file);
+  const text = await fs.readFile(target, "utf-8");
+  return JSON.parse(text);
 }
 
 export async function findLatestApiRecords() {
@@ -68,20 +62,25 @@ export async function findLatestApiRecords() {
     // ignore and fallback to legacy search
   }
 
-  const entries = await fs.readdir(results, { withFileTypes: true });
-  const candidates: { path: string; mtime: number }[] = [];
-  for (const ent of entries) {
-    if (!ent.isDirectory()) continue;
-    const p = path.join(results, ent.name, "api_records.jsonl");
-    try {
-      const stat = await fs.stat(p);
-      candidates.push({ path: p, mtime: stat.mtimeMs });
-    } catch {
-      // ignore
+  try {
+    const entries = await fs.readdir(results, { withFileTypes: true });
+    const candidates: { path: string; mtime: number }[] = [];
+    for (const ent of entries) {
+      if (!ent.isDirectory()) continue;
+      const p = path.join(results, ent.name, "api_records.jsonl");
+      try {
+        const stat = await fs.stat(p);
+        candidates.push({ path: p, mtime: stat.mtimeMs });
+      } catch {
+        // ignore
+      }
     }
+    candidates.sort((a, b) => b.mtime - a.mtime);
+    if (candidates.length) return candidates[0].path;
+  } catch {
+    // no fallback
   }
-  candidates.sort((a, b) => b.mtime - a.mtime);
-  return candidates.length ? candidates[0].path : null;
+  return null;
 }
 
 function sanitizeJsonLine(line: string) {
@@ -174,7 +173,7 @@ export async function findLatestValidRun(): Promise<LatestRunInfo | null> {
       .sort()
       .reverse();
   } catch {
-    return null;
+    runDirs = [];
   }
 
   for (const runId of runDirs) {
@@ -222,15 +221,20 @@ export async function readRiskTruthPanel() {
   }
 }
 
-export async function readGlobalVerdict() {
-  const { results } = dataDirs();
-  const target = path.join(results, "validation", "VERDICT.json");
-  try {
-    const text = await fs.readFile(target, "utf-8");
-    return sanitizeEncoding(JSON.parse(text));
-  } catch {
-    return { status: "unknown", gate_checks: {} };
+export async function readGlobalStatus() {
+  const run = await findLatestValidRun();
+  if (run) {
+    const gate = (run.summary?.deployment_gate || {}) as Record<string, unknown>;
+    const blocked = gate?.blocked === true;
+    return {
+      status: blocked ? "blocked" : "ok",
+      source: "latest_run_summary",
+      deployment_gate: gate,
+      checks: (run.summary?.checks || {}) as Record<string, unknown>,
+      scores: (run.summary?.scores || {}) as Record<string, unknown>,
+    };
   }
+  return { status: "unknown", source: "no_valid_run", checks: {}, scores: {} };
 }
 
 export async function readJsonlWithValidationGate(pathFile: string) {
@@ -270,5 +274,373 @@ export async function readDashboardOverview() {
   const overviewPath = path.join(results, "dashboard", "overview.json");
   const text = await fs.readFile(overviewPath, "utf-8");
   return JSON.parse(text);
+}
+
+export type LabCorrRunInfo = {
+  runId: string;
+  runDir: string;
+  summary: Record<string, unknown>;
+  summaryCompact: string;
+};
+
+function publicLabCorrLatestDir() {
+  return path.join(process.cwd(), "public", "data", "lab_corr_macro", "latest");
+}
+
+export type LabCorrTimeseriesRow = {
+  date: string;
+  N_used: number;
+  p1: number;
+  deff: number;
+  top5: number | null;
+  cluster_count: number | null;
+  largest_share: number | null;
+  entropy: number | null;
+  turnover_pair_frac: number | null;
+  structure_score: number | null;
+  p1_shuffle: number | null;
+  deff_shuffle: number | null;
+};
+
+export type LabCorrCaseStudy = {
+  case_regime: string;
+  date: string;
+  N_used: number;
+  p1: number;
+  deff: number;
+  lambda1: number;
+  lambda2: number;
+  top5: number;
+  exposure: number;
+  horizon_days: number;
+  future_days_used: number;
+  bench_cum_return: number;
+  strategy_cum_return: number;
+  alpha_cum: number;
+  bench_max_drawdown: number;
+  strategy_max_drawdown: number;
+  dd_improvement: number;
+  honest_verdict: string;
+};
+
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const n = Number(trimmed);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parseCsvLine(line: string): string[] {
+  const out: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (ch === "\"") {
+      if (inQuotes && line[i + 1] === "\"") {
+        current += "\"";
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (ch === "," && !inQuotes) {
+      out.push(current);
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+  out.push(current);
+  return out.map((item) => item.trim());
+}
+
+function parseCsvRecords(text: string): Record<string, string>[] {
+  const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
+  if (lines.length < 2) return [];
+  const headers = parseCsvLine(lines[0]);
+  if (!headers.length) return [];
+  return lines.slice(1).map((line) => {
+    const cols = parseCsvLine(line);
+    const row: Record<string, string> = {};
+    headers.forEach((h, idx) => {
+      row[h] = cols[idx] || "";
+    });
+    return row;
+  });
+}
+
+function normalizeLabTimeseriesRow(row: Record<string, string>): LabCorrTimeseriesRow | null {
+  const date = String(row.date || "").trim();
+  const nUsed = toFiniteNumber(row.N_used);
+  const p1 = toFiniteNumber(row.p1);
+  const deff = toFiniteNumber(row.deff);
+  if (!date || nUsed == null || p1 == null || deff == null) return null;
+  return {
+    date,
+    N_used: nUsed,
+    p1,
+    deff,
+    top5: toFiniteNumber(row.top5),
+    cluster_count: toFiniteNumber(row.cluster_count),
+    largest_share: toFiniteNumber(row.largest_share),
+    entropy: toFiniteNumber(row.entropy),
+    turnover_pair_frac: toFiniteNumber(row.turnover_pair_frac),
+    structure_score: toFiniteNumber(row.structure_score),
+    p1_shuffle: toFiniteNumber(row.p1_shuffle),
+    deff_shuffle: toFiniteNumber(row.deff_shuffle),
+  };
+}
+
+function normalizeLabCaseStudy(row: Record<string, string>): LabCorrCaseStudy | null {
+  const requiredNumbers = [
+    "N_used",
+    "p1",
+    "deff",
+    "lambda1",
+    "lambda2",
+    "top5",
+    "exposure",
+    "horizon_days",
+    "future_days_used",
+    "bench_cum_return",
+    "strategy_cum_return",
+    "alpha_cum",
+    "bench_max_drawdown",
+    "strategy_max_drawdown",
+    "dd_improvement",
+  ];
+  const parsed: Record<string, number> = {};
+  for (const key of requiredNumbers) {
+    const val = toFiniteNumber(row[key]);
+    if (val == null) return null;
+    parsed[key] = val;
+  }
+  const caseRegime = String(row.case_regime || "").trim();
+  const date = String(row.date || "").trim();
+  if (!caseRegime || !date) return null;
+  return {
+    case_regime: caseRegime,
+    date,
+    N_used: parsed.N_used,
+    p1: parsed.p1,
+    deff: parsed.deff,
+    lambda1: parsed.lambda1,
+    lambda2: parsed.lambda2,
+    top5: parsed.top5,
+    exposure: parsed.exposure,
+    horizon_days: parsed.horizon_days,
+    future_days_used: parsed.future_days_used,
+    bench_cum_return: parsed.bench_cum_return,
+    strategy_cum_return: parsed.strategy_cum_return,
+    alpha_cum: parsed.alpha_cum,
+    bench_max_drawdown: parsed.bench_max_drawdown,
+    strategy_max_drawdown: parsed.strategy_max_drawdown,
+    dd_improvement: parsed.dd_improvement,
+    honest_verdict: String(row.honest_verdict || "").trim(),
+  };
+}
+
+export async function findLatestLabCorrRun(): Promise<LabCorrRunInfo | null> {
+  const { results } = dataDirs();
+  const labRoot = path.join(results, "lab_corr_macro");
+  const pointerPath = path.join(labRoot, "latest_release.json");
+
+  const inspectCandidate = async (runId: string, runDir: string): Promise<LabCorrRunInfo | null> => {
+    const summaryPath = path.join(runDir, "summary.json");
+    const compactPath = path.join(runDir, "summary_compact.txt");
+    try {
+      const summaryRaw = await fs.readFile(summaryPath, "utf-8");
+      const summary = JSON.parse(summaryRaw) as Record<string, unknown>;
+      if (!isRunValid(summary)) return null;
+      let summaryCompact = "";
+      try {
+        summaryCompact = await fs.readFile(compactPath, "utf-8");
+      } catch {
+        summaryCompact = "";
+      }
+      return { runId, runDir, summary, summaryCompact };
+    } catch {
+      return null;
+    }
+  };
+
+  try {
+    const pointerRaw = await fs.readFile(pointerPath, "utf-8");
+    const pointer = JSON.parse(pointerRaw) as Record<string, unknown>;
+    const runId = String(pointer.run_id || "").trim();
+    const runDirFromPointer = String(pointer.run_dir || "").trim();
+    const runDir = runDirFromPointer || (runId ? path.join(labRoot, runId) : "");
+    if (runId && runDir) {
+      const hit = await inspectCandidate(runId, runDir);
+      if (hit) return hit;
+    }
+  } catch {
+    // fallback scan
+  }
+
+  try {
+    const dirs = await fs.readdir(labRoot, { withFileTypes: true });
+    const runs = dirs
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name)
+      .filter((name) => /^\d{8}T\d{6}Z$/i.test(name))
+      .sort()
+      .reverse();
+    for (const runId of runs) {
+      const candidate = await inspectCandidate(runId, path.join(labRoot, runId));
+      if (candidate) return candidate;
+    }
+  } catch {
+    // fallback to bundled public artifacts
+  }
+
+  try {
+    const pubDir = publicLabCorrLatestDir();
+    const summaryPath = path.join(pubDir, "summary.json");
+    const compactPath = path.join(pubDir, "summary_compact.txt");
+    const summaryRaw = await fs.readFile(summaryPath, "utf-8");
+    const summary = JSON.parse(summaryRaw) as Record<string, unknown>;
+    const runId = String(summary.run_id || "public_lab_corr_latest");
+    let summaryCompact = "";
+    try {
+      summaryCompact = await fs.readFile(compactPath, "utf-8");
+    } catch {
+      summaryCompact = "";
+    }
+    return { runId, runDir: pubDir, summary, summaryCompact };
+  } catch {
+    return null;
+  }
+}
+
+export async function readLatestLabCorrTimeseries(window = 120) {
+  const run = await findLatestLabCorrRun();
+  if (!run) return null;
+  const win = Number(window);
+  if (!Number.isFinite(win) || win <= 0) return null;
+  const filePath = path.join(run.runDir, `macro_timeseries_T${Math.trunc(win)}.csv`);
+  try {
+    const raw = await fs.readFile(filePath, "utf-8");
+    const parsed = parseCsvRecords(raw)
+      .map(normalizeLabTimeseriesRow)
+      .filter((row): row is LabCorrTimeseriesRow => row != null);
+    if (!parsed.length) return null;
+    const latest = parsed[parsed.length - 1];
+    const refIndex = Math.max(0, parsed.length - 21);
+    const ref20d = parsed[refIndex];
+    const nValues = parsed.map((r) => r.N_used).filter((v) => Number.isFinite(v));
+    const nMean = nValues.length ? nValues.reduce((acc, v) => acc + v, 0) / nValues.length : null;
+    return {
+      runId: run.runId,
+      runDir: run.runDir,
+      window: Math.trunc(win),
+      start: parsed[0].date,
+      end: latest.date,
+      n_used_stats: {
+        min: nValues.length ? Math.min(...nValues) : null,
+        max: nValues.length ? Math.max(...nValues) : null,
+        mean: nMean,
+      },
+      latest,
+      delta_20d: {
+        p1: latest.p1 - ref20d.p1,
+        deff: latest.deff - ref20d.deff,
+      },
+      rows: parsed,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function readLatestLabCorrCaseStudies(window = 120) {
+  const run = await findLatestLabCorrRun();
+  if (!run) return null;
+  const win = Number(window);
+  if (!Number.isFinite(win) || win <= 0) return null;
+  const filePath = path.join(run.runDir, `case_studies_T${Math.trunc(win)}.csv`);
+  try {
+    const raw = await fs.readFile(filePath, "utf-8");
+    const records = parseCsvRecords(raw);
+    const cases = records
+      .map(normalizeLabCaseStudy)
+      .filter((row): row is LabCorrCaseStudy => row != null);
+    return {
+      runId: run.runId,
+      runDir: run.runDir,
+      window: Math.trunc(win),
+      count_raw: records.length,
+      count_valid: cases.length,
+      dropped_rows: Math.max(0, records.length - cases.length),
+      cases,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function readLatestLabCorrJsonArtifact(window: number, fileStem: string, fallback: unknown) {
+  const run = await findLatestLabCorrRun();
+  if (!run) return fallback;
+  const win = Number(window);
+  if (!Number.isFinite(win) || win <= 0) return fallback;
+  const filePath = path.join(run.runDir, `${fileStem}_T${Math.trunc(win)}.json`);
+  try {
+    const raw = await fs.readFile(filePath, "utf-8");
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+export async function readLatestLabCorrOperationalAlerts(window = 120) {
+  return readLatestLabCorrJsonArtifact(window, "operational_alerts", {
+    latest_date: "",
+    latest_events: [],
+    n_events_total: 0,
+    n_events_last_60d: 0,
+    event_counts: {},
+    latest_event_rows: [],
+  });
+}
+
+export async function readLatestLabCorrEraEvaluation(window = 120) {
+  const payload = await readLatestLabCorrJsonArtifact(window, "era_evaluation", []);
+  return Array.isArray(payload) ? payload : [];
+}
+
+export async function readLatestLabCorrActionPlaybook(window = 120) {
+  const payload = await readLatestLabCorrJsonArtifact(window, "action_playbook", []);
+  return Array.isArray(payload) ? payload : [];
+}
+
+export async function readLatestLabCorrUiViewModel(window = 120) {
+  return readLatestLabCorrJsonArtifact(window, "ui_view_model", {
+    schema_version: "lab_corr_view_v1",
+    latest_state: {},
+    latest_regime: {},
+    alerts: { latest_events: [] },
+    playbook_latest: {},
+    case_preview: [],
+    era_summary: [],
+  });
+}
+
+export async function readLatestLabCorrBacktestSummary(window = 120) {
+  const run = await findLatestLabCorrRun();
+  if (!run) return null;
+  const win = Number(window);
+  if (!Number.isFinite(win) || win <= 0) return null;
+  const filePath = path.join(run.runDir, `backtest_summary_T${Math.trunc(win)}.json`);
+  try {
+    const raw = await fs.readFile(filePath, "utf-8");
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
 }
 

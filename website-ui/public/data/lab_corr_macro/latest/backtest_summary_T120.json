@@ -1,0 +1,27 @@
+{
+  "start": "2018-06-22",
+  "end": "2026-02-12",
+  "n_days": 1921,
+  "strategy": {
+    "ann_return": 0.016898845909946614,
+    "ann_vol": 0.10410584615444045,
+    "sharpe": 0.16232369779577285,
+    "max_drawdown": -0.19555993686039563
+  },
+  "benchmark": {
+    "ann_return": 0.07806807584165076,
+    "ann_vol": 0.2095310878952516,
+    "sharpe": 0.3725846919702837,
+    "max_drawdown": -0.42119545426466276
+  },
+  "avg_exposure": 0.5805830296720459,
+  "avg_turnover": 0.01436751691827173,
+  "total_cost_paid": 0.0138,
+  "max_daily_turnover": 0.1,
+  "regime_counts": {
+    "stable": 919,
+    "stress": 382,
+    "dispersion": 370,
+    "transition": 250
+  }
+}

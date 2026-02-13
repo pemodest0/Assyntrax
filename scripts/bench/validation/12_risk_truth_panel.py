@@ -258,11 +258,11 @@ def build_panel(root: Path) -> dict[str, Any]:
     watch = sum(1 for e in entries if e["risk_truth_status"] == "watch")
     inconclusive = n - validated - watch
 
-    global_verdict = _read_json(root / "VERDICT.json") or {}
+    global_status = _read_json(root / "STATUS.json") or _read_json(root / "VERDICT.json") or {}
     out = {
         "status": "ok",
         "root": str(root),
-        "global_validation_verdict": global_verdict.get("status"),
+        "global_validation_status": global_status.get("status"),
         "adaptive_thresholds_available": bool(thresholds_map),
         "data_adequacy_available": bool(adequacy_map),
         "hybrid_risk_available": bool(hybrid_map),

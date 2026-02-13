@@ -21,7 +21,7 @@ def test_pipeline_smoke(tmp_path: Path) -> None:
         [
             "python",
             "-m",
-            "spa.run",
+            "engine.run",
             "--input",
             str(input_csv),
             "--time-col",

@@ -12,7 +12,7 @@ export default function ProductPage() {
             Estrutura, métricas e decisão em um fluxo único
           </h1>
           <p className="text-zinc-300 max-w-3xl text-lg">
-            A Assyntrax combina diagnóstico de regime, risco estrutural e forecast condicional com
+            O Eigen Engine combina diagnóstico de regime, risco estrutural e forecast condicional com
             rastreabilidade operacional. O foco é reduzir erro de decisão, não adivinhar preço.
           </p>
         </div>
@@ -93,3 +93,4 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
     </div>
   );
 }
+

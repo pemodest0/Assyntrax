@@ -77,7 +77,9 @@ def main() -> None:
 
     (run_dir / "execution_log.json").write_text(json.dumps(logs, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    verdict = _read_json(ROOT / "results/validation/VERDICT.json")
+    global_status = _read_json(ROOT / "results/validation/STATUS.json")
+    if not global_status:
+        global_status = _read_json(ROOT / "results/validation/VERDICT.json")
     universe = _read_json(ROOT / "results/validation/universe_mini_full/universe_report.json")
     uncertainty = _read_json(ROOT / "results/validation/uncertainty_full/summary.json")
     validated = _read_json(ROOT / "results/validated/latest/summary.json")
@@ -86,7 +88,9 @@ def main() -> None:
     risk_utility = _read_json(ROOT / "results/validation/risk_utility/summary.json")
     adequacy = _read_json(ROOT / "results/validation/data_adequacy/summary.json")
     hist_metrics = _read_json(ROOT / "results/validation/historical_shifts/metrics.json")
-    hist_verdict = _read_json(ROOT / "results/validation/historical_shifts/VERDICT.json")
+    historical_status = _read_json(ROOT / "results/validation/historical_shifts/STATUS.json")
+    if not historical_status:
+        historical_status = _read_json(ROOT / "results/validation/historical_shifts/VERDICT.json")
     realestate_offline = _read_json(ROOT / "results/validation/realestate_offline/summary.json")
 
     success_rate = 0.0
@@ -99,11 +103,11 @@ def main() -> None:
     goals = protocol.get("goals") or {}
     min_success = float(goals.get("min_universe_success_rate", 0.8))
     min_stability = float(goals.get("min_stability_score", 0.55))
-    stability = float((verdict.get("scores") or {}).get("stability_score") or 0.0)
+    stability = float((global_status.get("scores") or {}).get("stability_score") or 0.0)
 
     checks = {
         "pipeline_ok": ok,
-        "verdict_pass": str(verdict.get("status", "")).lower() == "pass",
+        "status_pass": str(global_status.get("status", "")).lower() == "pass",
         "universe_success_ok": success_rate >= min_success,
         "stability_ok": stability >= min_stability,
         "ablation_ok": str(ablation.get("status", "")).lower() == "ok",
@@ -111,7 +115,7 @@ def main() -> None:
         "risk_utility_ok": str(risk_utility.get("status", "")).lower() == "ok",
         "data_adequacy_ok": str(adequacy.get("status", "")).lower() == "ok",
         "pseudo_bifurcation_ok": not bool(hist_metrics.get("pseudo_bifurcation_flag", False)),
-        "historical_shifts_ok": str(hist_verdict.get("status", "")).lower() in {"pass", "neutral"},
+        "historical_shifts_ok": str(historical_status.get("status", "")).lower() in {"pass", "neutral"},
         "realestate_offline_ok": str(realestate_offline.get("status", "")).lower() == "ok",
     }
     status = "ok" if all(checks.values()) else "fail"
@@ -133,12 +137,12 @@ def main() -> None:
             "risk_utility_mean_dd_avoidance": risk_utility.get("mean_drawdown_avoidance"),
             "data_adequacy_ok_count": ((adequacy.get("counts") or {}).get("ok")),
             "pseudo_bifurcation_flag": bool(hist_metrics.get("pseudo_bifurcation_flag", False)),
-            "historical_status": hist_verdict.get("status"),
+            "historical_status": historical_status.get("status"),
             "realestate_assets_ok": realestate_offline.get("ok"),
             "realestate_assets_fail": realestate_offline.get("fail"),
         },
         "sources": {
-            "verdict": "results/validation/VERDICT.json",
+            "status": "results/validation/STATUS.json",
             "universe_report": "results/validation/universe_mini_full/universe_report.json",
             "uncertainty": "results/validation/uncertainty_full/summary.json",
             "validated_summary": "results/validated/latest/summary.json",

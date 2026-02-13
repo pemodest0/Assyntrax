@@ -11,7 +11,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-lg font-semibold tracking-tight">Assyntrax</div>
-                  <div className="text-xs text-zinc-400">Regimes &amp; Diagnóstico</div>
+                  <div className="text-xs text-zinc-400">Eigen Engine</div>
                 </div>
                 <span className="text-[10px] px-2 py-1 rounded-full border border-zinc-700 text-zinc-300">
                   Institucional
@@ -57,3 +57,4 @@ function NavItem({ href, label }: { href: string; label: string }) {
     </Link>
   );
 }
+

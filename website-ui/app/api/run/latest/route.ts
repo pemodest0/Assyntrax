@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
-import { findLatestValidRun, readGlobalVerdict } from "@/lib/server/data";
+import { findLatestLabCorrRun, findLatestValidRun, readGlobalStatus, readLatestLabCorrTimeseries } from "@/lib/server/data";
 
 export async function GET() {
-  const [run, verdict] = await Promise.all([findLatestValidRun(), readGlobalVerdict()]);
+  const [run, globalStatus, labRun, labTs] = await Promise.all([
+    findLatestValidRun(),
+    readGlobalStatus(),
+    findLatestLabCorrRun(),
+    readLatestLabCorrTimeseries(120),
+  ]);
   if (!run) {
     return NextResponse.json(
       {
@@ -16,7 +21,15 @@ export async function GET() {
   return NextResponse.json({
     run_id: run.runId,
     summary: run.summary,
-    global_verdict_status: verdict?.status || "unknown",
+    global_status: globalStatus?.status || "unknown",
+    lab_corr_macro: labRun
+      ? {
+          run_id: labRun.runId,
+          latest_state: labTs?.latest || null,
+          delta_20d: labTs?.delta_20d || null,
+          deployment_gate: (labRun.summary?.deployment_gate || {}) as Record<string, unknown>,
+        }
+      : null,
   });
 }
 

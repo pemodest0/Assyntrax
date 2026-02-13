@@ -1,7 +1,8 @@
-﻿"""Graph/regime API facade."""
+"""Graph/regime API facade."""
 
-from graph_engine.core import GraphResult, run_graph_engine
-from graph_engine.schema import GraphAsset, GraphConfig, GraphLinks, GraphMetrics, GraphState
+from engine.graph.core import GraphResult, run_graph_engine
+from engine.graph.multilayer import MultilayerConfig, run_multilayer_engine
+from engine.graph.schema import GraphAsset, GraphConfig, GraphLinks, GraphMetrics, GraphState
 
 __all__ = [
     "GraphAsset",
@@ -11,4 +12,6 @@ __all__ = [
     "GraphState",
     "GraphResult",
     "run_graph_engine",
+    "MultilayerConfig",
+    "run_multilayer_engine",
 ]

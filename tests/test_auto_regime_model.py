@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from spa.engine.diagnostics.auto_regime_model import build_training_dataset_with_meta
+from engine.diagnostics.auto_regime_model import build_training_dataset_with_meta
 
 
 def _write_summary(path: Path) -> None:

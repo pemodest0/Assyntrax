@@ -11,7 +11,7 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
       <footer className="border-t border-zinc-900/80 bg-black/40">
         <div className="mx-auto max-w-7xl px-4 md:px-6 lg:px-8 py-10 grid grid-cols-1 md:grid-cols-4 gap-8 text-sm">
           <div className="space-y-3">
-            <div className="text-zinc-100 font-semibold tracking-wide">ASSYNTRAX</div>
+            <div className="text-zinc-100 font-semibold tracking-wide">Assyntrax</div>
             <p className="text-zinc-400 text-xs leading-relaxed">
               Sistema de diagnóstico de regime e risco estrutural para finanças e imobiliário.
             </p>
@@ -41,10 +41,12 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
             <a href="https://github.com/pemodest0/Assyntrax" className="hover:text-zinc-300 transition">GitHub</a>
             <a href="https://www.linkedin.com/in/pedro-henrique-gesualdo-modesto-39a135272/" className="hover:text-zinc-300 transition">LinkedIn</a>
             <a href="https://pemodest0.github.io/" className="hover:text-zinc-300 transition">Portfólio</a>
-            <span>Regime and Risk Engine</span>
+            <span>Eigen Engine</span>
           </div>
         </div>
       </footer>
     </div>
   );
 }
+
+

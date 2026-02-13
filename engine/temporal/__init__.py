@@ -1,6 +1,6 @@
-﻿"""Temporal/forecast API facade."""
+"""Temporal/forecast API facade."""
 
-from spa.engine.temporal_engine import (
+from engine.temporal.temporal_engine import (
     TemporalConfig,
     TemporalSummary,
     YearResult,

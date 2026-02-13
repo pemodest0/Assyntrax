@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
@@ -27,7 +27,7 @@ def _safe_float(x: Any, default: float = 0.0) -> float:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Veredito automático lendo results/validation.")
+    parser = argparse.ArgumentParser(description="Global status automatico lendo results/validation.")
     parser.add_argument("--root", type=str, default=str(OUTDIR_DEFAULT))
     args = parser.parse_args()
 
@@ -44,7 +44,7 @@ def main() -> None:
     sanity_ok = sanity.get("status") == "ok"
     stability_score = _safe_float(robustness.get("stability_score"))
     robustness_ok = robustness.get("status") == "ok" and stability_score >= 0.55
-    placebo_ok = placebo.get("status") == "ok" and placebo.get("verdict") == "pass"
+    placebo_ok = placebo.get("status") == "ok" and placebo.get("status_eval", placebo.get("verdict", "")) == "pass"
 
     counts = universe.get("counts") or {}
     ok_n = int(counts.get("ok") or 0)
@@ -80,7 +80,7 @@ def main() -> None:
     if not robustness_ok:
         notes.append(f"robustness abaixo do gate (stability_score={stability_score:.3f}, min=0.55)")
     if not placebo_ok:
-        notes.append(f"placebo sem rejeição robusta: {placebo.get('reason', 'sem detalhe')}")
+        notes.append(f"placebo sem rejeiÃ§Ã£o robusta: {placebo.get('reason', 'sem detalhe')}")
     if not universe_ok:
         notes.append(f"universe success rate baixo ({universe_success_rate:.2%}, min=80%)")
     if not stress_ok:
@@ -97,14 +97,14 @@ def main() -> None:
         notes.append("todos os gates passaram no estado atual")
 
     next_actions = [
-        "fixar ambiente (scikit-learn e dependências do motor) para evitar fail por import",
-        "aumentar estabilidade de segmentação para elevar stability_score acima de 0.55",
-        "endurecer regra de recusa em placebo quando estrutura não é detectável",
-        "elevar cobertura de datasets válidos no universe_mini para aumentar taxa de sucesso",
-        "automatizar execução sequencial 01..04 em CI e bloquear merge quando status=fail",
+        "fixar ambiente (scikit-learn e dependÃªncias do motor) para evitar fail por import",
+        "aumentar estabilidade de segmentaÃ§Ã£o para elevar stability_score acima de 0.55",
+        "endurecer regra de recusa em placebo quando estrutura nÃ£o Ã© detectÃ¡vel",
+        "elevar cobertura de datasets vÃ¡lidos no universe_mini para aumentar taxa de sucesso",
+        "automatizar execuÃ§Ã£o sequencial 01..04 em CI e bloquear merge quando status=fail",
     ]
 
-    verdict = {
+    status_payload = {
         "status": status,
         "gate_checks": gate_checks,
         "scores": {
@@ -117,13 +117,13 @@ def main() -> None:
         "next_actions": next_actions[:5],
     }
 
-    out_path = root / "VERDICT.json"
+    out_path = root / "STATUS.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(verdict, indent=2, ensure_ascii=False), encoding="utf-8")
+    out_path.write_text(json.dumps(status_payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
     print(
-        "verdict "
-        f"status={verdict['status']} "
+        "status "
+        f"status={status_payload['status']} "
         f"sanity={gate_checks['sanity_ok']} robustness={gate_checks['robustness_ok']} "
         f"placebo={gate_checks['placebo_ok']} universe={gate_checks['universe_ok']}"
     )
@@ -131,3 +131,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

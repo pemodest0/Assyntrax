@@ -21,6 +21,8 @@ type Props = {
   onNormalizeChange: (value: boolean) => void;
   showRegimeBands: boolean;
   onShowRegimeBandsChange: (value: boolean) => void;
+  regimeBandsLabel?: string;
+  regimeBandsTitle?: string;
   smoothing: "none" | "ema_short" | "ema_long";
   onSmoothingChange: (value: "none" | "ema_short" | "ema_long") => void;
   sectors?: Array<{ value: string; label: string }>;
@@ -37,7 +39,7 @@ const groupLabels: Record<string, string> = {
   equities_us_broad: "Equities US Broad",
   equities_us_sectors: "Equities US Setores",
   equities_international: "Equities Internacionais",
-  realestate: "Imobiliário",
+  realestate: "Imobiliario",
 };
 
 export default function DashboardFilters(props: Props) {
@@ -55,6 +57,8 @@ export default function DashboardFilters(props: Props) {
     onNormalizeChange,
     showRegimeBands,
     onShowRegimeBandsChange,
+    regimeBandsLabel = "Bandas regime",
+    regimeBandsTitle = "Exibir ou ocultar destaques no fundo do grafico",
     smoothing,
     onSmoothingChange,
     sectors,
@@ -131,7 +135,10 @@ export default function DashboardFilters(props: Props) {
           className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
           title="Filtrar por setor"
         >
-          {(sectors && sectors.length ? sectors : sectorsFromAssets.map((s) => ({ value: s, label: s === "all" ? "Todos os setores" : groupLabels[s] || s }))).map((s) => (
+          {(sectors && sectors.length
+            ? sectors
+            : sectorsFromAssets.map((s) => ({ value: s, label: s === "all" ? "Todos os setores" : groupLabels[s] || s }))
+          ).map((s) => (
             <option key={s.value} value={s.value}>
               {s.label}
             </option>
@@ -142,9 +149,9 @@ export default function DashboardFilters(props: Props) {
           value={timeframe}
           onChange={(e) => onTimeframeChange(e.target.value)}
           className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
-          title="Frequência da série"
+          title="Frequencia da serie"
         >
-          <option value="daily">Diário</option>
+          <option value="daily">Diario</option>
           <option value="weekly">Semanal</option>
         </select>
 
@@ -152,12 +159,12 @@ export default function DashboardFilters(props: Props) {
           value={rangePreset}
           onChange={(e) => onRangePresetChange(e.target.value)}
           className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
-          title="Janela temporal do gráfico"
+          title="Janela temporal do grafico"
         >
-          <option value="30d">Últimos 30d</option>
-          <option value="90d">Últimos 90d</option>
-          <option value="180d">Últimos 180d</option>
-          <option value="1y">Último 1y</option>
+          <option value="30d">Ultimos 30d</option>
+          <option value="90d">Ultimos 90d</option>
+          <option value="180d">Ultimos 180d</option>
+          <option value="1y">Ultimo 1y</option>
           <option value="all">Tudo</option>
         </select>
 
@@ -165,11 +172,11 @@ export default function DashboardFilters(props: Props) {
           value={smoothing}
           onChange={(e) => onSmoothingChange(e.target.value as "none" | "ema_short" | "ema_long")}
           className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
-          title="Suavização da curva para leitura estrutural"
+          title="Suavizacao da curva"
         >
-          <option value="none">Suavização: none</option>
-          <option value="ema_short">Suavização: EMA curto</option>
-          <option value="ema_long">Suavização: EMA longo</option>
+          <option value="none">Suavizacao: none</option>
+          <option value="ema_short">Suavizacao: EMA curto</option>
+          <option value="ema_long">Suavizacao: EMA longo</option>
         </select>
 
         <button
@@ -183,9 +190,9 @@ export default function DashboardFilters(props: Props) {
         <button
           className={`rounded-lg border px-3 py-2 text-sm ${showRegimeBands ? "border-cyan-400 text-cyan-300" : "border-zinc-700"}`}
           onClick={() => onShowRegimeBandsChange(!showRegimeBands)}
-          title="Exibir ou ocultar bandas de regime no fundo do gráfico"
+          title={regimeBandsTitle}
         >
-          {showRegimeBands ? "Bandas regime: ON" : "Bandas regime: OFF"}
+          {showRegimeBands ? `${regimeBandsLabel}: ON` : `${regimeBandsLabel}: OFF`}
         </button>
       </div>
     </div>

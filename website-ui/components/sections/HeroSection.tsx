@@ -8,9 +8,7 @@ export default function HeroSection() {
     <section className="grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] gap-8 lg:gap-10 items-center min-h-[70vh] lg:min-h-[78vh] max-h-[860px] py-10 md:py-12 lg:py-14 xl:py-16">
       <div className="rounded-[28px] border border-zinc-800 bg-zinc-950/70 p-8 lg:p-10 backdrop-blur ax-glow">
         <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Aplicação de regime e risco</div>
-        <h1 className="mt-5 text-4xl md:text-5xl font-semibold tracking-tight">
-          Assyntrax
-        </h1>
+        <h1 className="mt-5 text-4xl md:text-5xl font-semibold tracking-tight">Eigen Engine</h1>
         <p className="mt-4 text-zinc-300 max-w-2xl text-base lg:text-lg">
           Sistema de diagnóstico estrutural para setores financeiros, energia e mercado imobiliário.
           A leitura operacional prioriza estabilidade, transição e nível de confiabilidade antes de qualquer decisão.
@@ -41,3 +39,4 @@ export default function HeroSection() {
     </section>
   );
 }
+

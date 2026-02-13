@@ -1,0 +1,2271 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
+
+try:
+    from scipy.cluster.hierarchy import fcluster, linkage
+    from scipy.spatial.distance import squareform
+
+    SCIPY_OK = True
+except Exception:
+    SCIPY_OK = False
+
+
+ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_OUT_BASE = ROOT / "results" / "lab_corr_macro"
+DEFAULT_FINANCE_BASE = ROOT / "results" / "finance_download"
+DEFAULT_BASELINE_DIR = DEFAULT_OUT_BASE / "_official_baseline"
+ERA_ORDER = ["2018_2019", "2020", "2021_2022", "2023_2026"]
+
+
+def _run_id() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _find_latest_finance_run() -> Path:
+    if not DEFAULT_FINANCE_BASE.exists():
+        raise FileNotFoundError(f"Missing finance base dir: {DEFAULT_FINANCE_BASE}")
+    runs = sorted([p for p in DEFAULT_FINANCE_BASE.iterdir() if p.is_dir()], key=lambda p: p.name, reverse=True)
+    for d in runs:
+        if (d / "panel_long_sector.csv").exists() and (d / "universe_fixed.csv").exists():
+            return d
+    raise FileNotFoundError("No finance run with panel_long_sector.csv + universe_fixed.csv found.")
+
+
+def _ensure_cols(df: pd.DataFrame, cols: list[str], ctx: str) -> None:
+    miss = [c for c in cols if c not in df.columns]
+    if miss:
+        raise ValueError(f"{ctx} missing columns: {miss}")
+
+
+def _safe_sign(a: np.ndarray) -> np.ndarray:
+    s = np.sign(np.asarray(a, dtype=float))
+    s[np.abs(np.asarray(a, dtype=float)) < 1e-12] = 0.0
+    s[~np.isfinite(np.asarray(a, dtype=float))] = 0.0
+    return s
+
+
+def _cluster_metrics(corr: np.ndarray) -> tuple[np.ndarray, int, float, float]:
+    c = np.clip(np.asarray(corr, dtype=float), -1.0, 1.0)
+    dist = np.sqrt(np.clip(2.0 * (1.0 - c), 0.0, None))
+    np.fill_diagonal(dist, 0.0)
+    z = linkage(squareform(dist, checks=False), method="average")
+    cid = fcluster(z, t=1.0, criterion="distance")
+    _, counts = np.unique(cid, return_counts=True)
+    p = counts.astype(float) / counts.sum()
+    entropy = float(-np.sum(p * np.log(p + 1e-12)))
+    return cid.astype(int), int(counts.size), float(np.max(p)), entropy
+
+
+def _turnover_pair_frac(labels_a: np.ndarray, labels_b: np.ndarray) -> float:
+    m = labels_a.size
+    if m < 2:
+        return float("nan")
+    eq_a = labels_a[:, None] == labels_a[None, :]
+    eq_b = labels_b[:, None] == labels_b[None, :]
+    upper = np.triu(np.ones((m, m), dtype=bool), k=1)
+    changed = np.logical_xor(eq_a, eq_b)[upper]
+    return float(np.sum(changed) / max(int(upper.sum()), 1))
+
+
+def _spectral_metrics(corr: np.ndarray) -> tuple[np.ndarray, float, float, float]:
+    eig = np.real(np.sort(np.linalg.eigvalsh(corr))[::-1])
+    s = float(np.sum(eig))
+    if s <= 0:
+        return eig, float("nan"), float("nan"), float("nan")
+    p = eig / s
+    p1 = float(p[0])
+    deff = float(1.0 / np.sum(np.square(p)))
+    top5 = float(np.sum(p[: min(5, p.size)]))
+    return eig, p1, deff, top5
+
+
+def _block_bootstrap_col(x: np.ndarray, block_size: int, rng: np.random.Generator) -> np.ndarray:
+    n = int(x.shape[0])
+    if n <= 1:
+        return x.copy()
+    b = int(max(2, min(block_size, n)))
+    out = np.empty(n, dtype=float)
+    pos = 0
+    while pos < n:
+        start = int(rng.integers(0, n - b + 1))
+        seg = x[start : start + b]
+        take = min(seg.shape[0], n - pos)
+        out[pos : pos + take] = seg[:take]
+        pos += take
+    return out
+
+
+def _block_bootstrap_matrix(x: np.ndarray, block_size: int, rng: np.random.Generator) -> np.ndarray:
+    y = np.empty_like(x)
+    for j in range(x.shape[1]):
+        y[:, j] = _block_bootstrap_col(x[:, j], block_size=block_size, rng=rng)
+    return y
+
+
+def _process_window(
+    returns_wide: pd.DataFrame,
+    sector_by_ticker: dict[str, str],
+    window: int,
+    cov_window: float,
+    min_assets: int,
+    noise_step: int,
+    bootstrap_block: int,
+    seed: int,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    dates = returns_wide.index
+    rows: list[dict[str, Any]] = []
+    snaps: list[dict[str, Any]] = []
+    sector_rows: list[dict[str, Any]] = []
+    cluster_assign: dict[pd.Timestamp, dict[str, int]] = {}
+    min_obs = max(30, int(np.ceil(window * cov_window)))
+    if (len(dates) - window + 1) <= 0:
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+    for i in range(window - 1, len(dates)):
+        date = pd.Timestamp(dates[i])
+        block = returns_wide.reindex(dates[i - window + 1 : i + 1])
+        cov = block.notna().mean(axis=0)
+        tickers_t = cov[cov >= cov_window].index.to_list()
+        rec: dict[str, Any] = {
+            "date": date.date().isoformat(),
+            "N_used": int(len(tickers_t)),
+            "p1": np.nan,
+            "deff": np.nan,
+            "top5": np.nan,
+            "cluster_count": np.nan,
+            "largest_share": np.nan,
+            "entropy": np.nan,
+            "turnover_pair_frac": np.nan,
+            "p1_shuffle": np.nan,
+            "deff_shuffle": np.nan,
+            "structure_score": np.nan,
+            "p1_bootstrap": np.nan,
+            "deff_bootstrap": np.nan,
+            "structure_score_bootstrap": np.nan,
+            "insufficient_universe": True,
+        }
+        for k in range(1, 11):
+            rec[f"lambda{k}"] = np.nan
+
+        if rec["N_used"] < min_assets:
+            rows.append(rec)
+            continue
+
+        aligned = block[tickers_t].dropna(how="any")
+        if aligned.shape[0] < min_obs or aligned.shape[1] < min_assets:
+            rows.append(rec)
+            continue
+        x = aligned.to_numpy(dtype=float)
+        std = np.nanstd(x, axis=0)
+        keep = std > 1e-12
+        if int(np.sum(keep)) < min_assets:
+            rec["N_used"] = int(np.sum(keep))
+            rows.append(rec)
+            continue
+        if not np.all(keep):
+            aligned = aligned.loc[:, keep]
+            x = aligned.to_numpy(dtype=float)
+            rec["N_used"] = int(aligned.shape[1])
+
+        corr = np.corrcoef(x, rowvar=False)
+        if not np.all(np.isfinite(corr)):
+            rows.append(rec)
+            continue
+        eig, p1, deff, top5 = _spectral_metrics(corr)
+        if not (np.isfinite(p1) and np.isfinite(deff) and np.isfinite(top5)):
+            rows.append(rec)
+            continue
+        rec["p1"] = p1
+        rec["deff"] = deff
+        rec["top5"] = top5
+        rec["insufficient_universe"] = False
+        for k in range(1, 11):
+            rec[f"lambda{k}"] = float(eig[k - 1]) if eig.size >= k else np.nan
+
+        if SCIPY_OK:
+            cid, ccount, largest_share, entropy = _cluster_metrics(corr)
+            rec["cluster_count"] = ccount
+            rec["largest_share"] = largest_share
+            rec["entropy"] = entropy
+            amap = {t: int(c) for t, c in zip(aligned.columns.to_list(), cid.tolist())}
+            cluster_assign[date] = amap
+            is_eom = (i == len(dates) - 1) or (pd.Timestamp(dates[i + 1]).month != date.month)
+            if is_eom:
+                for t, c in amap.items():
+                    snaps.append({"date": date.date().isoformat(), "ticker": t, "cluster_id": c})
+            vc = pd.Series([sector_by_ticker.get(t, "unknown") for t in amap.keys()]).value_counts()
+            for sec, cnt in vc.items():
+                sector_rows.append({"date": date.date().isoformat(), "sector": str(sec), "count": int(cnt)})
+
+        prev_i = i - 5
+        if prev_i >= (window - 1):
+            prev_date = pd.Timestamp(dates[prev_i])
+            cm = cluster_assign.get(date)
+            pm = cluster_assign.get(prev_date)
+            if cm is not None and pm is not None:
+                common = sorted(set(cm.keys()).intersection(pm.keys()))
+                if len(common) >= 2:
+                    rec["turnover_pair_frac"] = _turnover_pair_frac(
+                        np.asarray([cm[t] for t in common], dtype=int),
+                        np.asarray([pm[t] for t in common], dtype=int),
+                    )
+
+        if (i % max(noise_step, 1) == 0) and (aligned.shape[1] >= min_assets):
+            rng = np.random.default_rng(seed + window * 10_000 + i)
+            x_shuffle = aligned.to_numpy(dtype=float).copy()
+            for j in range(x_shuffle.shape[1]):
+                rng.shuffle(x_shuffle[:, j])
+            keep_sh = np.nanstd(x_shuffle, axis=0) > 1e-12
+            if int(np.sum(keep_sh)) >= 2:
+                corr_shuffle = np.corrcoef(x_shuffle[:, keep_sh], rowvar=False)
+                if np.all(np.isfinite(corr_shuffle)):
+                    _, p1_sh, deff_sh, _ = _spectral_metrics(corr_shuffle)
+                    if np.isfinite(p1_sh) and np.isfinite(deff_sh):
+                        rec["p1_shuffle"] = p1_sh
+                        rec["deff_shuffle"] = deff_sh
+                        rec["structure_score"] = float((rec["p1"] - p1_sh) + (deff_sh - rec["deff"]))
+
+            x_boot = _block_bootstrap_matrix(
+                aligned.to_numpy(dtype=float),
+                block_size=int(max(2, bootstrap_block)),
+                rng=np.random.default_rng(seed + window * 20_000 + i),
+            )
+            keep_bs = np.nanstd(x_boot, axis=0) > 1e-12
+            if int(np.sum(keep_bs)) >= 2:
+                corr_boot = np.corrcoef(x_boot[:, keep_bs], rowvar=False)
+                if np.all(np.isfinite(corr_boot)):
+                    _, p1_bs, deff_bs, _ = _spectral_metrics(corr_boot)
+                    if np.isfinite(p1_bs) and np.isfinite(deff_bs):
+                        rec["p1_bootstrap"] = p1_bs
+                        rec["deff_bootstrap"] = deff_bs
+                        rec["structure_score_bootstrap"] = float((rec["p1"] - p1_bs) + (deff_bs - rec["deff"]))
+
+        rows.append(rec)
+    return pd.DataFrame(rows), pd.DataFrame(snaps), pd.DataFrame(sector_rows)
+
+
+def _summary_block(ts: pd.DataFrame, sector_daily: pd.DataFrame, window: int, outdir: Path) -> str:
+    if ts.empty:
+        return f"[T={window}] sem dados."
+    suff = ts[~ts["insufficient_universe"]].copy()
+    tail = ts.tail(60)
+    tails = tail[~tail["insufficient_universe"]]
+    if not sector_daily.empty:
+        sec = (
+            sector_daily.groupby("sector", as_index=False)
+            .agg(min_count=("count", "min"), mean_count=("count", "mean"), max_count=("count", "max"))
+            .sort_values("sector")
+        )
+        sec.to_csv(outdir / f"sector_presence_T{window}.csv", index=False)
+        z = sec[sec["min_count"] <= 0]["sector"].tolist()
+        sanity = f"setor_sanity={'OK' if len(z)==0 else 'WARN'}; sectors_with_zero={','.join(z) if z else 'none'}"
+    else:
+        sanity = "setor_sanity=unavailable"
+
+    stress = "sem dias suficientes para stress check"
+    if not suff.empty:
+        p1q, dq = float(suff["p1"].quantile(0.95)), float(suff["deff"].quantile(0.05))
+        s = suff[(suff["p1"] >= p1q) & (suff["deff"] <= dq)]
+        stress = (
+            f"stress_count={int(s.shape[0])}; p1_q95={p1q:.6f}; deff_q05={dq:.6f}; "
+            f"last_dates={','.join(s['date'].tail(10).to_list()) if not s.empty else 'none'}"
+        )
+
+    noise_line = "noise_baseline: unavailable"
+    if not suff.empty:
+        b = suff.dropna(subset=["p1_shuffle", "deff_shuffle"])
+        b2 = suff.dropna(subset=["p1_bootstrap", "deff_bootstrap"])
+        noise_line = (
+            "noise_baseline: "
+            f"shuffle_p1_gap={float((b['p1'] - b['p1_shuffle']).mean()) if not b.empty else np.nan:.4f}, "
+            f"shuffle_deff_gap={float((b['deff_shuffle'] - b['deff']).mean()) if not b.empty else np.nan:.4f}, "
+            f"bootstrap_p1_gap={float((b2['p1'] - b2['p1_bootstrap']).mean()) if not b2.empty else np.nan:.4f}, "
+            f"bootstrap_deff_gap={float((b2['deff_bootstrap'] - b2['deff']).mean()) if not b2.empty else np.nan:.4f}"
+        )
+
+    return "\n".join(
+        [
+            f"[T={window}]",
+            f"N_used stats: min={float(ts['N_used'].min()):.0f}, mean={float(ts['N_used'].mean()):.2f}, max={float(ts['N_used'].max()):.0f}, insufficient_days={int(ts['insufficient_universe'].sum())}",
+            f"ultimos_60_dias: p1_mean={float(tails['p1'].mean()) if not tails.empty else np.nan:.6f}, deff_mean={float(tails['deff'].mean()) if not tails.empty else np.nan:.6f}, turnover_mean={float(tails['turnover_pair_frac'].mean()) if not tails.empty else np.nan:.6f}",
+            f"stress: {stress}",
+            noise_line,
+            f"sanity: {sanity}",
+        ]
+    )
+
+
+def _majority_same_direction(signs: np.ndarray) -> int:
+    nz = signs[signs != 0]
+    if nz.size < 2:
+        return 0
+    return int(abs(int(np.sum(nz))) >= 2)
+
+
+def _build_robustness(ts_map: dict[int, pd.DataFrame], outdir: Path) -> tuple[pd.DataFrame, dict[str, float], str]:
+    windows = sorted(ts_map.keys())
+    parts = []
+    for w in windows:
+        d = ts_map[w].copy()
+        d["date"] = pd.to_datetime(d["date"], errors="coerce")
+        d = d.dropna(subset=["date"])
+        d = d[~d["insufficient_universe"]].set_index("date")
+        if d.empty:
+            continue
+        parts.append(d[["p1", "deff"]].rename(columns={"p1": f"p1_T{w}", "deff": f"deff_T{w}"}))
+    if not parts:
+        return pd.DataFrame(), {}, "temporal_robustness=sem_dados"
+    m = parts[0]
+    for p in parts[1:]:
+        m = m.join(p, how="inner")
+    if m.empty:
+        return pd.DataFrame(), {}, "temporal_robustness=sem_intersecao_datas"
+
+    for w in windows:
+        m[f"dp1_5_T{w}"] = m[f"p1_T{w}"].diff(5)
+        m[f"ddeff_5_T{w}"] = m[f"deff_T{w}"].diff(5)
+
+    dp1_sign = _safe_sign(m[[f"dp1_5_T{w}" for w in windows]].to_numpy())
+    ddeff_sign = _safe_sign(m[[f"ddeff_5_T{w}" for w in windows]].to_numpy())
+    m["p1_dir_consistent_5"] = ((np.all(dp1_sign != 0, axis=1)) & (np.abs(np.sum(dp1_sign, axis=1)) == len(windows))).astype(int)
+    m["deff_dir_consistent_5"] = ((np.all(ddeff_sign != 0, axis=1)) & (np.abs(np.sum(ddeff_sign, axis=1)) == len(windows))).astype(int)
+    m["joint_dir_consistent_5"] = ((m["p1_dir_consistent_5"] == 1) & (m["deff_dir_consistent_5"] == 1)).astype(int)
+
+    p1_majority = np.array([_majority_same_direction(dp1_sign[i, :]) for i in range(dp1_sign.shape[0])], dtype=int)
+    deff_majority = np.array([_majority_same_direction(ddeff_sign[i, :]) for i in range(ddeff_sign.shape[0])], dtype=int)
+    m["p1_dir_majority_5"] = p1_majority
+    m["deff_dir_majority_5"] = deff_majority
+    m["joint_majority_5"] = ((p1_majority == 1) & (deff_majority == 1)).astype(int)
+
+    out = m.reset_index().rename(columns={"index": "date"})
+    out["date"] = out["date"].dt.date.astype(str)
+    out.to_csv(outdir / "robustness_temporal.csv", index=False)
+
+    tail = out.tail(60)
+    latest = out.iloc[-1]
+    signs = []
+    for w in windows:
+        sp = int(_safe_sign(np.asarray([latest[f"dp1_5_T{w}"]]))[0])
+        sd = int(_safe_sign(np.asarray([latest[f"ddeff_5_T{w}"]]))[0])
+        signs.append(f"T{w}(dp1={sp:+d},ddeff={sd:+d})")
+
+    metrics = {
+        "p1_consistency_60d": float(tail["p1_dir_consistent_5"].mean()) if not tail.empty else float("nan"),
+        "deff_consistency_60d": float(tail["deff_dir_consistent_5"].mean()) if not tail.empty else float("nan"),
+        "joint_consistency_60d": float(tail["joint_dir_consistent_5"].mean()) if not tail.empty else float("nan"),
+        "p1_majority_60d": float(tail["p1_dir_majority_5"].mean()) if not tail.empty else float("nan"),
+        "deff_majority_60d": float(tail["deff_dir_majority_5"].mean()) if not tail.empty else float("nan"),
+        "joint_majority_60d": float(tail["joint_majority_5"].mean()) if not tail.empty else float("nan"),
+        "latest_joint_majority_5": float(latest["joint_majority_5"]),
+        "latest_joint_consistent_5": float(latest["joint_dir_consistent_5"]),
+    }
+    txt = (
+        "temporal_robustness_60d: "
+        f"joint_consistency={metrics['joint_consistency_60d']:.3f}, "
+        f"joint_majority={metrics['joint_majority_60d']:.3f}, "
+        f"latest_joint_majority={int(metrics['latest_joint_majority_5'])}; "
+        f"latest_signs={'; '.join(signs)}"
+    )
+    return out, metrics, txt
+
+
+def _apply_hysteresis(labels: list[str], min_persist: int) -> list[str]:
+    if not labels:
+        return []
+    k = int(max(1, min_persist))
+    current = labels[0]
+    pending = ""
+    cnt = 0
+    out = [current]
+    for raw in labels[1:]:
+        if raw == current:
+            pending = ""
+            cnt = 0
+            out.append(current)
+            continue
+        if raw == pending:
+            cnt += 1
+        else:
+            pending = raw
+            cnt = 1
+        if cnt >= k:
+            current = pending
+            pending = ""
+            cnt = 0
+        out.append(current)
+    return out
+
+
+def _classify_regime(
+    ts: pd.DataFrame,
+    hysteresis_days: int,
+    exp_stress: float,
+    exp_transition: float,
+    exp_stable: float,
+    exp_dispersion: float,
+) -> tuple[pd.DataFrame, dict[str, float]]:
+    d = ts.copy()
+    d["date"] = pd.to_datetime(d["date"], errors="coerce")
+    d = d.dropna(subset=["date"])
+    d = d[~d["insufficient_universe"]].sort_values("date")
+    if d.empty:
+        return pd.DataFrame(), {}
+
+    d["dp1_5"] = d["p1"].diff(5)
+    d["ddeff_5"] = d["deff"].diff(5)
+    p1_lo, p1_hi = float(d["p1"].quantile(0.20)), float(d["p1"].quantile(0.80))
+    deff_lo, deff_hi = float(d["deff"].quantile(0.20)), float(d["deff"].quantile(0.80))
+    dp1_thr = float(d["dp1_5"].abs().quantile(0.80))
+    ddeff_thr = float(d["ddeff_5"].abs().quantile(0.80))
+
+    raw_reg = []
+    for _, r in d.iterrows():
+        if (float(r["p1"]) >= p1_hi) and (float(r["deff"]) <= deff_lo):
+            raw_reg.append("stress")
+        elif (float(r["p1"]) <= p1_lo) and (float(r["deff"]) >= deff_hi):
+            raw_reg.append("dispersion")
+        elif (abs(float(r["dp1_5"]) if pd.notna(r["dp1_5"]) else 0.0) >= dp1_thr) or (
+            abs(float(r["ddeff_5"]) if pd.notna(r["ddeff_5"]) else 0.0) >= ddeff_thr
+        ):
+            raw_reg.append("transition")
+        else:
+            raw_reg.append("stable")
+
+    reg_hys = _apply_hysteresis(raw_reg, min_persist=int(max(1, hysteresis_days)))
+    d["regime_raw"] = raw_reg
+    d["regime"] = reg_hys
+    exp_map = {
+        "stress": float(exp_stress),
+        "transition": float(exp_transition),
+        "stable": float(exp_stable),
+        "dispersion": float(exp_dispersion),
+    }
+    d["exposure"] = d["regime"].map(exp_map).fillna(float(exp_stable)).astype(float).clip(0.0, 1.0)
+    d["date"] = d["date"].dt.date.astype(str)
+    meta = {
+        "p1_q20": p1_lo,
+        "p1_q80": p1_hi,
+        "deff_q20": deff_lo,
+        "deff_q80": deff_hi,
+        "abs_dp1_5_q80": dp1_thr,
+        "abs_ddeff_5_q80": ddeff_thr,
+        "hysteresis_days": float(max(1, hysteresis_days)),
+        "exp_stress": float(exp_stress),
+        "exp_transition": float(exp_transition),
+        "exp_stable": float(exp_stable),
+        "exp_dispersion": float(exp_dispersion),
+    }
+    return d, meta
+
+
+def _perf(rets: pd.Series) -> dict[str, float]:
+    x = pd.to_numeric(rets, errors="coerce").dropna().astype(float)
+    if x.empty:
+        return {"ann_return": float("nan"), "ann_vol": float("nan"), "sharpe": float("nan"), "max_drawdown": float("nan")}
+    eq = (1.0 + x).cumprod()
+    ann = float(np.power(float(eq.iloc[-1]), 252.0 / max(int(x.shape[0]), 1)) - 1.0)
+    vol = float(x.std(ddof=0) * np.sqrt(252.0))
+    return {
+        "ann_return": ann,
+        "ann_vol": vol,
+        "sharpe": float(ann / vol) if vol > 1e-12 else float("nan"),
+        "max_drawdown": float((eq / eq.cummax() - 1.0).min()),
+    }
+
+
+def _backtest(
+    regime_df: pd.DataFrame,
+    returns_wide: pd.DataFrame,
+    cost_bps: float,
+    max_daily_turnover: float,
+    start_exposure: float,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    if regime_df.empty:
+        return pd.DataFrame(), {"error": "empty_regime_df"}
+
+    mkt = returns_wide.mean(axis=1, skipna=True).rename("mkt_log_ret")
+    d = regime_df.copy()
+    d["date"] = pd.to_datetime(d["date"], errors="coerce")
+    d = d.dropna(subset=["date"]).set_index("date")
+    bt = d.join(mkt, how="inner").dropna(subset=["mkt_log_ret", "exposure"]).copy()
+    if bt.empty:
+        return pd.DataFrame(), {"error": "no_overlap"}
+
+    bt["mkt_simple_ret"] = np.expm1(bt["mkt_log_ret"].astype(float))
+    bt["exposure_target"] = bt["exposure"].astype(float).clip(0.0, 1.0)
+    target_exec = bt["exposure_target"].shift(1).fillna(float(start_exposure)).to_numpy(dtype=float)
+    cap = float(max(0.0, max_daily_turnover))
+    exec_exp = np.zeros_like(target_exec)
+    exec_exp[0] = float(np.clip(start_exposure, 0.0, 1.0))
+    for i in range(1, target_exec.shape[0]):
+        desired = float(np.clip(target_exec[i], 0.0, 1.0))
+        if cap <= 0:
+            exec_exp[i] = desired
+            continue
+        step = float(np.clip(desired - exec_exp[i - 1], -cap, cap))
+        exec_exp[i] = float(np.clip(exec_exp[i - 1] + step, 0.0, 1.0))
+    bt["exposure_exec"] = exec_exp
+    bt["turnover"] = bt["exposure_exec"].diff().abs().fillna(0.0)
+    bt["cost"] = bt["turnover"] * (float(cost_bps) / 10000.0)
+    bt["strategy_simple_ret"] = bt["exposure_exec"] * bt["mkt_simple_ret"] - bt["cost"]
+    bt["benchmark_simple_ret"] = bt["mkt_simple_ret"]
+    bt["strategy_equity"] = (1.0 + bt["strategy_simple_ret"]).cumprod()
+    bt["benchmark_equity"] = (1.0 + bt["benchmark_simple_ret"]).cumprod()
+    s, b = _perf(bt["strategy_simple_ret"]), _perf(bt["benchmark_simple_ret"])
+    summary = {
+        "start": bt.index.min().date().isoformat(),
+        "end": bt.index.max().date().isoformat(),
+        "n_days": int(bt.shape[0]),
+        "strategy": s,
+        "benchmark": b,
+        "avg_exposure": float(bt["exposure_exec"].mean()),
+        "avg_turnover": float(bt["turnover"].mean()),
+        "total_cost_paid": float(bt["cost"].sum()),
+        "max_daily_turnover": float(cap),
+        "regime_counts": bt["regime"].value_counts().to_dict(),
+    }
+    out = bt.reset_index().rename(columns={"index": "date"})
+    out["date"] = out["date"].dt.date.astype(str)
+    return out, summary
+
+
+def _cluster_alerts(ts: pd.DataFrame, lookback: int) -> tuple[pd.DataFrame, dict[str, Any], str]:
+    d = ts.copy()
+    d["date"] = pd.to_datetime(d["date"], errors="coerce")
+    d = d.dropna(subset=["date"])
+    d = d[~d["insufficient_universe"]]
+    if d.empty:
+        return pd.DataFrame(), {"n_active": 0, "active_metrics": []}, "cluster_alerts=sem_dados"
+    for c in ["cluster_count", "largest_share", "entropy", "turnover_pair_frac"]:
+        d[c] = pd.to_numeric(d[c], errors="coerce")
+    d = d.dropna(subset=["cluster_count", "largest_share", "entropy"])
+    if d.empty:
+        return pd.DataFrame(), {"n_active": 0, "active_metrics": []}, "cluster_alerts=sem_metricas"
+
+    last = d.iloc[-1]
+    rows: list[dict[str, Any]] = []
+    rules = [("cluster_count", "low"), ("largest_share", "high"), ("entropy", "low"), ("turnover_pair_frac", "high")]
+    for metric, side in rules:
+        s_all = d[metric].dropna()
+        if s_all.empty:
+            continue
+        s = s_all.tail(max(30, min(int(lookback), int(s_all.shape[0]))))
+        q05, q95 = float(s.quantile(0.05)), float(s.quantile(0.95))
+        val = float(last[metric])
+        if side == "high":
+            alert = bool(val >= q95)
+            rule = f">=q95({q95:.6f})"
+            sev = float((val - q95) / max(abs(q95), 1e-9))
+        else:
+            alert = bool(val <= q05)
+            rule = f"<=q05({q05:.6f})"
+            sev = float((q05 - val) / max(abs(q05), 1e-9))
+        rows.append(
+            {
+                "date": last["date"].date().isoformat(),
+                "metric": metric,
+                "latest_value": val,
+                "q05": q05,
+                "q95": q95,
+                "rule": rule,
+                "severity_ratio": sev if alert else 0.0,
+                "alert": alert,
+            }
+        )
+
+    a = pd.DataFrame(rows)
+    active = a[a["alert"]]["metric"].tolist() if not a.empty else []
+    payload = {"n_active": int(len(active)), "active_metrics": active}
+    return a, payload, f"cluster_alerts_active={','.join(active) if active else 'none'}"
+
+
+def _era_name(date_like: Any) -> str:
+    dt = pd.Timestamp(date_like)
+    y = int(dt.year)
+    if y <= 2019:
+        return "2018_2019"
+    if y == 2020:
+        return "2020"
+    if y <= 2022:
+        return "2021_2022"
+    return "2023_2026"
+
+
+def _build_operational_alerts(
+    ts_off: pd.DataFrame,
+    regime_df: pd.DataFrame,
+    robust_metrics: dict[str, float],
+) -> tuple[pd.DataFrame, dict[str, Any], str]:
+    if ts_off.empty or regime_df.empty:
+        payload = {"latest_date": "", "latest_events": [], "n_events_total": 0, "n_events_last_60d": 0, "event_counts": {}}
+        return pd.DataFrame(), payload, "operational_alerts=sem_dados"
+
+    ts = ts_off.copy()
+    ts["date"] = pd.to_datetime(ts["date"], errors="coerce")
+    ts = ts.dropna(subset=["date"])
+    ts = ts[~ts["insufficient_universe"]].copy()
+    rg = regime_df.copy()
+    rg["date"] = pd.to_datetime(rg["date"], errors="coerce")
+    rg = rg.dropna(subset=["date"]).copy()
+    d = rg.merge(ts[["date", "N_used", "p1", "deff"]], on="date", how="left")
+    for base in ["N_used", "p1", "deff"]:
+        if base in d.columns:
+            continue
+        for alt in [f"{base}_x", f"{base}_y", f"{base}_ts"]:
+            if alt in d.columns:
+                d[base] = pd.to_numeric(d[alt], errors="coerce")
+                break
+    d = d.sort_values("date").reset_index(drop=True)
+    if d.empty:
+        payload = {"latest_date": "", "latest_events": [], "n_events_total": 0, "n_events_last_60d": 0, "event_counts": {}}
+        return pd.DataFrame(), payload, "operational_alerts=sem_dados"
+
+    p1_q25 = float(pd.to_numeric(d["p1"], errors="coerce").quantile(0.25))
+    p1_q80 = float(pd.to_numeric(d["p1"], errors="coerce").quantile(0.80))
+    deff_q75 = float(pd.to_numeric(d["deff"], errors="coerce").quantile(0.75))
+    abs_dp1_q90 = float(pd.to_numeric(d["dp1_5"], errors="coerce").abs().quantile(0.90))
+    abs_dd_q90 = float(pd.to_numeric(d["ddeff_5"], errors="coerce").abs().quantile(0.90))
+
+    events: list[dict[str, Any]] = []
+    for i, r in d.iterrows():
+        date_s = pd.Timestamp(r["date"]).date().isoformat()
+        reg = str(r.get("regime", ""))
+        p1 = float(r.get("p1", np.nan))
+        deff = float(r.get("deff", np.nan))
+        dp1 = abs(float(r.get("dp1_5", np.nan)))
+        dd = abs(float(r.get("ddeff_5", np.nan)))
+        prev_reg = str(d.iloc[i - 1]["regime"]) if i > 0 else ""
+
+        if i > 0 and reg != prev_reg:
+            events.append(
+                {
+                    "date": date_s,
+                    "event_code": "REGIME_CHANGE",
+                    "severity": 1.0,
+                    "regime": reg,
+                    "message": f"regime mudou de {prev_reg} para {reg}.",
+                    "p1": p1,
+                    "deff": deff,
+                    "dp1_5": float(r.get("dp1_5", np.nan)),
+                    "ddeff_5": float(r.get("ddeff_5", np.nan)),
+                }
+            )
+
+        if reg == "stress" and prev_reg != "stress":
+            sev = float(max(0.0, (p1 - p1_q80) / max(abs(p1_q80), 1e-9))) if np.isfinite(p1_q80) else 0.0
+            events.append(
+                {
+                    "date": date_s,
+                    "event_code": "STRESS_ENTER",
+                    "severity": sev,
+                    "regime": reg,
+                    "message": "entrada em stress: aumentar defesa e limitar risco.",
+                    "p1": p1,
+                    "deff": deff,
+                    "dp1_5": float(r.get("dp1_5", np.nan)),
+                    "ddeff_5": float(r.get("ddeff_5", np.nan)),
+                }
+            )
+
+        if i > 0 and prev_reg == "stress" and reg != "stress":
+            sev = float(max(0.0, (p1_q80 - p1) / max(abs(p1_q80), 1e-9))) if np.isfinite(p1_q80) else 0.0
+            events.append(
+                {
+                    "date": date_s,
+                    "event_code": "STRESS_EXIT",
+                    "severity": sev,
+                    "regime": reg,
+                    "message": "saida de stress: liberar risco de forma gradual.",
+                    "p1": p1,
+                    "deff": deff,
+                    "dp1_5": float(r.get("dp1_5", np.nan)),
+                    "ddeff_5": float(r.get("ddeff_5", np.nan)),
+                }
+            )
+
+        if reg == "transition" and (
+            (np.isfinite(dp1) and np.isfinite(abs_dp1_q90) and dp1 >= abs_dp1_q90)
+            or (np.isfinite(dd) and np.isfinite(abs_dd_q90) and dd >= abs_dd_q90)
+        ):
+            sev_a = (dp1 / max(abs_dp1_q90, 1e-9)) if np.isfinite(abs_dp1_q90) and np.isfinite(dp1) else 0.0
+            sev_b = (dd / max(abs_dd_q90, 1e-9)) if np.isfinite(abs_dd_q90) and np.isfinite(dd) else 0.0
+            events.append(
+                {
+                    "date": date_s,
+                    "event_code": "TRANSITION_SPIKE",
+                    "severity": float(max(sev_a, sev_b) - 1.0),
+                    "regime": reg,
+                    "message": "transicao acelerando: reduzir tamanho e esperar confirmacao.",
+                    "p1": p1,
+                    "deff": deff,
+                    "dp1_5": float(r.get("dp1_5", np.nan)),
+                    "ddeff_5": float(r.get("ddeff_5", np.nan)),
+                }
+            )
+
+        if reg == "dispersion" and np.isfinite(p1) and np.isfinite(deff) and np.isfinite(p1_q25) and np.isfinite(deff_q75):
+            if (p1 <= p1_q25) and (deff >= deff_q75):
+                sev = float(max(0.0, (deff - deff_q75) / max(abs(deff_q75), 1e-9)))
+                events.append(
+                    {
+                        "date": date_s,
+                        "event_code": "DISPERSION_CONFIRM",
+                        "severity": sev,
+                        "regime": reg,
+                        "message": "dispersao confirmada: priorizar rotacao e selecao.",
+                        "p1": p1,
+                        "deff": deff,
+                        "dp1_5": float(r.get("dp1_5", np.nan)),
+                        "ddeff_5": float(r.get("ddeff_5", np.nan)),
+                    }
+                )
+
+    latest_date = pd.Timestamp(d.iloc[-1]["date"]).date().isoformat()
+    latest_jm = float(robust_metrics.get("latest_joint_majority_5", np.nan))
+    jm60 = float(robust_metrics.get("joint_majority_60d", np.nan))
+    if np.isfinite(latest_jm) and int(latest_jm) == 0:
+        r = d.iloc[-1]
+        events.append(
+            {
+                "date": latest_date,
+                "event_code": "SIGNAL_UNCONFIRMED",
+                "severity": 1.0,
+                "regime": str(r.get("regime", "")),
+                "message": "direcao recente ainda sem confirmacao entre janelas.",
+                "p1": float(r.get("p1", np.nan)),
+                "deff": float(r.get("deff", np.nan)),
+                "dp1_5": float(r.get("dp1_5", np.nan)),
+                "ddeff_5": float(r.get("ddeff_5", np.nan)),
+            }
+        )
+    if np.isfinite(jm60) and (jm60 < 0.30):
+        r = d.iloc[-1]
+        events.append(
+            {
+                "date": latest_date,
+                "event_code": "ROBUSTNESS_LOW",
+                "severity": float(max(0.0, (0.30 - jm60) / 0.30)),
+                "regime": str(r.get("regime", "")),
+                "message": "consistencia 60d abaixo do alvo operacional.",
+                "p1": float(r.get("p1", np.nan)),
+                "deff": float(r.get("deff", np.nan)),
+                "dp1_5": float(r.get("dp1_5", np.nan)),
+                "ddeff_5": float(r.get("ddeff_5", np.nan)),
+            }
+        )
+
+    ev = pd.DataFrame(events)
+    if ev.empty:
+        payload = {"latest_date": latest_date, "latest_events": [], "n_events_total": 0, "n_events_last_60d": 0, "event_counts": {}}
+        return ev, payload, "operational_alerts=none"
+
+    ev["date"] = pd.to_datetime(ev["date"], errors="coerce")
+    ev = ev.dropna(subset=["date"]).sort_values(["date", "event_code"]).reset_index(drop=True)
+    latest_ts = ev["date"].max()
+    latest_mask = ev["date"] == latest_ts
+    last60_cut = latest_ts - pd.Timedelta(days=60)
+    last60 = ev[ev["date"] >= last60_cut].copy()
+    latest_events = latest_mask.sum()
+    payload = {
+        "latest_date": latest_ts.date().isoformat(),
+        "latest_events": ev.loc[latest_mask, "event_code"].astype(str).tolist(),
+        "n_events_total": int(ev.shape[0]),
+        "n_events_last_60d": int(last60.shape[0]),
+        "event_counts": ev["event_code"].value_counts().to_dict(),
+        "latest_event_rows": ev.loc[latest_mask]
+        .assign(date=lambda x: x["date"].dt.date.astype(str))
+        .to_dict(orient="records"),
+    }
+    ev["date"] = ev["date"].dt.date.astype(str)
+    txt = f"operational_alerts_latest={','.join(payload['latest_events']) if payload['latest_events'] else 'none'}"
+    return ev, payload, txt
+
+
+def _build_era_evaluation(ts_off: pd.DataFrame, regime_df: pd.DataFrame, bt_df: pd.DataFrame) -> pd.DataFrame:
+    if ts_off.empty or regime_df.empty or bt_df.empty:
+        return pd.DataFrame()
+    ts = ts_off.copy()
+    rg = regime_df.copy()
+    bt = bt_df.copy()
+    for d in (ts, rg, bt):
+        d["date"] = pd.to_datetime(d["date"], errors="coerce")
+    ts = ts.dropna(subset=["date"])
+    rg = rg.dropna(subset=["date"])
+    bt = bt.dropna(subset=["date"])
+    merged = rg.merge(
+        ts[["date", "N_used", "p1", "deff", "turnover_pair_frac"]],
+        on="date",
+        how="left",
+        suffixes=("", "_ts"),
+    ).merge(bt[["date", "strategy_simple_ret", "benchmark_simple_ret"]], on="date", how="left")
+    merged = merged.sort_values("date").reset_index(drop=True)
+    if merged.empty:
+        return pd.DataFrame()
+    merged["era"] = merged["date"].map(_era_name)
+    rows: list[dict[str, Any]] = []
+    for era in ERA_ORDER:
+        x = merged[merged["era"] == era].copy()
+        if x.empty:
+            continue
+        sret = pd.to_numeric(x["strategy_simple_ret"], errors="coerce").dropna()
+        bret = pd.to_numeric(x["benchmark_simple_ret"], errors="coerce").dropna()
+        sp = _perf(sret)
+        bp = _perf(bret)
+        row = {
+            "era": era,
+            "start": x["date"].min().date().isoformat(),
+            "end": x["date"].max().date().isoformat(),
+            "n_days": int(x.shape[0]),
+            "n_used_mean": float(pd.to_numeric(x["N_used"], errors="coerce").mean()),
+            "p1_mean": float(pd.to_numeric(x["p1"], errors="coerce").mean()),
+            "p1_std": float(pd.to_numeric(x["p1"], errors="coerce").std(ddof=0)),
+            "deff_mean": float(pd.to_numeric(x["deff"], errors="coerce").mean()),
+            "deff_std": float(pd.to_numeric(x["deff"], errors="coerce").std(ddof=0)),
+            "turnover_pair_mean": float(pd.to_numeric(x["turnover_pair_frac"], errors="coerce").mean()),
+            "strategy_ann_return": float(sp["ann_return"]),
+            "strategy_sharpe": float(sp["sharpe"]),
+            "strategy_max_drawdown": float(sp["max_drawdown"]),
+            "benchmark_ann_return": float(bp["ann_return"]),
+            "benchmark_sharpe": float(bp["sharpe"]),
+            "benchmark_max_drawdown": float(bp["max_drawdown"]),
+            "alpha_ann_return": float(sp["ann_return"] - bp["ann_return"]),
+            "dd_improvement": float(abs(bp["max_drawdown"]) - abs(sp["max_drawdown"])),
+        }
+        for reg in ["stress", "transition", "stable", "dispersion"]:
+            row[f"share_{reg}"] = float((x["regime"] == reg).mean())
+        rows.append(row)
+    if not rows:
+        return pd.DataFrame()
+    out = pd.DataFrame(rows)
+    out["__ord"] = out["era"].map({k: i for i, k in enumerate(ERA_ORDER)})
+    out = out.sort_values("__ord").drop(columns="__ord").reset_index(drop=True)
+    return out
+
+
+def _action_map(regime: str) -> tuple[str, str]:
+    r = str(regime).lower().strip()
+    if r == "stress":
+        return "REDUCE_RISK", "defensive"
+    if r == "transition":
+        return "DEFENSIVE_REBALANCE", "cautious"
+    if r == "dispersion":
+        return "ROTATE_RISK", "offensive_selective"
+    return "BASELINE_RISK", "balanced"
+
+
+def _reliability_tier(score: float) -> str:
+    if not np.isfinite(score):
+        return "low"
+    if score >= 0.67:
+        return "high"
+    if score >= 0.45:
+        return "medium"
+    return "low"
+
+
+def _build_action_playbook(
+    regime_df: pd.DataFrame,
+    ts_off: pd.DataFrame,
+    bt_df: pd.DataFrame,
+    horizon_days: int,
+) -> pd.DataFrame:
+    if regime_df.empty or ts_off.empty or bt_df.empty:
+        return pd.DataFrame()
+    rg = regime_df.copy()
+    rg["date"] = pd.to_datetime(rg["date"], errors="coerce")
+    rg = rg.dropna(subset=["date"])
+    ts = ts_off.copy()
+    ts["date"] = pd.to_datetime(ts["date"], errors="coerce")
+    ts = ts.dropna(subset=["date"])
+    x = rg.merge(
+        ts[["date", "N_used", "p1", "deff", "structure_score", "insufficient_universe"]],
+        on="date",
+        how="left",
+        suffixes=("", "_ts"),
+    ).sort_values("date")
+    if x.empty:
+        return pd.DataFrame()
+    dp1_ref = float(pd.to_numeric(x["dp1_5"], errors="coerce").abs().quantile(0.80))
+    dd_ref = float(pd.to_numeric(x["ddeff_5"], errors="coerce").abs().quantile(0.80))
+
+    bt = bt_df.copy()
+    bt["date"] = pd.to_datetime(bt["date"], errors="coerce")
+    bt = bt.dropna(subset=["date"]).set_index("date").sort_index()
+
+    rows: list[dict[str, Any]] = []
+    for _, r in x.iterrows():
+        date_s = pd.Timestamp(r["date"]).date().isoformat()
+        reg = str(r.get("regime", ""))
+        action_code, risk_stance = _action_map(reg)
+        dp1 = abs(float(r.get("dp1_5", np.nan)))
+        dd = abs(float(r.get("ddeff_5", np.nan)))
+        smooth_term = 0.0
+        if np.isfinite(dp1) and np.isfinite(dp1_ref) and dp1_ref > 1e-9:
+            smooth_term += min(1.0, dp1 / dp1_ref)
+        if np.isfinite(dd) and np.isfinite(dd_ref) and dd_ref > 1e-9:
+            smooth_term += min(1.0, dd / dd_ref)
+        smooth_term = smooth_term / 2.0 if smooth_term > 0 else 0.5
+        score = 0.25
+        score += 0.20 if (not bool(r.get("insufficient_universe", False))) else 0.0
+        n_used = float(r.get("N_used", np.nan))
+        score += 0.20 if (np.isfinite(n_used) and n_used >= 25.0) else 0.0
+        struct = float(r.get("structure_score", np.nan))
+        if np.isfinite(struct):
+            score += 0.20 if struct > 0 else 0.05
+        score += 0.35 * (1.0 - smooth_term)
+        score = float(np.clip(score, 0.0, 1.0))
+
+        fut = _future_stats(bt_by_date=bt, anchor_date=date_s, horizon_days=int(max(1, horizon_days)))
+        rows.append(
+            {
+                "date": date_s,
+                "regime": reg,
+                "exposure": float(r.get("exposure", np.nan)),
+                "action_code": action_code,
+                "risk_stance": risk_stance,
+                "signal_reliability": score,
+                "signal_tier": _reliability_tier(score),
+                "N_used": float(r.get("N_used", np.nan)),
+                "p1": float(r.get("p1", np.nan)),
+                "deff": float(r.get("deff", np.nan)),
+                "dp1_5": float(r.get("dp1_5", np.nan)),
+                "ddeff_5": float(r.get("ddeff_5", np.nan)),
+                "future_days_used": float(fut["future_days_used"]),
+                "alpha_cum_future": float(fut["alpha_cum"]),
+                "dd_improvement_future": float(fut["dd_improvement"]),
+                "tradeoff_label": _honest_verdict(alpha_cum=float(fut["alpha_cum"]), dd_improvement=float(fut["dd_improvement"])),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _build_ui_view_model(
+    run_id: str,
+    ts_off: pd.DataFrame,
+    regime_df: pd.DataFrame,
+    robust_metrics: dict[str, float],
+    gate: dict[str, Any],
+    op_payload: dict[str, Any],
+    case_df: pd.DataFrame,
+    era_df: pd.DataFrame,
+    playbook_df: pd.DataFrame,
+) -> dict[str, Any]:
+    latest_state: dict[str, Any] = {}
+    if not ts_off.empty:
+        suff = ts_off[~ts_off["insufficient_universe"]].copy()
+        if not suff.empty:
+            x = suff.iloc[-1]
+            latest_state = {
+                "date": str(x["date"]),
+                "N_used": int(x["N_used"]),
+                "p1": float(x["p1"]),
+                "deff": float(x["deff"]),
+            }
+
+    latest_regime: dict[str, Any] = {}
+    if not regime_df.empty:
+        r = regime_df.iloc[-1]
+        latest_regime = {"regime": str(r.get("regime", "unknown")), "exposure": float(r.get("exposure", np.nan))}
+
+    playbook_latest = {}
+    if not playbook_df.empty:
+        rr = playbook_df.iloc[-1]
+        playbook_latest = {
+            "date": str(rr.get("date", "")),
+            "regime": str(rr.get("regime", "")),
+            "action_code": str(rr.get("action_code", "")),
+            "risk_stance": str(rr.get("risk_stance", "")),
+            "signal_tier": str(rr.get("signal_tier", "")),
+            "signal_reliability": float(rr.get("signal_reliability", np.nan)),
+            "tradeoff_label": str(rr.get("tradeoff_label", "")),
+        }
+
+    return {
+        "schema_version": "lab_corr_view_v1",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "run_id": str(run_id),
+        "deployment_gate_blocked": bool(gate.get("blocked", True)),
+        "deployment_reasons": [str(x) for x in gate.get("reasons", [])],
+        "latest_state": latest_state,
+        "latest_regime": latest_regime,
+        "robustness": {
+            "joint_majority_60d": float(robust_metrics.get("joint_majority_60d", np.nan)),
+            "latest_joint_majority_5": float(robust_metrics.get("latest_joint_majority_5", np.nan)),
+        },
+        "alerts": {
+            "latest_date": str(op_payload.get("latest_date", "")),
+            "latest_events": [str(x) for x in op_payload.get("latest_events", [])],
+            "n_events_last_60d": int(op_payload.get("n_events_last_60d", 0)),
+        },
+        "playbook_latest": playbook_latest,
+        "case_preview": case_df.head(3).to_dict(orient="records") if not case_df.empty else [],
+        "era_summary": era_df.to_dict(orient="records") if not era_df.empty else [],
+    }
+
+
+def _qa(ts_map: dict[int, pd.DataFrame], core_counts: pd.DataFrame, n_core: int, min_assets: int, official_window: int) -> dict[str, Any]:
+    checks: list[dict[str, Any]] = []
+    checks.append({"check": "core_counts_match_n_core", "ok": int(core_counts["n_tickers"].sum()) == int(n_core)})
+    checks.append({"check": "all_sectors_nonzero_in_core", "ok": bool((core_counts["n_tickers"] > 0).all())})
+    for w, ts in sorted(ts_map.items()):
+        if ts.empty:
+            checks.append({"check": f"T{w}_non_empty", "ok": False})
+            continue
+        checks.append({"check": f"T{w}_insufficient_ratio", "ok": float(ts["insufficient_universe"].mean()) <= 0.05})
+        checks.append({"check": f"T{w}_N_used_min", "ok": float(ts["N_used"].min()) >= float(min_assets)})
+        suff = ts[~ts["insufficient_universe"]].copy()
+        if suff.empty:
+            checks.append({"check": f"T{w}_sufficient_non_empty", "ok": False})
+            continue
+        checks.append({"check": f"T{w}_p1_range", "ok": bool(suff["p1"].between(0.0, 1.0, inclusive="both").all())})
+        checks.append({"check": f"T{w}_deff_range", "ok": bool(((suff["deff"] >= 1.0) & (suff["deff"] <= (suff["N_used"] + 1e-6))).all())})
+        last20 = suff.tail(20)
+        checks.append({"check": f"T{w}_last20_complete", "ok": bool(last20.shape[0] == 20 and last20[["p1", "deff"]].notna().all().all())})
+    checks.append({"check": "official_window_present", "ok": official_window in ts_map})
+    return {"ok": bool(all(c["ok"] for c in checks)), "checks": checks}
+
+
+def _freeze_baseline(
+    baseline_dir: Path,
+    outdir: Path,
+    universe_core: pd.DataFrame,
+    ts_official: pd.DataFrame,
+    official_window: int,
+    start: str,
+    end: str,
+    cov_core: float,
+    cov_window: float,
+) -> dict[str, Any]:
+    baseline_dir.mkdir(parents=True, exist_ok=True)
+    tickers = sorted(universe_core["ticker"].astype(str).tolist())
+    uh = hashlib.sha256("|".join(tickers).encode("utf-8")).hexdigest()
+    prev_meta_path = baseline_dir / "baseline_meta.json"
+    prev_ts_path = baseline_dir / f"macro_timeseries_T{official_window}.csv"
+
+    prev_meta: dict[str, Any] = {}
+    if prev_meta_path.exists():
+        try:
+            prev_meta = json.loads(prev_meta_path.read_text(encoding="utf-8"))
+        except Exception:
+            prev_meta = {}
+    prev_last: dict[str, float] = {}
+    if prev_ts_path.exists():
+        try:
+            p = pd.read_csv(prev_ts_path)
+            p = p[~p["insufficient_universe"]]
+            if not p.empty:
+                prev_last = {"p1": float(p.iloc[-1]["p1"]), "deff": float(p.iloc[-1]["deff"])}
+        except Exception:
+            prev_last = {}
+
+    cur = ts_official[~ts_official["insufficient_universe"]]
+    cur_last = {"p1": float(cur.iloc[-1]["p1"]), "deff": float(cur.iloc[-1]["deff"])} if not cur.empty else {}
+
+    universe_core.to_csv(baseline_dir / "universe_core.csv", index=False)
+    ts_official.to_csv(prev_ts_path, index=False)
+    meta = {
+        "frozen_at_utc": datetime.now(timezone.utc).isoformat(),
+        "frozen_from_run_dir": str(outdir),
+        "official_window": int(official_window),
+        "period_start": str(start),
+        "period_end": str(end),
+        "coverage_core_threshold": float(cov_core),
+        "coverage_window_threshold": float(cov_window),
+        "n_core": int(universe_core.shape[0]),
+        "universe_hash": uh,
+    }
+    (baseline_dir / "baseline_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    cmp = {
+        "baseline_dir": str(baseline_dir),
+        "same_universe_vs_previous": (prev_meta.get("universe_hash", uh) == uh),
+        "previous_run_dir": prev_meta.get("frozen_from_run_dir"),
+        "current_run_dir": str(outdir),
+        "delta_p1_vs_previous": (cur_last.get("p1", np.nan) - prev_last.get("p1", np.nan)) if prev_last else np.nan,
+        "delta_deff_vs_previous": (cur_last.get("deff", np.nan) - prev_last.get("deff", np.nan)) if prev_last else np.nan,
+    }
+    (baseline_dir / "baseline_compare.json").write_text(json.dumps(cmp, indent=2), encoding="utf-8")
+    return cmp
+
+
+def _build_deployment_gate(
+    qa: dict[str, Any],
+    robust_metrics: dict[str, float],
+    baseline: dict[str, Any],
+    alerts_payload: dict[str, Any],
+    min_joint_majority_60d: float,
+    require_latest_majority: bool,
+    max_abs_delta_p1: float,
+    max_abs_delta_deff: float,
+    max_active_cluster_alerts: int,
+) -> dict[str, Any]:
+    blocked = False
+    reasons: list[str] = []
+    checks: dict[str, Any] = {}
+
+    qa_ok = bool(qa.get("ok", False))
+    checks["qa_ok"] = qa_ok
+    if not qa_ok:
+        blocked = True
+        reasons.append("qa_failed")
+
+    jm60 = float(robust_metrics.get("joint_majority_60d", np.nan))
+    checks["joint_majority_60d"] = jm60
+    if np.isfinite(jm60) and (jm60 < float(min_joint_majority_60d)):
+        blocked = True
+        reasons.append("robustness_joint_majority_below_threshold")
+
+    latest_jm = float(robust_metrics.get("latest_joint_majority_5", np.nan))
+    checks["latest_joint_majority_5"] = latest_jm
+    if bool(require_latest_majority):
+        if (not np.isfinite(latest_jm)) or (int(latest_jm) != 1):
+            blocked = True
+            reasons.append("latest_window_direction_not_confirmed")
+
+    same_universe = bool(baseline.get("same_universe_vs_previous", True))
+    checks["same_universe_vs_previous"] = same_universe
+    if not same_universe:
+        blocked = True
+        reasons.append("baseline_universe_mismatch")
+
+    dp1 = float(baseline.get("delta_p1_vs_previous", np.nan))
+    dd = float(baseline.get("delta_deff_vs_previous", np.nan))
+    checks["abs_delta_p1_vs_previous"] = abs(dp1) if np.isfinite(dp1) else np.nan
+    checks["abs_delta_deff_vs_previous"] = abs(dd) if np.isfinite(dd) else np.nan
+    if np.isfinite(dp1) and (abs(dp1) > float(max_abs_delta_p1)):
+        blocked = True
+        reasons.append("baseline_delta_p1_exceeds_threshold")
+    if np.isfinite(dd) and (abs(dd) > float(max_abs_delta_deff)):
+        blocked = True
+        reasons.append("baseline_delta_deff_exceeds_threshold")
+
+    n_alerts = int(alerts_payload.get("n_active", 0))
+    checks["active_cluster_alerts"] = n_alerts
+    if n_alerts > int(max_active_cluster_alerts):
+        blocked = True
+        reasons.append("too_many_cluster_alerts")
+
+    return {
+        "blocked": blocked,
+        "reasons": reasons,
+        "checks": checks,
+        "thresholds": {
+            "min_joint_majority_60d": float(min_joint_majority_60d),
+            "require_latest_majority": bool(require_latest_majority),
+            "max_abs_delta_p1": float(max_abs_delta_p1),
+            "max_abs_delta_deff": float(max_abs_delta_deff),
+            "max_active_cluster_alerts": int(max_active_cluster_alerts),
+        },
+    }
+
+
+def _write_compact_report(
+    outdir: Path,
+    run_id: str,
+    period_start: str,
+    period_end: str,
+    n_core: int,
+    official_window: int,
+    ts_official: pd.DataFrame,
+    regime_df: pd.DataFrame,
+    robust_metrics: dict[str, float],
+    baseline: dict[str, Any],
+    bt_summary: dict[str, Any],
+    gate: dict[str, Any],
+) -> None:
+    lines: list[str] = []
+    lines.append(f"run_id={run_id}")
+    lines.append(f"period={period_start}->{period_end}")
+    lines.append(f"N_core={int(n_core)}")
+    lines.append(f"official_window=T{int(official_window)}")
+    suff = ts_official[~ts_official["insufficient_universe"]].copy()
+    if not suff.empty:
+        x = suff.iloc[-1]
+        lines.append(f"latest={x['date']} N_used={int(x['N_used'])} p1={float(x['p1']):.6f} deff={float(x['deff']):.6f}")
+    else:
+        lines.append("latest=unavailable")
+    if not regime_df.empty:
+        r = regime_df.iloc[-1]
+        lines.append(f"regime_now={r['regime']} exposure={float(r['exposure']):.2f}")
+    else:
+        lines.append("regime_now=unavailable")
+    lines.append(
+        "robustness="
+        f"joint_majority_60d={float(robust_metrics.get('joint_majority_60d', np.nan)):.3f}, "
+        f"latest_joint_majority_5={int(float(robust_metrics.get('latest_joint_majority_5', np.nan))) if np.isfinite(float(robust_metrics.get('latest_joint_majority_5', np.nan))) else 'nan'}"
+    )
+    lines.append(
+        "baseline_delta="
+        f"dp1={float(baseline.get('delta_p1_vs_previous', np.nan)):.6f}, "
+        f"ddeff={float(baseline.get('delta_deff_vs_previous', np.nan)):.6f}"
+    )
+    if bt_summary and ("strategy" in bt_summary) and ("benchmark" in bt_summary):
+        s = bt_summary["strategy"]
+        b = bt_summary["benchmark"]
+        lines.append(
+            "backtest="
+            f"str_ann={float(s.get('ann_return', np.nan)):.4f}, str_mdd={float(s.get('max_drawdown', np.nan)):.4f}, "
+            f"bench_ann={float(b.get('ann_return', np.nan)):.4f}, bench_mdd={float(b.get('max_drawdown', np.nan)):.4f}"
+        )
+    else:
+        lines.append("backtest=unavailable")
+    lines.append(f"deployment_gate_blocked={bool(gate.get('blocked', True))}")
+    lines.append(f"deployment_gate_reasons={','.join(gate.get('reasons', [])) if gate.get('reasons') else 'none'}")
+    (outdir / "summary_compact.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _update_release_pointer(out_base: Path, run_meta: dict[str, Any], gate: dict[str, Any]) -> dict[str, Any]:
+    pointer_path = out_base / "latest_release.json"
+    decision = {
+        "updated": False,
+        "pointer_path": str(pointer_path),
+        "blocked": bool(gate.get("blocked", True)),
+        "reasons": gate.get("reasons", []),
+    }
+    if decision["blocked"]:
+        return decision
+    payload = {
+        "updated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "run_id": Path(str(run_meta["run_dir"])).name,
+        "run_dir": run_meta["run_dir"],
+        "status": "ok",
+    }
+    pointer_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    decision["updated"] = True
+    return decision
+
+
+def _load_policy(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        return raw if isinstance(raw, dict) else {}
+    except Exception:
+        return {}
+
+
+def _apply_policy_to_args(args: argparse.Namespace, policy: dict[str, Any]) -> None:
+    if not policy:
+        return
+    data = policy.get("data", {}) or {}
+    regime = policy.get("regime", {}) or {}
+    gate = policy.get("gate", {}) or {}
+    backtest = policy.get("backtest", {}) or {}
+    calib = policy.get("calibration", {}) or {}
+    cases = policy.get("case_studies", {}) or {}
+
+    for key, attr in [
+        ("start", "start"),
+        ("end", "end"),
+        ("coverage_core", "coverage_core"),
+        ("coverage_window", "coverage_window"),
+        ("min_assets", "min_assets"),
+        ("official_window", "official_window"),
+    ]:
+        if key in data:
+            setattr(args, attr, data[key])
+
+    if "hysteresis_days" in regime:
+        args.hysteresis_days = regime["hysteresis_days"]
+    exp = regime.get("exposure", {}) or {}
+    if "stress" in exp:
+        args.exp_stress = exp["stress"]
+    if "transition" in exp:
+        args.exp_transition = exp["transition"]
+    if "stable" in exp:
+        args.exp_stable = exp["stable"]
+    if "dispersion" in exp:
+        args.exp_dispersion = exp["dispersion"]
+
+    for key, attr in [
+        ("min_joint_majority_60d", "min_joint_majority_60d"),
+        ("require_latest_majority", "require_latest_majority"),
+        ("max_abs_delta_p1", "max_abs_delta_p1"),
+        ("max_abs_delta_deff", "max_abs_delta_deff"),
+        ("max_active_cluster_alerts", "max_active_cluster_alerts"),
+        ("alert_lookback", "alert_lookback"),
+    ]:
+        if key in gate:
+            setattr(args, attr, gate[key])
+
+    for key, attr in [("cost_bps", "cost_bps"), ("max_daily_turnover", "max_daily_turnover")]:
+        if key in backtest:
+            setattr(args, attr, backtest[key])
+
+    if "enabled" in calib:
+        args.calibrate_exposure_grid = int(bool(calib["enabled"]))
+    if "apply_best" in calib:
+        args.apply_grid_best = int(bool(calib["apply_best"]))
+    if "objective" in calib:
+        args.calibration_objective = str(calib["objective"])
+    if "horizon_days" in cases:
+        args.case_horizon_days = int(cases["horizon_days"])
+    if "regimes" in cases and isinstance(cases["regimes"], list):
+        args.case_regimes = ",".join([str(x) for x in cases["regimes"] if str(x).strip()])
+
+
+def _default_exposure_candidates(
+    exp_stress: float,
+    exp_transition: float,
+    exp_stable: float,
+    exp_dispersion: float,
+) -> list[dict[str, float]]:
+    base = {
+        "stress": float(exp_stress),
+        "transition": float(exp_transition),
+        "stable": float(exp_stable),
+        "dispersion": float(exp_dispersion),
+    }
+    cands = [
+        base,
+        {"stress": 0.05, "transition": 0.35, "stable": 0.65, "dispersion": 0.90},
+        {"stress": 0.10, "transition": 0.40, "stable": 0.70, "dispersion": 0.90},
+        {"stress": 0.15, "transition": 0.45, "stable": 0.70, "dispersion": 0.90},
+        {"stress": 0.10, "transition": 0.45, "stable": 0.75, "dispersion": 0.95},
+        {"stress": 0.15, "transition": 0.50, "stable": 0.75, "dispersion": 0.95},
+        {"stress": 0.20, "transition": 0.50, "stable": 0.80, "dispersion": 1.00},
+        {"stress": 0.05, "transition": 0.30, "stable": 0.60, "dispersion": 0.85},
+    ]
+    out = []
+    seen = set()
+    for c in cands:
+        t = (round(float(c["stress"]), 4), round(float(c["transition"]), 4), round(float(c["stable"]), 4), round(float(c["dispersion"]), 4))
+        if t in seen:
+            continue
+        seen.add(t)
+        out.append({k: float(np.clip(v, 0.0, 1.0)) for k, v in c.items()})
+    return out
+
+
+def _score_backtest(summary: dict[str, Any], objective: str) -> float:
+    s = (summary or {}).get("strategy", {}) or {}
+    ann = float(s.get("ann_return", np.nan))
+    sharpe = float(s.get("sharpe", np.nan))
+    mdd = float(s.get("max_drawdown", np.nan))
+    if not (np.isfinite(ann) and np.isfinite(sharpe) and np.isfinite(mdd)):
+        return float("-inf")
+    dd = max(abs(mdd), 1e-6)
+    if objective == "ann_over_dd":
+        return float(ann / dd)
+    if objective == "sharpe":
+        return float(sharpe)
+    return float(sharpe + 0.25 * (ann / dd))
+
+
+def _exposure_grid_search(
+    regime_df: pd.DataFrame,
+    returns_wide: pd.DataFrame,
+    cost_bps: float,
+    max_daily_turnover: float,
+    start_exposure: float,
+    candidates: list[dict[str, float]],
+    objective: str,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    if regime_df.empty or len(candidates) == 0:
+        return pd.DataFrame(), {}
+    for i, c in enumerate(candidates):
+        tmp = regime_df.copy()
+        tmp["exposure"] = tmp["regime"].map(c).fillna(float(start_exposure)).astype(float).clip(0.0, 1.0)
+        _, bt = _backtest(
+            regime_df=tmp,
+            returns_wide=returns_wide,
+            cost_bps=float(cost_bps),
+            max_daily_turnover=float(max_daily_turnover),
+            start_exposure=float(start_exposure),
+        )
+        score = _score_backtest(bt, objective=objective)
+        s = (bt or {}).get("strategy", {}) or {}
+        rows.append(
+            {
+                "candidate_id": i,
+                "exp_stress": float(c["stress"]),
+                "exp_transition": float(c["transition"]),
+                "exp_stable": float(c["stable"]),
+                "exp_dispersion": float(c["dispersion"]),
+                "score": score,
+                "ann_return": float(s.get("ann_return", np.nan)),
+                "sharpe": float(s.get("sharpe", np.nan)),
+                "max_drawdown": float(s.get("max_drawdown", np.nan)),
+                "ann_vol": float(s.get("ann_vol", np.nan)),
+                "avg_turnover": float(bt.get("avg_turnover", np.nan)),
+            }
+        )
+    df = pd.DataFrame(rows).sort_values(["score", "ann_return"], ascending=[False, False]).reset_index(drop=True)
+    if df.empty:
+        return df, {}
+    best = df.iloc[0].to_dict()
+    best_payload = {
+        "objective": objective,
+        "candidate_id": int(best["candidate_id"]),
+        "exposure": {
+            "stress": float(best["exp_stress"]),
+            "transition": float(best["exp_transition"]),
+            "stable": float(best["exp_stable"]),
+            "dispersion": float(best["exp_dispersion"]),
+        },
+        "metrics": {
+            "score": float(best["score"]),
+            "ann_return": float(best["ann_return"]),
+            "sharpe": float(best["sharpe"]),
+            "max_drawdown": float(best["max_drawdown"]),
+            "ann_vol": float(best["ann_vol"]),
+            "avg_turnover": float(best["avg_turnover"]),
+        },
+        "n_candidates": int(df.shape[0]),
+    }
+    return df, best_payload
+
+
+def _write_daily_brief(
+    outdir: Path,
+    regime_df: pd.DataFrame,
+    ts_off: pd.DataFrame,
+    robust_metrics: dict[str, float],
+    gate: dict[str, Any],
+    baseline: dict[str, Any],
+    calibration_best: dict[str, Any],
+) -> None:
+    lines: list[str] = []
+    lines.append("Daily Regime Brief")
+    lines.append(f"run_id={outdir.name}")
+    suff = ts_off[~ts_off["insufficient_universe"]].copy()
+    if not suff.empty:
+        x = suff.iloc[-1]
+        lines.append(f"date={x['date']} N_used={int(x['N_used'])} p1={float(x['p1']):.6f} deff={float(x['deff']):.6f}")
+    if not regime_df.empty:
+        r = regime_df.iloc[-1]
+        lines.append(f"regime_now={r['regime']} exposure_now={float(r['exposure']):.2f}")
+    lines.append(
+        "change_signal="
+        f"joint_majority_60d={float(robust_metrics.get('joint_majority_60d', np.nan)):.3f}; "
+        f"latest_joint_majority_5={float(robust_metrics.get('latest_joint_majority_5', np.nan)):.0f}"
+    )
+    lines.append(
+        "trust="
+        f"gate_blocked={bool(gate.get('blocked', True))}; "
+        f"baseline_delta_p1={float(baseline.get('delta_p1_vs_previous', np.nan)):.6f}; "
+        f"baseline_delta_deff={float(baseline.get('delta_deff_vs_previous', np.nan)):.6f}"
+    )
+    if calibration_best:
+        exp = calibration_best.get("exposure", {})
+        m = calibration_best.get("metrics", {})
+        lines.append(
+            "recommended_exposure="
+            f"stress={float(exp.get('stress', np.nan)):.2f}, transition={float(exp.get('transition', np.nan)):.2f}, "
+            f"stable={float(exp.get('stable', np.nan)):.2f}, dispersion={float(exp.get('dispersion', np.nan)):.2f}"
+        )
+        lines.append(
+            "calibration_score="
+            f"{float(m.get('score', np.nan)):.6f}; ann={float(m.get('ann_return', np.nan)):.4f}; "
+            f"mdd={float(m.get('max_drawdown', np.nan)):.4f}; sharpe={float(m.get('sharpe', np.nan)):.4f}"
+        )
+    (outdir / "daily_regime_brief.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _write_commercial_narrative(
+    outdir: Path,
+    regime_df: pd.DataFrame,
+    ts_off: pd.DataFrame,
+    bt_summary: dict[str, Any],
+    calibration_best: dict[str, Any],
+    gate: dict[str, Any],
+) -> None:
+    suff = ts_off[~ts_off["insufficient_universe"]].copy()
+    if suff.empty:
+        return
+    last = suff.iloc[-1]
+    regime_now = "unknown"
+    exp_now = float("nan")
+    if not regime_df.empty:
+        rr = regime_df.iloc[-1]
+        regime_now = str(rr.get("regime", "unknown"))
+        exp_now = float(rr.get("exposure", np.nan))
+    s = (bt_summary or {}).get("strategy", {}) or {}
+    b = (bt_summary or {}).get("benchmark", {}) or {}
+    rec = (calibration_best or {}).get("exposure", {}) or {}
+    lines = []
+    lines.append("Bloco 1 - Estado Atual")
+    lines.append(
+        f"Hoje o motor identifica regime {regime_now} com p1={float(last['p1']):.4f} e deff={float(last['deff']):.2f}. "
+        f"Exposicao operacional atual={exp_now:.2f}."
+    )
+    lines.append("Bloco 2 - Mudanca Recente")
+    lines.append(
+        f"O sinal estrutural segue monitorado por robustez entre janelas e o gate esta "
+        f"{'liberado' if not bool(gate.get('blocked', True)) else 'bloqueado'} para publicacao."
+    )
+    lines.append("Bloco 3 - Acao Recomendada e Risco")
+    if rec:
+        lines.append(
+            f"Exposicao recomendada pela calibracao curta: stress={float(rec.get('stress', np.nan)):.2f}, "
+            f"transition={float(rec.get('transition', np.nan)):.2f}, stable={float(rec.get('stable', np.nan)):.2f}, "
+            f"dispersion={float(rec.get('dispersion', np.nan)):.2f}."
+        )
+    lines.append(
+        f"No historico atual, a estrategia regime teve max drawdown={float(s.get('max_drawdown', np.nan)):.4f} "
+        f"vs benchmark={float(b.get('max_drawdown', np.nan)):.4f}."
+    )
+    (outdir / "commercial_narrative.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _parse_csv_list(text: str) -> list[str]:
+    return [x.strip() for x in str(text).split(",") if x.strip()]
+
+
+def _future_stats(bt_by_date: pd.DataFrame, anchor_date: str, horizon_days: int) -> dict[str, float]:
+    if bt_by_date.empty:
+        return {
+            "future_days_used": 0.0,
+            "bench_cum_return": float("nan"),
+            "strategy_cum_return": float("nan"),
+            "bench_max_drawdown": float("nan"),
+            "strategy_max_drawdown": float("nan"),
+            "alpha_cum": float("nan"),
+            "dd_improvement": float("nan"),
+        }
+    idx = bt_by_date.index.get_indexer([pd.Timestamp(anchor_date)])
+    if idx.size == 0 or int(idx[0]) < 0:
+        return {
+            "future_days_used": 0.0,
+            "bench_cum_return": float("nan"),
+            "strategy_cum_return": float("nan"),
+            "bench_max_drawdown": float("nan"),
+            "strategy_max_drawdown": float("nan"),
+            "alpha_cum": float("nan"),
+            "dd_improvement": float("nan"),
+        }
+    pos = int(idx[0])
+    sub = bt_by_date.iloc[pos + 1 : pos + 1 + int(max(1, horizon_days))].copy()
+    if sub.empty:
+        return {
+            "future_days_used": 0.0,
+            "bench_cum_return": float("nan"),
+            "strategy_cum_return": float("nan"),
+            "bench_max_drawdown": float("nan"),
+            "strategy_max_drawdown": float("nan"),
+            "alpha_cum": float("nan"),
+            "dd_improvement": float("nan"),
+        }
+
+    b = pd.to_numeric(sub["benchmark_simple_ret"], errors="coerce").dropna()
+    s = pd.to_numeric(sub["strategy_simple_ret"], errors="coerce").dropna()
+    n = int(min(b.shape[0], s.shape[0]))
+    if n <= 0:
+        return {
+            "future_days_used": 0.0,
+            "bench_cum_return": float("nan"),
+            "strategy_cum_return": float("nan"),
+            "bench_max_drawdown": float("nan"),
+            "strategy_max_drawdown": float("nan"),
+            "alpha_cum": float("nan"),
+            "dd_improvement": float("nan"),
+        }
+    b = b.iloc[:n]
+    s = s.iloc[:n]
+    b_eq = (1.0 + b).cumprod()
+    s_eq = (1.0 + s).cumprod()
+    b_cum = float(b_eq.iloc[-1] - 1.0)
+    s_cum = float(s_eq.iloc[-1] - 1.0)
+    b_mdd = float((b_eq / b_eq.cummax() - 1.0).min())
+    s_mdd = float((s_eq / s_eq.cummax() - 1.0).min())
+    return {
+        "future_days_used": float(n),
+        "bench_cum_return": b_cum,
+        "strategy_cum_return": s_cum,
+        "bench_max_drawdown": b_mdd,
+        "strategy_max_drawdown": s_mdd,
+        "alpha_cum": float(s_cum - b_cum),
+        "dd_improvement": float(abs(b_mdd) - abs(s_mdd)),
+    }
+
+
+def _case_score(df: pd.DataFrame, regime: str) -> pd.Series:
+    if regime == "stress":
+        p1 = pd.to_numeric(df.get("p1"), errors="coerce")
+        deff = pd.to_numeric(df.get("deff"), errors="coerce")
+        return p1.fillna(-1.0) - 0.01 * deff.fillna(1e9)
+    if regime == "transition":
+        dp1 = pd.to_numeric(df.get("dp1_5"), errors="coerce").abs()
+        dd = pd.to_numeric(df.get("ddeff_5"), errors="coerce").abs()
+        return dp1.fillna(0.0) + 0.25 * dd.fillna(0.0)
+    if regime == "dispersion":
+        p1 = pd.to_numeric(df.get("p1"), errors="coerce")
+        deff = pd.to_numeric(df.get("deff"), errors="coerce")
+        return deff.fillna(-1.0) - p1.fillna(1e9)
+    return pd.Series(np.zeros(df.shape[0]), index=df.index, dtype=float)
+
+
+def _choose_case_row(df: pd.DataFrame, regime: str) -> dict[str, Any]:
+    x = df[df["regime"] == regime].copy()
+    if x.empty:
+        return {}
+    x["score_case"] = _case_score(x, regime=regime)
+    x["date_dt"] = pd.to_datetime(x["date"], errors="coerce")
+    x = x.sort_values(["score_case", "date_dt"], ascending=[False, False]).reset_index(drop=True)
+    if x.empty:
+        return {}
+    return x.iloc[0].to_dict()
+
+
+def _honest_verdict(alpha_cum: float, dd_improvement: float) -> str:
+    if (not np.isfinite(alpha_cum)) or (not np.isfinite(dd_improvement)):
+        return "inconclusivo: janela futura insuficiente."
+    if (alpha_cum >= 0.0) and (dd_improvement >= 0.0):
+        return "sinal util: melhor retorno e menor drawdown."
+    if (alpha_cum < 0.0) and (dd_improvement >= 0.0):
+        return "trade-off: protegeu risco, mas sacrificou retorno."
+    if (alpha_cum >= 0.0) and (dd_improvement < 0.0):
+        return "trade-off: ganhou retorno, mas com pior drawdown."
+    return "sinal fraco nesse episodio: piorou retorno e drawdown."
+
+
+def _build_case_studies(
+    regime_df: pd.DataFrame,
+    ts_off: pd.DataFrame,
+    bt_df: pd.DataFrame,
+    target_regimes: list[str],
+    horizon_days: int,
+) -> pd.DataFrame:
+    if regime_df.empty or ts_off.empty or bt_df.empty:
+        return pd.DataFrame()
+    ts = ts_off.copy()
+    ts = ts[~ts["insufficient_universe"]].copy()
+    ts["date"] = pd.to_datetime(ts["date"], errors="coerce")
+    ts = ts.dropna(subset=["date"])
+
+    rg = regime_df.copy()
+    rg["date"] = pd.to_datetime(rg["date"], errors="coerce")
+    rg = rg.dropna(subset=["date"])
+    merged = rg.merge(
+        ts[["date", "N_used", "p1", "deff", "lambda1", "lambda2", "top5"]],
+        on="date",
+        how="left",
+        suffixes=("", "_ts"),
+    )
+    if merged.empty:
+        return pd.DataFrame()
+    merged["date"] = merged["date"].dt.date.astype(str)
+
+    bt = bt_df.copy()
+    bt["date"] = pd.to_datetime(bt["date"], errors="coerce")
+    bt = bt.dropna(subset=["date"]).set_index("date").sort_index()
+
+    rows: list[dict[str, Any]] = []
+    for r in target_regimes:
+        if r not in {"stress", "transition", "dispersion", "stable"}:
+            continue
+        chosen = _choose_case_row(merged, regime=r)
+        if not chosen:
+            continue
+        date_s = str(chosen.get("date"))
+        f = _future_stats(bt_by_date=bt, anchor_date=date_s, horizon_days=int(max(1, horizon_days)))
+        row = {
+            "case_regime": r,
+            "date": date_s,
+            "N_used": float(chosen.get("N_used", np.nan)),
+            "p1": float(chosen.get("p1", np.nan)),
+            "deff": float(chosen.get("deff", np.nan)),
+            "lambda1": float(chosen.get("lambda1", np.nan)),
+            "lambda2": float(chosen.get("lambda2", np.nan)),
+            "top5": float(chosen.get("top5", np.nan)),
+            "exposure": float(chosen.get("exposure", np.nan)),
+            "horizon_days": float(horizon_days),
+            "future_days_used": float(f["future_days_used"]),
+            "bench_cum_return": float(f["bench_cum_return"]),
+            "strategy_cum_return": float(f["strategy_cum_return"]),
+            "alpha_cum": float(f["alpha_cum"]),
+            "bench_max_drawdown": float(f["bench_max_drawdown"]),
+            "strategy_max_drawdown": float(f["strategy_max_drawdown"]),
+            "dd_improvement": float(f["dd_improvement"]),
+            "honest_verdict": _honest_verdict(alpha_cum=float(f["alpha_cum"]), dd_improvement=float(f["dd_improvement"])),
+        }
+        rows.append(row)
+    if not rows:
+        return pd.DataFrame()
+    out = pd.DataFrame(rows)
+    order = [r for r in target_regimes if r in out["case_regime"].tolist()]
+    out["__ord"] = out["case_regime"].map({k: i for i, k in enumerate(order)})
+    out = out.sort_values(["__ord", "date"]).drop(columns="__ord").reset_index(drop=True)
+    return out
+
+
+def _write_case_studies_demo(outdir: Path, cases_df: pd.DataFrame) -> None:
+    if cases_df.empty:
+        (outdir / "case_studies_demo.txt").write_text("No case studies available.\n", encoding="utf-8")
+        return
+    lines: list[str] = []
+    lines.append("Case Studies Demo (T120)")
+    for _, r in cases_df.iterrows():
+        lines.append("")
+        lines.append(f"[{str(r['case_regime']).upper()}] date={r['date']}")
+        lines.append(
+            f"state: p1={float(r['p1']):.4f}, deff={float(r['deff']):.2f}, "
+            f"lambda1={float(r['lambda1']):.2f}, lambda2={float(r['lambda2']):.2f}, top5={float(r['top5']):.3f}"
+        )
+        lines.append(
+            f"action: exposure={float(r['exposure']):.2f} for next {int(r['horizon_days'])} days "
+            f"(used={int(r['future_days_used'])})"
+        )
+        lines.append(
+            f"outcome: strategy={float(r['strategy_cum_return']):.4f}, benchmark={float(r['bench_cum_return']):.4f}, "
+            f"alpha={float(r['alpha_cum']):.4f}, dd_improvement={float(r['dd_improvement']):.4f}"
+        )
+        lines.append(f"honesty: {str(r['honest_verdict'])}")
+    (outdir / "case_studies_demo.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description="Macro corr lab offline (no API).")
+    ap.add_argument("--policy-path", type=str, default=str(ROOT / "config" / "lab_corr_policy.json"))
+    ap.add_argument("--apply-policy", type=int, default=1)
+    ap.add_argument("--panel-path", type=str, default="")
+    ap.add_argument("--universe-path", type=str, default="")
+    ap.add_argument("--out-base", type=str, default=str(DEFAULT_OUT_BASE))
+    ap.add_argument("--baseline-dir", type=str, default=str(DEFAULT_BASELINE_DIR))
+    ap.add_argument("--start", type=str, default="2018-01-01")
+    ap.add_argument("--end", type=str, default="2026-02-12")
+    ap.add_argument("--coverage-core", type=float, default=0.95)
+    ap.add_argument("--coverage-window", type=float, default=0.98)
+    ap.add_argument("--min-assets", type=int, default=25)
+    ap.add_argument("--noise-step", type=int, default=5, help="Compute shuffle/bootstrap baseline every N days.")
+    ap.add_argument("--bootstrap-block", type=int, default=10)
+    ap.add_argument("--seed", type=int, default=123)
+    ap.add_argument("--official-window", type=int, default=120)
+    ap.add_argument("--freeze-baseline", type=int, default=1)
+    ap.add_argument("--strict-checks", type=int, default=1)
+    ap.add_argument("--cost-bps", type=float, default=5.0)
+    ap.add_argument("--max-daily-turnover", type=float, default=0.10)
+    ap.add_argument("--hysteresis-days", type=int, default=3)
+    ap.add_argument("--exp-stress", type=float, default=0.10)
+    ap.add_argument("--exp-transition", type=float, default=0.40)
+    ap.add_argument("--exp-stable", type=float, default=0.70)
+    ap.add_argument("--exp-dispersion", type=float, default=0.90)
+    ap.add_argument("--min-joint-majority-60d", type=float, default=0.30)
+    ap.add_argument("--require-latest-majority", type=int, default=0)
+    ap.add_argument("--max-abs-delta-p1", type=float, default=0.01)
+    ap.add_argument("--max-abs-delta-deff", type=float, default=1.00)
+    ap.add_argument("--max-active-cluster-alerts", type=int, default=1)
+    ap.add_argument("--alert-lookback", type=int, default=252)
+    ap.add_argument("--case-horizon-days", type=int, default=20)
+    ap.add_argument("--case-regimes", type=str, default="stress,transition,dispersion")
+    ap.add_argument("--calibrate-exposure-grid", type=int, default=1)
+    ap.add_argument("--apply-grid-best", type=int, default=0)
+    ap.add_argument("--calibration-objective", type=str, default="composite", choices=["composite", "ann_over_dd", "sharpe"])
+    ap.add_argument("--update-release-pointer", type=int, default=1)
+    args = ap.parse_args()
+
+    policy_path = Path(args.policy_path)
+    policy = _load_policy(policy_path)
+    if int(args.apply_policy) == 1 and policy:
+        _apply_policy_to_args(args, policy)
+
+    if args.panel_path:
+        panel_path = Path(args.panel_path)
+        universe_path = Path(args.universe_path) if args.universe_path else None
+    else:
+        latest = _find_latest_finance_run()
+        panel_path = latest / "panel_long_sector.csv"
+        universe_path = latest / "universe_fixed.csv"
+    if not panel_path.exists():
+        raise SystemExit(f"panel path not found: {panel_path}")
+    if universe_path is not None and (not universe_path.exists()):
+        raise SystemExit(f"universe path not found: {universe_path}")
+
+    out_base = Path(args.out_base)
+    outdir = out_base / _run_id()
+    outdir.mkdir(parents=True, exist_ok=True)
+    (outdir / "policy_used.json").write_text(
+        json.dumps(
+            {
+                "policy_path": str(policy_path),
+                "policy_loaded": bool(policy),
+                "policy": policy,
+                "effective": {
+                    "start": args.start,
+                    "end": args.end,
+                    "coverage_core": float(args.coverage_core),
+                    "coverage_window": float(args.coverage_window),
+                    "official_window": int(args.official_window),
+                    "hysteresis_days": int(args.hysteresis_days),
+                    "exp_stress": float(args.exp_stress),
+                    "exp_transition": float(args.exp_transition),
+                    "exp_stable": float(args.exp_stable),
+                    "exp_dispersion": float(args.exp_dispersion),
+                    "min_joint_majority_60d": float(args.min_joint_majority_60d),
+                    "require_latest_majority": bool(int(args.require_latest_majority)),
+                    "max_abs_delta_p1": float(args.max_abs_delta_p1),
+                    "max_abs_delta_deff": float(args.max_abs_delta_deff),
+                    "max_active_cluster_alerts": int(args.max_active_cluster_alerts),
+                    "cost_bps": float(args.cost_bps),
+                    "max_daily_turnover": float(args.max_daily_turnover),
+                    "calibrate_exposure_grid": bool(int(args.calibrate_exposure_grid)),
+                    "apply_grid_best": bool(int(args.apply_grid_best)),
+                    "calibration_objective": str(args.calibration_objective),
+                    "case_horizon_days": int(args.case_horizon_days),
+                    "case_regimes": str(args.case_regimes),
+                },
+            },
+            indent=2,
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    panel = pd.read_csv(panel_path)
+    _ensure_cols(panel, ["date", "ticker", "sector", "r"], "panel")
+    panel["date"] = pd.to_datetime(panel["date"], errors="coerce")
+    panel["r"] = pd.to_numeric(panel["r"], errors="coerce")
+    panel = panel.dropna(subset=["date", "ticker", "sector", "r"]).copy()
+    panel = panel[(panel["date"] >= pd.Timestamp(args.start)) & (panel["date"] <= pd.Timestamp(args.end))].sort_values(["date", "ticker"]).reset_index(drop=True)
+    if panel.empty:
+        raise SystemExit("No rows in target period after filtering.")
+
+    trading_days = pd.DatetimeIndex(sorted(panel["date"].drop_duplicates().to_list()))
+    returns_wide = panel.pivot_table(index="date", columns="ticker", values="r", aggfunc="last").reindex(trading_days).sort_index()
+    sector_map = panel[["ticker", "sector"]].drop_duplicates(subset=["ticker"], keep="last").set_index("ticker")["sector"].to_dict()
+
+    coverage = returns_wide.notna().mean(axis=0)
+    core = sorted(coverage[coverage >= float(args.coverage_core)].index.to_list())
+    if len(core) < int(args.min_assets):
+        raise SystemExit(f"core universe too small: {len(core)} < min_assets={int(args.min_assets)}")
+
+    universe_core = (
+        pd.DataFrame({"ticker": core, "sector": [sector_map.get(t, "unknown") for t in core], "coverage": [float(coverage.loc[t]) for t in core]})
+        .sort_values(["sector", "ticker"])
+        .reset_index(drop=True)
+    )
+    universe_core.to_csv(outdir / "universe_core.csv", index=False)
+    core_counts = universe_core.groupby("sector", as_index=False).agg(n_tickers=("ticker", "count"))
+    core_counts.to_csv(outdir / "universe_core_by_sector.csv", index=False)
+
+    R = returns_wide[core].copy()
+    R.to_csv(outdir / "returns_wide_core.csv", index=True, index_label="date")
+
+    summary = [
+        "Macro Correlation Offline Lab",
+        f"run_dir: {outdir}",
+        f"panel_path: {panel_path}",
+        f"period: {args.start} -> {args.end}",
+        f"coverage_core_threshold: {args.coverage_core}",
+        f"coverage_window_threshold: {args.coverage_window}",
+        f"N_core: {len(core)}",
+        "N_core_by_sector:",
+    ]
+    for _, r in core_counts.sort_values("sector").iterrows():
+        summary.append(f"  - {r['sector']}: {int(r['n_tickers'])}")
+    summary.append(f"scipy_enabled_for_clustering: {SCIPY_OK}")
+
+    ts_map: dict[int, pd.DataFrame] = {}
+    for w in (60, 120, 252):
+        ts, snap, sec = _process_window(
+            returns_wide=R,
+            sector_by_ticker={t: sector_map.get(t, "unknown") for t in core},
+            window=w,
+            cov_window=float(args.coverage_window),
+            min_assets=int(args.min_assets),
+            noise_step=int(args.noise_step),
+            bootstrap_block=int(args.bootstrap_block),
+            seed=int(args.seed),
+        )
+        ts_map[w] = ts.copy()
+        cols = [
+            "date",
+            "N_used",
+            "p1",
+            "deff",
+            "lambda1",
+            "lambda2",
+            "lambda3",
+            "lambda4",
+            "lambda5",
+            "lambda6",
+            "lambda7",
+            "lambda8",
+            "lambda9",
+            "lambda10",
+            "top5",
+            "cluster_count",
+            "largest_share",
+            "entropy",
+            "turnover_pair_frac",
+            "p1_shuffle",
+            "deff_shuffle",
+            "structure_score",
+            "p1_bootstrap",
+            "deff_bootstrap",
+            "structure_score_bootstrap",
+            "insufficient_universe",
+        ]
+        for c in cols:
+            if c not in ts.columns:
+                ts[c] = np.nan
+        ts = ts[cols]
+        ts.to_csv(outdir / f"macro_timeseries_T{w}.csv", index=False)
+        if not snap.empty:
+            snap = snap.sort_values(["date", "ticker"]).reset_index(drop=True)
+        snap.to_csv(outdir / f"clusters_snapshots_T{w}.csv", index=False)
+        summary += ["", _summary_block(ts=ts, sector_daily=sec, window=w, outdir=outdir)]
+
+    robust_df, robust_metrics, robust_txt = _build_robustness(ts_map=ts_map, outdir=outdir)
+    summary += ["", "[ROBUSTNESS]", robust_txt]
+
+    if int(args.official_window) not in ts_map:
+        raise SystemExit(f"official window {int(args.official_window)} missing")
+    ts_off = ts_map[int(args.official_window)].copy()
+    regime_df, reg_thr = _classify_regime(
+        ts=ts_off,
+        hysteresis_days=int(args.hysteresis_days),
+        exp_stress=float(args.exp_stress),
+        exp_transition=float(args.exp_transition),
+        exp_stable=float(args.exp_stable),
+        exp_dispersion=float(args.exp_dispersion),
+    )
+    regime_df.to_csv(outdir / f"regime_series_T{int(args.official_window)}.csv", index=False)
+    (outdir / f"regime_thresholds_T{int(args.official_window)}.json").write_text(json.dumps(reg_thr, indent=2), encoding="utf-8")
+
+    calibration_best: dict[str, Any] = {}
+    calib_df = pd.DataFrame()
+    if int(args.calibrate_exposure_grid) == 1 and (not regime_df.empty):
+        candidates = _default_exposure_candidates(
+            exp_stress=float(args.exp_stress),
+            exp_transition=float(args.exp_transition),
+            exp_stable=float(args.exp_stable),
+            exp_dispersion=float(args.exp_dispersion),
+        )
+        policy_cands = (((policy.get("calibration", {}) or {}).get("candidate_exposures")) if policy else None)
+        if isinstance(policy_cands, list) and len(policy_cands) > 0:
+            c2 = []
+            for c in policy_cands:
+                if not isinstance(c, dict):
+                    continue
+                if not all(k in c for k in ("stress", "transition", "stable", "dispersion")):
+                    continue
+                c2.append(
+                    {
+                        "stress": float(np.clip(float(c["stress"]), 0.0, 1.0)),
+                        "transition": float(np.clip(float(c["transition"]), 0.0, 1.0)),
+                        "stable": float(np.clip(float(c["stable"]), 0.0, 1.0)),
+                        "dispersion": float(np.clip(float(c["dispersion"]), 0.0, 1.0)),
+                    }
+                )
+            if c2:
+                candidates = c2
+        calib_df, calibration_best = _exposure_grid_search(
+            regime_df=regime_df,
+            returns_wide=R,
+            cost_bps=float(args.cost_bps),
+            max_daily_turnover=float(args.max_daily_turnover),
+            start_exposure=float(args.exp_stable),
+            candidates=candidates,
+            objective=str(args.calibration_objective),
+        )
+        calib_df.to_csv(outdir / f"exposure_grid_T{int(args.official_window)}.csv", index=False)
+        (outdir / f"exposure_recommendation_T{int(args.official_window)}.json").write_text(
+            json.dumps(calibration_best, indent=2),
+            encoding="utf-8",
+        )
+        if int(args.apply_grid_best) == 1 and calibration_best:
+            exp = calibration_best.get("exposure", {})
+            regime_df["exposure"] = regime_df["regime"].map(exp).fillna(float(args.exp_stable)).astype(float).clip(0.0, 1.0)
+            regime_df.to_csv(outdir / f"regime_series_T{int(args.official_window)}.csv", index=False)
+
+    bt_df, bt_sum = _backtest(
+        regime_df=regime_df,
+        returns_wide=R,
+        cost_bps=float(args.cost_bps),
+        max_daily_turnover=float(args.max_daily_turnover),
+        start_exposure=float(args.exp_stable),
+    )
+    bt_df.to_csv(outdir / f"backtest_regime_T{int(args.official_window)}.csv", index=False)
+    (outdir / f"backtest_summary_T{int(args.official_window)}.json").write_text(json.dumps(bt_sum, indent=2), encoding="utf-8")
+
+    era_df = _build_era_evaluation(ts_off=ts_off, regime_df=regime_df, bt_df=bt_df)
+    era_df.to_csv(outdir / f"era_evaluation_T{int(args.official_window)}.csv", index=False)
+    (outdir / f"era_evaluation_T{int(args.official_window)}.json").write_text(
+        json.dumps(era_df.to_dict(orient="records"), indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    case_regimes = [x.lower() for x in _parse_csv_list(args.case_regimes)]
+    case_df = _build_case_studies(
+        regime_df=regime_df,
+        ts_off=ts_off,
+        bt_df=bt_df,
+        target_regimes=case_regimes,
+        horizon_days=int(max(1, args.case_horizon_days)),
+    )
+    case_df.to_csv(outdir / f"case_studies_T{int(args.official_window)}.csv", index=False)
+    (outdir / f"case_studies_T{int(args.official_window)}.json").write_text(
+        json.dumps(case_df.to_dict(orient="records"), indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    _write_case_studies_demo(outdir=outdir, cases_df=case_df)
+
+    playbook_df = _build_action_playbook(
+        regime_df=regime_df,
+        ts_off=ts_off,
+        bt_df=bt_df,
+        horizon_days=int(max(1, args.case_horizon_days)),
+    )
+    playbook_df.to_csv(outdir / f"action_playbook_T{int(args.official_window)}.csv", index=False)
+    (outdir / f"action_playbook_T{int(args.official_window)}.json").write_text(
+        json.dumps(playbook_df.to_dict(orient="records"), indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    alerts, alerts_payload, alerts_txt = _cluster_alerts(ts=ts_off, lookback=int(args.alert_lookback))
+    alerts.to_csv(outdir / f"cluster_alerts_T{int(args.official_window)}.csv", index=False)
+    op_alerts, op_payload, op_txt = _build_operational_alerts(
+        ts_off=ts_off,
+        regime_df=regime_df,
+        robust_metrics=robust_metrics,
+    )
+    op_alerts.to_csv(outdir / f"operational_alerts_T{int(args.official_window)}.csv", index=False)
+    (outdir / f"operational_alerts_T{int(args.official_window)}.json").write_text(
+        json.dumps(op_payload, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    summary += ["", f"[OFFICIAL_T{int(args.official_window)}]"]
+    if bt_df.empty:
+        summary += ["backtest: unavailable"]
+    else:
+        s, b = bt_sum["strategy"], bt_sum["benchmark"]
+        summary += [
+            f"backtest: strategy_ann={float(s.get('ann_return', np.nan)):.6f}, strategy_sharpe={float(s.get('sharpe', np.nan)):.4f}, strategy_mdd={float(s.get('max_drawdown', np.nan)):.4f}; bench_ann={float(b.get('ann_return', np.nan)):.6f}, bench_sharpe={float(b.get('sharpe', np.nan)):.4f}, bench_mdd={float(b.get('max_drawdown', np.nan)):.4f}; avg_exposure={float(bt_sum.get('avg_exposure', np.nan)):.4f}, avg_turnover={float(bt_sum.get('avg_turnover', np.nan)):.6f}"
+        ]
+    if not regime_df.empty:
+        rc = regime_df["regime"].value_counts(normalize=True).to_dict()
+        summary += [
+            f"regime_mix: stress={rc.get('stress',0.0):.3f}, transition={rc.get('transition',0.0):.3f}, stable={rc.get('stable',0.0):.3f}, dispersion={rc.get('dispersion',0.0):.3f}"
+        ]
+    else:
+        summary += ["regime_mix: unavailable"]
+    summary += [f"alerts: {alerts_txt}"]
+    summary += [f"operational_alerts: {op_txt}"]
+    if calibration_best:
+        exp = calibration_best.get("exposure", {})
+        m = calibration_best.get("metrics", {})
+        summary += [
+            "",
+            "[EXPOSURE_CALIBRATION]",
+            f"objective={calibration_best.get('objective')}; n_candidates={calibration_best.get('n_candidates')}; apply_grid_best={bool(int(args.apply_grid_best))}",
+            f"recommended: stress={float(exp.get('stress', np.nan)):.2f}, transition={float(exp.get('transition', np.nan)):.2f}, stable={float(exp.get('stable', np.nan)):.2f}, dispersion={float(exp.get('dispersion', np.nan)):.2f}",
+            f"recommended_metrics: score={float(m.get('score', np.nan)):.6f}, ann_return={float(m.get('ann_return', np.nan)):.6f}, sharpe={float(m.get('sharpe', np.nan)):.4f}, max_drawdown={float(m.get('max_drawdown', np.nan)):.4f}",
+        ]
+    if not case_df.empty:
+        summary += ["", "[CASE_STUDIES]"]
+        for _, cr in case_df.iterrows():
+            summary += [
+                f"{str(cr['case_regime'])}: date={str(cr['date'])}, exposure={float(cr['exposure']):.2f}, "
+                f"alpha_{int(cr['horizon_days'])}d={float(cr['alpha_cum']):.4f}, "
+                f"dd_improvement={float(cr['dd_improvement']):.4f}, honesty={str(cr['honest_verdict'])}"
+            ]
+    else:
+        summary += ["", "[CASE_STUDIES]", "none"]
+    if not era_df.empty:
+        summary += ["", "[ERA_EVALUATION]"]
+        for _, er in era_df.iterrows():
+            summary += [
+                f"{str(er['era'])}: n_days={int(er['n_days'])}, p1_mean={float(er['p1_mean']):.4f}, "
+                f"deff_mean={float(er['deff_mean']):.2f}, alpha_ann={float(er['alpha_ann_return']):.4f}, "
+                f"dd_improvement={float(er['dd_improvement']):.4f}"
+            ]
+    else:
+        summary += ["", "[ERA_EVALUATION]", "none"]
+    if not playbook_df.empty:
+        x = playbook_df.iloc[-1]
+        summary += [
+            "",
+            "[ACTION_PLAYBOOK]",
+            f"latest_date={x['date']}; regime={x['regime']}; action={x['action_code']}; "
+            f"signal={x['signal_tier']}({float(x['signal_reliability']):.3f}); tradeoff={x['tradeoff_label']}",
+        ]
+    else:
+        summary += ["", "[ACTION_PLAYBOOK]", "none"]
+
+    qa = _qa(ts_map=ts_map, core_counts=core_counts, n_core=int(len(core)), min_assets=int(args.min_assets), official_window=int(args.official_window))
+    (outdir / "qa_checks.json").write_text(json.dumps(qa, indent=2), encoding="utf-8")
+    summary += ["", "[QA]", f"qa_ok={qa['ok']}; checks={len(qa['checks'])}"]
+    if not qa["ok"]:
+        summary += [f"qa_failed={','.join([c['check'] for c in qa['checks'] if not c.get('ok',False)])}"]
+
+    baseline: dict[str, Any] = {}
+    if int(args.freeze_baseline) == 1:
+        baseline = _freeze_baseline(
+            baseline_dir=Path(args.baseline_dir),
+            outdir=outdir,
+            universe_core=universe_core,
+            ts_official=ts_off,
+            official_window=int(args.official_window),
+            start=str(args.start),
+            end=str(args.end),
+            cov_core=float(args.coverage_core),
+            cov_window=float(args.coverage_window),
+        )
+        summary += [
+            "",
+            "[BASELINE]",
+            f"baseline_dir={baseline['baseline_dir']}; same_universe_vs_previous={baseline['same_universe_vs_previous']}; delta_p1_vs_previous={baseline['delta_p1_vs_previous']}; delta_deff_vs_previous={baseline['delta_deff_vs_previous']}",
+        ]
+    else:
+        baseline = {"same_universe_vs_previous": True, "delta_p1_vs_previous": np.nan, "delta_deff_vs_previous": np.nan}
+
+    gate = _build_deployment_gate(
+        qa=qa,
+        robust_metrics=robust_metrics,
+        baseline=baseline,
+        alerts_payload=alerts_payload,
+        min_joint_majority_60d=float(args.min_joint_majority_60d),
+        require_latest_majority=bool(int(args.require_latest_majority)),
+        max_abs_delta_p1=float(args.max_abs_delta_p1),
+        max_abs_delta_deff=float(args.max_abs_delta_deff),
+        max_active_cluster_alerts=int(args.max_active_cluster_alerts),
+    )
+    (outdir / "deployment_gate.json").write_text(json.dumps(gate, indent=2), encoding="utf-8")
+    summary += ["", "[DEPLOYMENT_GATE]", f"blocked={gate['blocked']}; reasons={','.join(gate['reasons']) if gate['reasons'] else 'none'}"]
+
+    view_model = _build_ui_view_model(
+        run_id=outdir.name,
+        ts_off=ts_off,
+        regime_df=regime_df,
+        robust_metrics=robust_metrics,
+        gate=gate,
+        op_payload=op_payload,
+        case_df=case_df,
+        era_df=era_df,
+        playbook_df=playbook_df,
+    )
+    (outdir / f"ui_view_model_T{int(args.official_window)}.json").write_text(
+        json.dumps(view_model, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    (outdir / "summary.txt").write_text("\n".join(summary) + "\n", encoding="utf-8")
+
+    summary_json = {
+        "status": "ok" if (not gate["blocked"]) else "fail",
+        "run_id": outdir.name,
+        "run_dir": str(outdir),
+        "period_start": str(args.start),
+        "period_end": str(args.end),
+        "n_core": int(len(core)),
+        "official_window": int(args.official_window),
+        "policy_path": str(policy_path),
+        "policy_loaded": bool(policy),
+        "deployment_gate": gate,
+        "checks": {"qa_ok": bool(qa["ok"]), "scipy_clustering": bool(SCIPY_OK)},
+        "scores": {
+            "joint_majority_60d": float(robust_metrics.get("joint_majority_60d", np.nan)),
+            "latest_joint_majority_5": float(robust_metrics.get("latest_joint_majority_5", np.nan)),
+            "active_cluster_alerts": int(alerts_payload.get("n_active", 0)),
+        },
+        "calibration": calibration_best if calibration_best else {},
+        "operational_alerts": op_payload,
+        "era_evaluation": {
+            "count": int(era_df.shape[0]) if not era_df.empty else 0,
+            "file_csv": str(outdir / f"era_evaluation_T{int(args.official_window)}.csv"),
+            "file_json": str(outdir / f"era_evaluation_T{int(args.official_window)}.json"),
+        },
+        "action_playbook": {
+            "count": int(playbook_df.shape[0]) if not playbook_df.empty else 0,
+            "horizon_days": int(max(1, args.case_horizon_days)),
+            "file_csv": str(outdir / f"action_playbook_T{int(args.official_window)}.csv"),
+            "file_json": str(outdir / f"action_playbook_T{int(args.official_window)}.json"),
+        },
+        "case_studies": {
+            "count": int(case_df.shape[0]) if not case_df.empty else 0,
+            "regimes_requested": case_regimes,
+            "horizon_days": int(max(1, args.case_horizon_days)),
+            "files": {
+                "csv": str(outdir / f"case_studies_T{int(args.official_window)}.csv"),
+                "json": str(outdir / f"case_studies_T{int(args.official_window)}.json"),
+                "demo_txt": str(outdir / "case_studies_demo.txt"),
+            },
+        },
+        "ui_view_model": {
+            "schema_version": str(view_model.get("schema_version", "")),
+            "file_json": str(outdir / f"ui_view_model_T{int(args.official_window)}.json"),
+        },
+    }
+    (outdir / "summary.json").write_text(json.dumps(summary_json, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    _write_compact_report(
+        outdir=outdir,
+        run_id=outdir.name,
+        period_start=str(args.start),
+        period_end=str(args.end),
+        n_core=int(len(core)),
+        official_window=int(args.official_window),
+        ts_official=ts_off,
+        regime_df=regime_df,
+        robust_metrics=robust_metrics,
+        baseline=baseline,
+        bt_summary=bt_sum,
+        gate=gate,
+    )
+    _write_daily_brief(
+        outdir=outdir,
+        regime_df=regime_df,
+        ts_off=ts_off,
+        robust_metrics=robust_metrics,
+        gate=gate,
+        baseline=baseline,
+        calibration_best=calibration_best,
+    )
+    _write_commercial_narrative(
+        outdir=outdir,
+        regime_df=regime_df,
+        ts_off=ts_off,
+        bt_summary=bt_sum,
+        calibration_best=calibration_best,
+        gate=gate,
+    )
+
+    meta = {
+        "run_dir": str(outdir),
+        "panel_path": str(panel_path),
+        "period_start": str(args.start),
+        "period_end": str(args.end),
+        "N_core": int(len(core)),
+        "windows": [60, 120, 252],
+        "official_window": int(args.official_window),
+        "policy_path": str(policy_path),
+        "policy_loaded": bool(policy),
+        "baseline_dir": str(args.baseline_dir),
+        "freeze_baseline": int(args.freeze_baseline),
+        "strict_checks": int(args.strict_checks),
+        "qa_ok": bool(qa["ok"]),
+        "deployment_blocked": bool(gate["blocked"]),
+        "robustness_rows": int(robust_df.shape[0]) if not robust_df.empty else 0,
+        "case_studies_count": int(case_df.shape[0]) if not case_df.empty else 0,
+        "era_rows": int(era_df.shape[0]) if not era_df.empty else 0,
+        "playbook_rows": int(playbook_df.shape[0]) if not playbook_df.empty else 0,
+        "operational_alerts_latest": int(len(op_payload.get("latest_events", []))) if isinstance(op_payload, dict) else 0,
+    }
+
+    release_decision = {"updated": False}
+    if int(args.update_release_pointer) == 1:
+        release_decision = _update_release_pointer(out_base=out_base, run_meta=meta, gate=gate)
+        (outdir / "release_pointer_update.json").write_text(json.dumps(release_decision, indent=2), encoding="utf-8")
+    meta["release_pointer_updated"] = bool(release_decision.get("updated", False))
+
+    (outdir / "run_meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(json.dumps(meta, ensure_ascii=False))
+
+    if int(args.strict_checks) == 1 and bool(gate["blocked"]):
+        raise SystemExit(f"Deployment gate blocked: {', '.join(gate['reasons']) if gate['reasons'] else 'unspecified'}")
+
+
+if __name__ == "__main__":
+    main()

@@ -46,7 +46,7 @@ export default function SiteHeader() {
   return (
     <header className="mx-auto max-w-7xl px-4 md:px-6 lg:px-8 py-4 md:py-5 flex items-center justify-between">
       <Link href={labels.home} className="font-semibold tracking-tight text-lg text-zinc-100">
-        ASSYNTRAX
+        Assyntrax
       </Link>
       <nav className="flex items-center gap-4 text-sm text-zinc-300">
         <Link className="hover:text-white" href={labels.productHref}>
@@ -89,3 +89,4 @@ export default function SiteHeader() {
     </header>
   );
 }
+

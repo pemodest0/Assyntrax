@@ -360,7 +360,7 @@ def main() -> None:
                         pdf.savefig(fig)
                         plt.close(fig)
 
-    verdict_json = outdir / "temporal_verdict.json"
+    status_json = outdir / "temporal_status.json"
     if not overview.empty:
         cfg = TemporalConfig()
         model_map = {}
@@ -375,8 +375,8 @@ def main() -> None:
                 results.append(YearResult(year=int(year), model_error=model_error, baseline_error=baseline_error))
             model_map[model] = {"default": results}
         summaries = compare_models(model_map, cfg)
-        verdict = build_temporal_report(summaries, cfg)
-        verdict_json.write_text(json.dumps(verdict, indent=2, ensure_ascii=False), encoding="utf-8")
+        status_report = build_temporal_report(summaries, cfg)
+        status_json.write_text(json.dumps(status_report, indent=2, ensure_ascii=False), encoding="utf-8")
 
     if progress is not None:
         progress.close()

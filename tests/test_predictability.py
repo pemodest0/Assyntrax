@@ -1,22 +1,42 @@
+from __future__ import annotations
+
+import sys
 from pathlib import Path
-import json
+
+import numpy as np
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from engine.diagnostics.predictability import (
+    classify_predictability,
+    compute_acf,
+    hurst_exponent_rs,
+    lyapunov_proxy,
+)
 
 
-def test_attractor_and_predictability_files_exist():
-    repo_root = Path(__file__).resolve().parents[1]
-    base = repo_root / "website" / "assets" / "spa_energy"
-    attractor = base / 'attractor_daily_Sudeste_Centro-Oeste.json'
-    predictability = base / 'predictability_daily_Sudeste_Centro-Oeste.json'
+def test_predictability_diagnostics_smoke() -> None:
+    x = np.linspace(0.0, 12.0 * np.pi, 600)
+    series = np.sin(x) + 0.05 * np.random.default_rng(11).normal(size=x.size)
 
-    assert attractor.exists(), 'attractor json missing'
-    assert predictability.exists(), 'predictability json missing'
+    acf = compute_acf(series, max_lag=30)
+    hurst = hurst_exponent_rs(series, min_window=10, max_window=120)
+    lyap = lyapunov_proxy(errors_by_horizon=[0.05, 0.07, 0.11, 0.17], horizons=[1, 5, 10, 20])
+    label = classify_predictability(
+        acf=acf,
+        hurst=hurst,
+        lyap=lyap,
+        win_rate=0.62,
+        avg_improvement=0.03,
+    )
 
-    data = json.loads(attractor.read_text(encoding='utf-8'))
-    assert isinstance(data, list)
-    assert len(data) > 0
-    assert all('x' in p and 'y' in p and 'z' in p for p in data[:5])
-
-    pred = json.loads(predictability.read_text(encoding='utf-8'))
-    assert 'h' in pred and 'mape' in pred
-    assert len(pred['h']) > 0
-    assert len(pred['h']) == len(pred['mape'])
+    assert np.isfinite(acf.acf1)
+    assert acf.max_lag <= 30
+    assert label in {
+        "PREVISIVEL_CURTO_PRAZO",
+        "REGIME_DEPENDENTE",
+        "INSTAVEL_OU_CAOTICO",
+        "ESSENCIALMENTE_RUIDOSO",
+    }

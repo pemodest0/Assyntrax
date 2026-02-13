@@ -79,10 +79,12 @@ def main() -> None:
             except Exception:
                 bad_numeric[k] += 1
 
-    verdict = _read_json(ROOT / "results" / "validation" / "VERDICT.json", {})
+    global_status = _read_json(ROOT / "results" / "validation" / "STATUS.json", {})
+    if not global_status:
+        global_status = _read_json(ROOT / "results" / "validation" / "VERDICT.json", {})
     risk_truth = _read_json(ROOT / "results" / "validation" / "risk_truth_panel.json", {})
     mojibake_summary = _contains_mojibake(summary)
-    mojibake_verdict = _contains_mojibake(verdict)
+    mojibake_status = _contains_mojibake(global_status)
     mojibake_risk_truth = _contains_mojibake(risk_truth)
 
     payload = {
@@ -94,10 +96,10 @@ def main() -> None:
         "bad_numeric_fields": bad_numeric,
         "encoding_flags": {
             "summary_has_mojibake": mojibake_summary,
-            "verdict_has_mojibake": mojibake_verdict,
+            "status_has_mojibake": mojibake_status,
             "risk_truth_has_mojibake": mojibake_risk_truth,
         },
-        "global_verdict_status": str(verdict.get("status", "unknown")).lower(),
+        "global_status": str(global_status.get("status", "unknown")).lower(),
         "risk_truth_counts": risk_truth.get("counts", {}),
         "checks": {
             "has_records": len(rows) > 0,

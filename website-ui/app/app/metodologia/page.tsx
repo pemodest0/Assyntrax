@@ -1,4 +1,4 @@
-﻿import { readGlobalVerdict, readLatestSnapshot, readRiskTruthPanel } from "@/lib/server/data";
+import { readGlobalStatus, readLatestSnapshot, readRiskTruthPanel } from "@/lib/server/data";
 
 function toNum(v: unknown, fallback = 0) {
   const n = Number(v);
@@ -6,15 +6,15 @@ function toNum(v: unknown, fallback = 0) {
 }
 
 export default async function MetodologiaPage() {
-  const [snap, verdict, panel] = await Promise.all([
+  const [snap, globalStatus, panel] = await Promise.all([
     readLatestSnapshot(),
-    readGlobalVerdict(),
+    readGlobalStatus(),
     readRiskTruthPanel(),
   ]);
 
   const summary = (snap?.summary || {}) as Record<string, unknown>;
-  const checks = (verdict?.gate_checks || {}) as Record<string, unknown>;
-  const scores = (verdict?.scores || {}) as Record<string, unknown>;
+  const checks = (globalStatus?.checks || {}) as Record<string, unknown>;
+  const scores = (globalStatus?.scores || {}) as Record<string, unknown>;
   const counts = (panel?.counts || {}) as Record<string, unknown>;
   const entries = Array.isArray(panel?.entries) ? (panel?.entries as Record<string, unknown>[]) : [];
   const sample = entries.slice(0, 5);
@@ -26,19 +26,19 @@ export default async function MetodologiaPage() {
         <h1 className="mt-2 text-2xl md:text-3xl font-semibold text-zinc-100">Metodologia e evidências do run atual</h1>
         <p className="mt-3 text-sm text-zinc-300">
           Todos os números abaixo são carregados de artefatos reais do repositório: snapshot validado,
-          painel de verdade de risco e gate global.
+          painel de verdade de risco e status global.
         </p>
       </section>
 
       <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-        <Metric title="Global verdict" value={String(verdict?.status || "unknown").toUpperCase()} />
+        <Metric title="Global status" value={String(globalStatus?.status || "unknown").toUpperCase()} />
         <Metric title="Run id" value={String(snap?.runId || "n/a")} />
         <Metric title="Ativos no painel" value={String(toNum(counts.assets, 0))} />
         <Metric title="Validated" value={String(toNum(counts.validated, 0))} />
       </section>
 
       <section className="rounded-2xl border border-zinc-800 bg-zinc-950/45 p-5">
-        <h2 className="text-lg font-semibold text-zinc-100">Gate checks</h2>
+        <h2 className="text-lg font-semibold text-zinc-100">Checks globais</h2>
         <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
           {Object.keys(checks).length ? (
             Object.entries(checks).map(([k, v]) => (
@@ -47,7 +47,7 @@ export default async function MetodologiaPage() {
               </div>
             ))
           ) : (
-            <div className="text-zinc-400">Sem gate_checks no arquivo de veredito.</div>
+            <div className="text-zinc-400">Sem checks no status global.</div>
           )}
         </div>
       </section>
@@ -62,7 +62,7 @@ export default async function MetodologiaPage() {
               </div>
             ))
           ) : (
-            <div className="text-zinc-400">Sem scores no arquivo de veredito.</div>
+            <div className="text-zinc-400">Sem scores no status global.</div>
           )}
           <div className="rounded-lg border border-zinc-800 bg-black/25 p-2 text-zinc-300">
             <span className="text-zinc-400">deployment_gate.blocked:</span>{" "}

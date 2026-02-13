@@ -67,8 +67,76 @@ function computeConfidence(vol: number, minVol: number, maxVol: number) {
   return Math.max(0.55, Math.min(0.9, conf));
 }
 
+function normalizeRegime(raw: unknown, warnings?: string[]) {
+  const r = String(raw || "").toUpperCase();
+  if (r === "STABLE" || r === "TRANSITION" || r === "UNSTABLE" || r === "INCONCLUSIVE") return r;
+  if (warnings?.includes("REGIME_INSTAVEL")) return "UNSTABLE";
+  return "TRANSITION";
+}
+
+async function loadBundledSeries(asset: string, tf: string, limit: number, step: number) {
+  const bundled = path.join(process.cwd(), "public", "data", "latest", "api_records.jsonl");
+  const raw = await fs.readFile(bundled, "utf-8");
+  const rows = raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      try {
+        return JSON.parse(line) as Record<string, unknown>;
+      } catch {
+        return null;
+      }
+    })
+    .filter((row): row is Record<string, unknown> => row !== null)
+    .filter((row) => String(row.asset || "") === asset)
+    .filter((row) => {
+      const rowTf = String(row.timeframe || "").toLowerCase();
+      if (!rowTf) return true;
+      return rowTf === tf.toLowerCase() || (tf.toLowerCase() === "weekly" && rowTf === "daily");
+    });
+
+  const horizons = Array.from(new Set(rows.map((row) => Number(row.horizon)).filter((h) => Number.isFinite(h) && h > 0))).sort((a, b) => a - b);
+  const preferredHorizon = horizons[0];
+  const scoped = Number.isFinite(preferredHorizon) ? rows.filter((row) => Number(row.horizon) === preferredHorizon) : rows;
+
+  const byDate = new Map<string, { date: string; confidence: number; regime: string; price: number | null }>();
+  for (const row of scoped) {
+    const date = String(row.timestamp || "").slice(0, 10);
+    if (!date) continue;
+    const warnings = Array.isArray(row.warnings) ? row.warnings.map((w) => String(w)) : [];
+    byDate.set(date, {
+      date,
+      confidence: Number(row.forecast_confidence ?? row.regime_confidence ?? 0.5) || 0.5,
+      regime: normalizeRegime(row.regime_label, warnings),
+      price: null,
+    });
+  }
+
+  const series = Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
+  const total = series.length;
+  const n = limit ? Math.min(limit, total) : total;
+  return series.slice(-n).filter((_, idx) => idx % step === 0);
+}
+
+async function resolvePriceFile(asset: string) {
+  const candidates = [
+    path.join(resultsRoot(), "..", "data", "raw", "finance", "yfinance_daily", `${asset}.csv`),
+    path.join(process.cwd(), "public", "data", "raw", "finance", "yfinance_daily", `${asset}.csv`),
+  ];
+  for (const candidate of candidates) {
+    try {
+      await fs.access(candidate);
+      return candidate;
+    } catch {
+      // keep trying
+    }
+  }
+  throw new Error("price_file_not_found");
+}
+
 async function loadFallbackSeries(asset: string, tf: string, limit: number, step: number) {
-  const priceFile = path.join(resultsRoot(), "..", "data", "raw", "finance", "yfinance_daily", `${asset}.csv`);
+  const priceFile = await resolvePriceFile(asset);
   const rawPrice = await fs.readFile(priceFile, "utf-8");
   const priceRows = parseCsv(rawPrice);
   const dates = priceRows.map((r) => r.date).filter(Boolean);
@@ -161,7 +229,11 @@ export async function GET(request: Request) {
         try {
           out[asset] = await loadFallbackSeries(asset, tf, limit, step);
         } catch {
-          out[asset] = [];
+          try {
+            out[asset] = await loadBundledSeries(asset, tf, limit, step);
+          } catch {
+            out[asset] = [];
+          }
         }
       }
     })

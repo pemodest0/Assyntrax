@@ -327,8 +327,40 @@ def build_asset_output(
     stretch_mu = float(result.stretch_mu[-1])
     state_label = aligned_labels[-1]
     quality_score = result.quality["score"]
-
+    fused_conf = conf_now
     alerts: List[str] = []
+
+    multilayer = result.multilayer if isinstance(result.multilayer, dict) else {}
+    ml_decision = multilayer.get("decision", {}) if isinstance(multilayer, dict) else {}
+    ml_label = ml_decision.get("label")
+    ml_conf = ml_decision.get("confidence")
+    ml_support = ml_decision.get("auditor_support")
+    if isinstance(ml_conf, (int, float)):
+        ml_conf = float(np.clip(ml_conf, 0.0, 1.0))
+    else:
+        ml_conf = None
+    if isinstance(ml_support, (int, float)):
+        ml_support = float(np.clip(ml_support, 0.0, 1.0))
+    else:
+        ml_support = 0.0
+
+    if (
+        ml_label in {"STABLE", "TRANSITION", "UNSTABLE", "NOISY"}
+        and ml_conf is not None
+        and multilayer.get("status") == "ok"
+    ):
+        fused_conf = float(np.clip(0.7 * conf_now + 0.3 * ml_conf, 0.0, 1.0))
+        if state_label == "STABLE" and ml_label in {"TRANSITION", "UNSTABLE"} and ml_conf >= 0.62 and ml_support >= 0.34:
+            state_label = str(ml_label)
+            alerts.append("MULTILAYER_OVERRIDE")
+        elif state_label == "TRANSITION" and ml_label == "UNSTABLE" and ml_conf >= 0.65:
+            state_label = "UNSTABLE"
+            alerts.append("MULTILAYER_OVERRIDE")
+        elif state_label == "UNSTABLE" and ml_label == "STABLE" and ml_conf >= 0.75 and quality_score >= 0.7:
+            # Downshift only with high confidence to avoid masking stress.
+            state_label = "TRANSITION"
+            alerts.append("MULTILAYER_OVERRIDE_SOFT")
+
     quality_floor = 0.35
     if quality_score < quality_floor:
         alerts.append("LOW_QUALITY")
@@ -355,7 +387,7 @@ def build_asset_output(
         timeframe=timeframe,
         asof=iso_now(),
         group=asset_group,
-        state=GraphState(label=str(state_label), confidence=conf_now),
+        state=GraphState(label=str(state_label), confidence=fused_conf),
         graph=GraphConfig(n_micro=effective_micro, k_nn=effective_knn, theiler=theiler, alpha=alpha, method=method),
         metrics=GraphMetrics(
             stay_prob=conf_now,
@@ -538,6 +570,7 @@ def build_asset_output(
     asset.diagnostics = compute_diagnostics(series, m=m_use, tau=tau_use, theiler=theiler)
     if asset.diagnostics is None:
         asset.diagnostics = {}
+    asset.diagnostics["multilayer"] = multilayer
     asset.diagnostics["graph_entropy"] = graph_entropy
     asset.diagnostics["graph_entropy_delta"] = graph_entropy_delta
     asset.diagnostics["graph_entropy_recent"] = graph_entropy_recent
@@ -649,6 +682,9 @@ def build_asset_output(
         "confidence_trend": trend,
         "stress_flags": list(stress_flags),
         "alerts": list(alerts),
+        "multilayer_label": ml_label,
+        "multilayer_confidence": ml_conf,
+        "multilayer_support": ml_support,
     }
 
     return asset, audit

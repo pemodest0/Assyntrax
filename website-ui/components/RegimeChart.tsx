@@ -14,6 +14,7 @@ type Props = {
   showRegimeBands?: boolean;
   smoothing?: "none" | "ema_short" | "ema_long";
   rangePreset?: string;
+  tooltipMode?: "full" | "price_only";
 };
 
 const regimeColors: Record<string, string> = {
@@ -71,6 +72,7 @@ export default function RegimeChart(props: Props) {
     showRegimeBands = true,
     smoothing = "none",
     rangePreset = "all",
+    tooltipMode = "full",
   } = props;
   const [hidden, setHidden] = useState<Record<string, boolean>>({});
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
@@ -87,9 +89,7 @@ export default function RegimeChart(props: Props) {
         };
       });
 
-    const dataMap: SeriesMap = Array.isArray(data)
-      ? { SERIES: normalizeLegacy(data) }
-      : data;
+    const dataMap: SeriesMap = Array.isArray(data) ? { SERIES: normalizeLegacy(data) } : data;
     const baseSelection = selected.length ? selected : Object.keys(dataMap);
     const active = baseSelection.filter((a) => !hidden[a] && (dataMap[a] || []).length);
     if (!active.length) return null;
@@ -144,7 +144,7 @@ export default function RegimeChart(props: Props) {
   const scaleX = (i: number, total: number) => pad + (i / Math.max(1, total - 1)) * (width - pad * 2);
   const scaleY = (v: number, ymin: number, ymax: number, h: number) => h - pad - ((v - ymin) / Math.max(1e-9, ymax - ymin)) * (h - pad * 2);
 
-  if (!prepared) return <div className="text-sm text-zinc-500">Selecione ativos para visualizar o gráfico.</div>;
+  if (!prepared) return <div className="text-sm text-zinc-500">Selecione ativos para visualizar o grafico.</div>;
 
   const h = height;
   const hover = hoverIndex != null ? Math.min(hoverIndex, prepared.count - 1) : null;
@@ -152,17 +152,12 @@ export default function RegimeChart(props: Props) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between text-xs text-zinc-400">
-        <div>Gráfico principal</div>
-        <button
-          className="rounded border border-zinc-700 px-2 py-1 hover:border-zinc-500"
-          onClick={() => setHidden({})}
-        >
+        <div>Grafico principal</div>
+        <button className="rounded border border-zinc-700 px-2 py-1 hover:border-zinc-500" onClick={() => setHidden({})}>
           Reset series
         </button>
       </div>
-      <div className="text-xs text-zinc-500">
-        Eixo X: tempo do período selecionado. Eixo Y: {normalize ? "índice base 100" : "preço do ativo"}.
-      </div>
+      <div className="text-xs text-zinc-500">Eixo X: tempo do periodo selecionado. Eixo Y: {normalize ? "indice base 100" : "preco do ativo"}.</div>
 
       <div className="rounded-xl border border-zinc-800 p-4 md:p-5 bg-transparent">
         <svg
@@ -216,7 +211,7 @@ export default function RegimeChart(props: Props) {
             Tempo
           </text>
           <text x={14} y={h / 2} textAnchor="middle" fill="#94a3b8" fontSize="11" transform={`rotate(-90 14 ${h / 2})`}>
-            {normalize ? "Índice (base 100)" : "Preço"}
+            {normalize ? "Indice (base 100)" : "Preco"}
           </text>
 
           {prepared.series.map((s, idx) => {
@@ -229,22 +224,14 @@ export default function RegimeChart(props: Props) {
                 {s.values.map((v, i) => {
                   if (!Number.isFinite(v) || i % 18 !== 0) return null;
                   return (
-                    <circle
-                      key={`${s.asset}-${i}`}
-                      cx={scaleX(i, s.values.length)}
-                      cy={scaleY(v, prepared.ymin, prepared.ymax, h)}
-                      r={1.8}
-                      fill={lineColors[idx % lineColors.length]}
-                    />
+                    <circle key={`${s.asset}-${i}`} cx={scaleX(i, s.values.length)} cy={scaleY(v, prepared.ymin, prepared.ymax, h)} r={1.8} fill={lineColors[idx % lineColors.length]} />
                   );
                 })}
               </g>
             );
           })}
 
-          {hover != null ? (
-            <line x1={scaleX(hover, prepared.count)} y1={pad} x2={scaleX(hover, prepared.count)} y2={h - pad} stroke="rgba(226,232,240,0.5)" strokeDasharray="4 4" />
-          ) : null}
+          {hover != null ? <line x1={scaleX(hover, prepared.count)} y1={pad} x2={scaleX(hover, prepared.count)} y2={h - pad} stroke="rgba(226,232,240,0.5)" strokeDasharray="4 4" /> : null}
         </svg>
       </div>
 
@@ -264,9 +251,19 @@ export default function RegimeChart(props: Props) {
       {hover != null ? (
         <div className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-300">
           <div>Data: {prepared.series[0].points[hover]?.date || "--"}</div>
-          <div>Regime: {prepared.series[0].points[hover]?.regime || "--"}</div>
-          <div>Confiança: {((prepared.series[0].points[hover]?.confidence || 0) * 100).toFixed(1)}%</div>
-          <div>Qualidade: {((prepared.series[0].points[hover]?.confidence || 0) * 0.92 * 100).toFixed(1)}%</div>
+          {tooltipMode === "price_only" ? (
+            prepared.series.map((series) => (
+              <div key={`${series.asset}-hover`}>
+                {series.asset}: {Number.isFinite(series.values[hover]) ? formatValue(series.values[hover]) : "--"}
+              </div>
+            ))
+          ) : (
+            <>
+              <div>Regime: {prepared.series[0].points[hover]?.regime || "--"}</div>
+              <div>Confianca: {((prepared.series[0].points[hover]?.confidence || 0) * 100).toFixed(1)}%</div>
+              <div>Qualidade: {((prepared.series[0].points[hover]?.confidence || 0) * 0.92 * 100).toFixed(1)}%</div>
+            </>
+          )}
         </div>
       ) : null}
     </div>

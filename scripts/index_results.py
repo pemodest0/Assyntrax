@@ -104,7 +104,7 @@ def extract_metrics(data: Dict[str, Any]) -> Dict[str, Any]:
     for k in keys:
         if k in data:
             out[k] = data[k]
-    for k in ("warnings", "alert", "alerts", "verdict"):
+    for k in ("warnings", "alert", "alerts", "status"):
         if k in data:
             out[k] = data[k]
     if "metrics" in data and isinstance(data["metrics"], dict):

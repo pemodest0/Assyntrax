@@ -1,0 +1,11 @@
+run_id=20260213T074220Z
+period=2018-01-01->2026-02-12
+N_core=477
+official_window=T120
+latest=2026-02-12 N_used=477 p1=0.150485 deff=24.681962
+regime_now=dispersion exposure=0.90
+robustness=joint_majority_60d=0.317, latest_joint_majority_5=0
+baseline_delta=dp1=0.000000, ddeff=0.000000
+backtest=str_ann=0.0169, str_mdd=-0.1956, bench_ann=0.0781, bench_mdd=-0.4212
+deployment_gate_blocked=False
+deployment_gate_reasons=none

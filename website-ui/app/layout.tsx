@@ -1,9 +1,9 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Assyntrax",
-  description: "Regime & Risk Engine",
+  title: "Assyntrax | Eigen Engine",
+  description: "Assyntrax - Eigen Engine for regime and risk diagnostics",
 };
 
 export default function RootLayout({
@@ -19,3 +19,4 @@ export default function RootLayout({
     </html>
   );
 }
+
