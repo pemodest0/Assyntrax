@@ -136,13 +136,14 @@ def build_motor_daily_series(tickers: list[str], assets_dir: Path, prices_dir: P
     return agg
 
 
-def _dedupe_events(event_dates: list[pd.Timestamp], cooldown_days: int = 20) -> list[pd.Timestamp]:
+def _dedupe_events(event_dates: list[pd.Timestamp], event_pos: list[int], cooldown_days: int = 20) -> list[pd.Timestamp]:
     out: list[pd.Timestamp] = []
-    last: pd.Timestamp | None = None
-    for d in sorted(event_dates):
-        if last is None or (d - last).days > cooldown_days:
-            out.append(d)
-            last = d
+    last_pos: int | None = None
+    pairs = sorted(zip(event_dates, event_pos), key=lambda x: int(x[1]))
+    for d, p in pairs:
+        if last_pos is None or (int(p) - int(last_pos)) > int(cooldown_days):
+            out.append(pd.Timestamp(d))
+            last_pos = int(p)
     return out
 
 
@@ -152,8 +153,10 @@ def build_event_dates(ref: pd.DataFrame, test_start: pd.Timestamp, ret_q01: floa
     x["event_dd20"] = x["dd20"] <= -0.08
     out: dict[str, list[pd.Timestamp]] = {}
     for name, col in [("ret_tail", "event_ret_tail"), ("drawdown20", "event_dd20")]:
-        dates = x.loc[(x["date"] >= test_start) & (x[col].fillna(False)), "date"].tolist()
-        out[name] = _dedupe_events(dates, cooldown_days=20)
+        mask = (x["date"] >= test_start) & (x[col].fillna(False))
+        dates = x.loc[mask, "date"].tolist()
+        pos = x.index[mask].tolist()
+        out[name] = _dedupe_events(dates, pos, cooldown_days=20)
     return out
 
 
@@ -187,25 +190,28 @@ def evaluate_alerts(
         if co_hi >= co_lo and bool(s_alert.iloc[co_lo : co_hi + 1].any()):
             coincident += 1
 
-    alert_idx = np.where(s_alert.to_numpy(dtype=bool))[0]
+    alert_days_idx = np.where(s_alert.to_numpy(dtype=bool))[0]
+    # Precision/false alarm are episode-based (entry alerts), avoiding distortion from long alert streaks.
+    starts_mask = s_alert.to_numpy(dtype=bool) & (~s_alert.shift(1, fill_value=False).to_numpy(dtype=bool))
+    alert_episode_idx = np.where(starts_mask)[0]
     good_alerts = 0
-    for a in alert_idx:
+    for a in alert_episode_idx:
         has_future_event = any((ev >= a + 1) and (ev <= a + int(assoc_horizon_days)) for ev in event_idx)
         if has_future_event:
             good_alerts += 1
-    n_alert = int(len(alert_idx))
-    n_false = int(max(0, n_alert - good_alerts))
+    n_alert_episodes = int(len(alert_episode_idx))
+    n_false_episodes = int(max(0, n_alert_episodes - good_alerts))
     years = max(1e-9, len(dts) / 252.0)
 
     return EvalResult(
         recall=float(detected / len(event_idx)) if event_idx else float("nan"),
-        precision=float(good_alerts / n_alert) if n_alert > 0 else float("nan"),
-        false_alarm_per_year=float(n_false / years),
+        precision=float(good_alerts / n_alert_episodes) if n_alert_episodes > 0 else float("nan"),
+        false_alarm_per_year=float(n_false_episodes / years),
         mean_lead_days=float(np.mean(lead_days)) if lead_days else float("nan"),
         coincident_rate=float(coincident / len(event_idx)) if event_idx else float("nan"),
         n_events=int(len(event_idx)),
-        n_alert_days=n_alert,
-        n_false_alert_days=n_false,
+        n_alert_days=int(len(alert_days_idx)),
+        n_false_alert_days=n_false_episodes,
     )
 
 

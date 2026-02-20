@@ -604,6 +604,8 @@ def main() -> None:
         str(float(args.drift_block_zscore)),
         "--profile-file",
         str(args.profile_file),
+        "--out-root",
+        str(Path(args.out_root) / "drift"),
         "--out-json",
         str(drift_monitor_path),
     ]

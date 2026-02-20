@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="/Users/PedroHenrique/Desktop/A-firma"
-source "$REPO/.venv/bin/activate"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if [ -f "$REPO/.venv/bin/activate" ]; then
+  # Prefer local venv when available.
+  source "$REPO/.venv/bin/activate"
+fi
 
 export FRED_API_KEY="${FRED_API_KEY:-}"
 cd "$REPO"

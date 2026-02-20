@@ -174,18 +174,19 @@ function parseCsv(text: string): CsvRow[] {
   return rows;
 }
 
-function isAuthorized(request: Request) {
+function authState(request: Request): { authorized: boolean; misconfigured: boolean } {
   const raw = process.env.ASSYNTRAX_API_KEYS || "";
   const keys = raw
     .split(",")
     .map((x) => x.trim())
     .filter(Boolean);
-  if (!keys.length) return true;
+  if (!keys.length) {
+    const isProd = process.env.NODE_ENV === "production";
+    return { authorized: !isProd, misconfigured: isProd };
+  }
   const fromHeader = request.headers.get("x-assyntrax-key") || "";
-  const { searchParams } = new URL(request.url);
-  const fromQuery = searchParams.get("key") || "";
-  const provided = (fromHeader || fromQuery).trim();
-  return keys.includes(provided);
+  const provided = fromHeader.trim();
+  return { authorized: keys.includes(provided), misconfigured: false };
 }
 
 async function findLatestSectorRun() {
@@ -214,7 +215,14 @@ async function findLatestSectorRun() {
 
 export async function GET(request: Request) {
   try {
-    if (!isAuthorized(request)) {
+    const auth = authState(request);
+    if (auth.misconfigured) {
+      return NextResponse.json(
+        { error: "auth_misconfigured", message: "ASSYNTRAX_API_KEYS is required in production" },
+        { status: 503 }
+      );
+    }
+    if (!auth.authorized) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
 

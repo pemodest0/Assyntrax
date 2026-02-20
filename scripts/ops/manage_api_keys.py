@@ -20,6 +20,13 @@ def write_env(path: Path, lines: list[str]) -> None:
     path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
 
+def _mask_key(value: str) -> str:
+    s = str(value)
+    if len(s) <= 10:
+        return "***"
+    return f"{s[:4]}...{s[-4:]}"
+
+
 def set_var(lines: list[str], key: str, value: str) -> list[str]:
     out: list[str] = []
     found = False
@@ -57,11 +64,17 @@ def main() -> None:
     lines = set_var(lines, "ASSYNTRAX_API_KEYS", ",".join(merged))
     write_env(env_path, lines)
 
-    print({"status": "ok", "env_file": str(env_path), "n_total_keys": len(merged), "new_keys": new_keys})
+    print(
+        {
+            "status": "ok",
+            "env_file": str(env_path),
+            "n_total_keys": len(merged),
+            "n_new_keys": len(new_keys),
+        }
+    )
     if args.show_current:
-        print({"current_keys": merged})
+        print({"current_keys_masked": [_mask_key(k) for k in merged]})
 
 
 if __name__ == "__main__":
     main()
-
