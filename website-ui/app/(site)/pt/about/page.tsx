@@ -57,41 +57,8 @@ export default function AboutPage() {
           </ul>
         </div>
       </section>
-
-      <section className="relative isolate rounded-[32px] border border-zinc-800 bg-zinc-950/60 p-8">
-        <div className="text-sm uppercase tracking-[0.3em] text-zinc-400">Pacote comercial</div>
-        <h2 className="mt-3 text-2xl font-semibold tracking-tight">Material pronto para iniciar piloto</h2>
-        <p className="mt-2 text-zinc-300">
-          O pacote atual ja inclui oferta, playbook de 30 dias e checklist operacional para venda assistida.
-        </p>
-        <div className="mt-4 flex flex-wrap gap-3 text-sm">
-          <a
-            className="rounded-lg border border-zinc-700 px-3 py-2 text-zinc-300 hover:text-white hover:border-zinc-500"
-            href="https://github.com/pemodest0/Assyntrax/blob/main/docs/OFERTA_COMERCIAL_MOTOR.md"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Oferta comercial
-          </a>
-          <a
-            className="rounded-lg border border-zinc-700 px-3 py-2 text-zinc-300 hover:text-white hover:border-zinc-500"
-            href="https://github.com/pemodest0/Assyntrax/blob/main/docs/PILOTO_30D_PLAYBOOK.md"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Playbook 30 dias
-          </a>
-          <a
-            className="rounded-lg border border-zinc-700 px-3 py-2 text-zinc-300 hover:text-white hover:border-zinc-500"
-            href="https://github.com/pemodest0/Assyntrax/blob/main/docs/PACOTE_VENDA_CHECKLIST.md"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Checklist de venda
-          </a>
-        </div>
-      </section>
     </div>
   );
 }
+
 
