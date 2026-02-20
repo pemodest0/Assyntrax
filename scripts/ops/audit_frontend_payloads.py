@@ -76,7 +76,7 @@ def main() -> None:
         for k in ("confidence", "quality"):
             try:
                 float(r.get(k))
-            except Exception:
+            except (TypeError, ValueError):
                 bad_numeric[k] += 1
 
     global_status = _read_json(ROOT / "results" / "validation" / "STATUS.json", {})
@@ -123,4 +123,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

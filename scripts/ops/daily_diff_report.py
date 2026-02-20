@@ -27,7 +27,7 @@ def _latest_two_dirs(root: Path) -> list[Path]:
 def _to_float(v: Any) -> float:
     try:
         return float(v)
-    except Exception:
+    except (TypeError, ValueError):
         return 0.0
 
 

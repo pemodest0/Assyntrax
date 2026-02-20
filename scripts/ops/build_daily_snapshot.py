@@ -24,7 +24,7 @@ def _read_adequacy_map(path: Path) -> dict[str, dict[str, Any]]:
         return {}
     try:
         df = pd.read_csv(path)
-    except Exception:
+    except (FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError, OSError):
         return {}
     out: dict[str, dict[str, Any]] = {}
     for _, r in df.iterrows():
