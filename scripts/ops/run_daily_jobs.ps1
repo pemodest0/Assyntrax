@@ -30,4 +30,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 python scripts/ops/build_run_audit_pack.py --run-id $runId --seed $Seed --max-assets $MaxAssets
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+python scripts/ops/run_daily_sector_alerts.py --profile-file config/sector_alerts_profile.json
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 Write-Host "[ops] done"

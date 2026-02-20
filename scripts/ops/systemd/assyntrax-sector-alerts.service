@@ -1,0 +1,18 @@
+[Unit]
+Description=Assyntrax Daily Sector Alerts
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/A-firma
+ExecStart=/usr/bin/env python3 scripts/ops/run_daily_sector_alerts.py --alert-policy regime_entry_confirm
+EnvironmentFile=%h/A-firma/.env.ops
+StandardOutput=append:%h/A-firma/results/event_study_sectors/logs/systemd.log
+StandardError=append:%h/A-firma/results/event_study_sectors/logs/systemd.log
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+

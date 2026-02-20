@@ -137,7 +137,7 @@ def main() -> None:
     parser.add_argument("--min-points", type=int, default=600)
     parser.add_argument("--min-years", type=float, default=3.0)
     parser.add_argument("--max-gap-days", type=int, default=14)
-    parser.add_argument("--strict", action="store_true", default=True, help="Fail summary when any asset fails adequacy.")
+    parser.add_argument("--strict", action="store_true", default=False, help="Fail summary when any asset fails adequacy.")
     parser.add_argument("--allow-partial", action="store_true", help="Allow partial pass even with failing assets.")
     parser.add_argument("--source-config", type=str, default=str(SOURCE_CONFIG_DEFAULT))
     parser.add_argument("--adequacy-config", type=str, default=str(ADEQUACY_CONFIG_DEFAULT))

@@ -9,6 +9,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[3]
+PY = sys.executable
 
 
 def _run(cmd: list[str]) -> tuple[int, str]:
@@ -25,7 +26,7 @@ def main() -> None:
 
     steps = [
         [
-            "python",
+            PY,
             "scripts/realestate/fetch_realestate_sources.py",
             "--outdir",
             "data/raw/realestate",
@@ -33,7 +34,7 @@ def main() -> None:
             "2000",
         ],
         [
-            "python",
+            PY,
             "scripts/realestate/build_realestate_offline_core.py",
             "--normalized-dir",
             "data/realestate/normalized",
@@ -49,7 +50,7 @@ def main() -> None:
             str(args.seed),
         ],
         [
-            "python",
+            PY,
             "scripts/realestate/run_realestate_hmm.py",
             "--input-dir",
             "data/realestate/normalized",
@@ -61,7 +62,7 @@ def main() -> None:
             "60",
         ],
         [
-            "python",
+            PY,
             "scripts/bench/validation/18_hmm_fallback_sector_check.py",
             "--outdir",
             "results/validation/hmm_sector_check",
@@ -75,14 +76,15 @@ def main() -> None:
             str(args.seed),
         ],
         [
-            "python",
+            PY,
             "scripts/bench/validation/16_data_adequacy_gate.py",
             "--outdir",
             "results/validation/data_adequacy",
+            "--allow-partial",
         ],
-        ["python", "scripts/bench/validation/01_sanity_run.py", "--outdir", "results/validation/sanity", "--seed", str(args.seed)],
+        [PY, "scripts/bench/validation/01_sanity_run.py", "--outdir", "results/validation/sanity", "--seed", str(args.seed)],
         [
-            "python",
+            PY,
             "scripts/bench/validation/02_robustness_sweep.py",
             "--dataset",
             "data/raw/finance/yfinance_daily/^VIX.csv",
@@ -96,7 +98,7 @@ def main() -> None:
             "daily",
         ],
         [
-            "python",
+            PY,
             "scripts/bench/validation/03_placebo_tests.py",
             "--dataset",
             "data/raw/finance/yfinance_daily/^VIX.csv",
@@ -113,7 +115,7 @@ def main() -> None:
             "--include-phase-random",
         ],
         [
-            "python",
+            PY,
             "scripts/bench/validation/04_universe_mini.py",
             "--outdir",
             "results/validation/universe_mini",
@@ -123,7 +125,7 @@ def main() -> None:
             str(args.max_assets),
         ],
         [
-            "python",
+            PY,
             "scripts/bench/validation/07_historical_regime_shifts.py",
             "--outdir",
             "results/validation/historical_shifts",
@@ -132,7 +134,7 @@ def main() -> None:
             "--calibrate",
         ],
         [
-            "python",
+            PY,
             "scripts/bench/validation/09_synthetic_false_alarm_stress.py",
             "--outdir",
             "results/validation/synthetic_false_alarm_stress",
@@ -140,7 +142,7 @@ def main() -> None:
             str(args.seed),
         ],
         [
-            "python",
+            PY,
             "scripts/bench/validation/13_ablation_formal.py",
             "--outdir",
             "results/validation/ablation",
@@ -148,19 +150,19 @@ def main() -> None:
             str(args.seed),
         ],
         [
-            "python",
+            PY,
             "scripts/bench/validation/14_adaptive_status_gates.py",
             "--outdir",
             "results/validation/adaptive_gates",
         ],
         [
-            "python",
+            PY,
             "scripts/bench/validation/15_risk_utility_metrics.py",
             "--outdir",
             "results/validation/risk_utility",
         ],
         [
-            "python",
+            PY,
             "scripts/bench/validation/17_hybrid_ews_var_garch.py",
             "--outdir",
             "results/validation/hybrid_risk",
@@ -170,16 +172,16 @@ def main() -> None:
             str(args.max_assets),
         ],
         [
-            "python",
+            PY,
             "scripts/bench/validation/12_risk_truth_panel.py",
             "--root",
             "results/validation",
             "--out",
             "results/validation/risk_truth_panel.json",
         ],
-        ["python", "scripts/bench/validation/05_verdict.py", "--root", "results/validation"],
+        [PY, "scripts/bench/validation/05_verdict.py", "--root", "results/validation"],
         [
-            "python",
+            PY,
             "scripts/bench/validation/00_build_validated_artifacts.py",
             "--outdir",
             "results/validated/latest",

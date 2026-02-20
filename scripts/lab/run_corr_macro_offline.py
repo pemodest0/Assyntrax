@@ -1013,26 +1013,92 @@ def _build_ui_view_model(
     }
 
 
-def _qa(ts_map: dict[int, pd.DataFrame], core_counts: pd.DataFrame, n_core: int, min_assets: int, official_window: int) -> dict[str, Any]:
+def _qa(
+    ts_map: dict[int, pd.DataFrame],
+    core_counts: pd.DataFrame,
+    n_core: int,
+    min_assets: int,
+    official_window: int,
+    max_insufficient_ratio: float,
+    min_n_used_ratio: float,
+    q_min: float,
+) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
-    checks.append({"check": "core_counts_match_n_core", "ok": int(core_counts["n_tickers"].sum()) == int(n_core)})
-    checks.append({"check": "all_sectors_nonzero_in_core", "ok": bool((core_counts["n_tickers"] > 0).all())})
+    core_sum = int(core_counts["n_tickers"].sum()) if not core_counts.empty else 0
+    core_min = int(core_counts["n_tickers"].min()) if not core_counts.empty else 0
+    checks.append(
+        {
+            "check": "core_counts_match_n_core",
+            "ok": core_sum == int(n_core),
+            "value": core_sum,
+            "expected": int(n_core),
+        }
+    )
+    checks.append(
+        {
+            "check": "all_sectors_nonzero_in_core",
+            "ok": bool((core_counts["n_tickers"] > 0).all()) if not core_counts.empty else False,
+            "min_sector_count": core_min,
+        }
+    )
+    min_n_used_required = max(float(min_assets), float(np.ceil(float(n_core) * float(min_n_used_ratio))))
     for w, ts in sorted(ts_map.items()):
         if ts.empty:
-            checks.append({"check": f"T{w}_non_empty", "ok": False})
+            checks.append({"check": f"T{w}_non_empty", "ok": False, "n_rows": 0})
             continue
-        checks.append({"check": f"T{w}_insufficient_ratio", "ok": float(ts["insufficient_universe"].mean()) <= 0.05})
-        checks.append({"check": f"T{w}_N_used_min", "ok": float(ts["N_used"].min()) >= float(min_assets)})
+        insufficient_ratio = float(ts["insufficient_universe"].mean())
+        checks.append(
+            {
+                "check": f"T{w}_insufficient_ratio",
+                "ok": insufficient_ratio <= float(max_insufficient_ratio),
+                "value": insufficient_ratio,
+                "max_allowed": float(max_insufficient_ratio),
+            }
+        )
         suff = ts[~ts["insufficient_universe"]].copy()
         if suff.empty:
-            checks.append({"check": f"T{w}_sufficient_non_empty", "ok": False})
+            checks.append({"check": f"T{w}_sufficient_non_empty", "ok": False, "n_sufficient": 0})
             continue
+        n_used_min = float(suff["N_used"].min())
+        checks.append(
+            {
+                "check": f"T{w}_N_used_min_sufficient",
+                "ok": n_used_min >= float(min_n_used_required),
+                "value": n_used_min,
+                "min_required": float(min_n_used_required),
+            }
+        )
+        q_series = float(w) / suff["N_used"].astype(float).clip(lower=1.0)
+        q_observed_min = float(q_series.min())
+        checks.append(
+            {
+                "check": f"T{w}_q_min",
+                "ok": q_observed_min >= float(q_min),
+                "value": q_observed_min,
+                "min_required": float(q_min),
+            }
+        )
         checks.append({"check": f"T{w}_p1_range", "ok": bool(suff["p1"].between(0.0, 1.0, inclusive="both").all())})
         checks.append({"check": f"T{w}_deff_range", "ok": bool(((suff["deff"] >= 1.0) & (suff["deff"] <= (suff["N_used"] + 1e-6))).all())})
         last20 = suff.tail(20)
-        checks.append({"check": f"T{w}_last20_complete", "ok": bool(last20.shape[0] == 20 and last20[["p1", "deff"]].notna().all().all())})
-    checks.append({"check": "official_window_present", "ok": official_window in ts_map})
-    return {"ok": bool(all(c["ok"] for c in checks)), "checks": checks}
+        checks.append(
+            {
+                "check": f"T{w}_last20_complete",
+                "ok": bool(last20.shape[0] == 20 and last20[["p1", "deff"]].notna().all().all()),
+                "n_last20": int(last20.shape[0]),
+                "required": 20,
+            }
+        )
+    checks.append(
+        {
+            "check": "official_window_present",
+            "ok": official_window in ts_map,
+            "official_window": int(official_window),
+            "available_windows": [int(x) for x in sorted(ts_map.keys())],
+        }
+    )
+    failed_checks = [str(c.get("check", "")) for c in checks if not bool(c.get("ok", False))]
+    return {"ok": bool(len(failed_checks) == 0), "checks": checks, "failed_checks": failed_checks}
 
 
 def _freeze_baseline(
@@ -1254,6 +1320,41 @@ def _load_policy(path: Path) -> dict[str, Any]:
         return {}
 
 
+def _slug_token(text: str) -> str:
+    s = "".join(ch.lower() if ch.isalnum() else "_" for ch in str(text))
+    while "__" in s:
+        s = s.replace("__", "_")
+    s = s.strip("_")
+    return s or "custom"
+
+
+def _resolve_baseline_dir(
+    args: argparse.Namespace,
+    out_base: Path,
+    policy_path: Path,
+    policy: dict[str, Any],
+) -> tuple[Path, str]:
+    baseline_dir = Path(str(args.baseline_dir))
+    default_baseline = Path(DEFAULT_BASELINE_DIR)
+    if baseline_dir != default_baseline:
+        return baseline_dir, "manual"
+
+    official_policy = ROOT / "config" / "lab_corr_policy.json"
+    try:
+        is_official_policy = policy_path.resolve() == official_policy.resolve()
+    except Exception:
+        is_official_policy = str(policy_path) == str(official_policy)
+
+    if int(args.apply_policy) != 1 or not policy or is_official_policy:
+        return baseline_dir, "official_default"
+
+    version = str((policy or {}).get("version", "")).strip()
+    ns = _slug_token(version if version else policy_path.stem)
+    if ns in {"lab_corr_policy_v1", "lab_corr_policy", "official"}:
+        return baseline_dir, "official_default"
+    return out_base / f"_baseline_{ns}", ns
+
+
 def _apply_policy_to_args(args: argparse.Namespace, policy: dict[str, Any]) -> None:
     if not policy:
         return
@@ -1271,6 +1372,7 @@ def _apply_policy_to_args(args: argparse.Namespace, policy: dict[str, Any]) -> N
         ("coverage_window", "coverage_window"),
         ("min_assets", "min_assets"),
         ("official_window", "official_window"),
+        ("business_days_only", "business_days_only"),
     ]:
         if key in data:
             setattr(args, attr, data[key])
@@ -1294,6 +1396,9 @@ def _apply_policy_to_args(args: argparse.Namespace, policy: dict[str, Any]) -> N
         ("max_abs_delta_deff", "max_abs_delta_deff"),
         ("max_active_cluster_alerts", "max_active_cluster_alerts"),
         ("alert_lookback", "alert_lookback"),
+        ("max_insufficient_ratio", "max_insufficient_ratio"),
+        ("min_n_used_ratio", "min_n_used_ratio"),
+        ("q_min", "q_min"),
     ]:
         if key in gate:
             setattr(args, attr, gate[key])
@@ -1738,6 +1843,12 @@ def main() -> None:
     ap.add_argument("--coverage-core", type=float, default=0.95)
     ap.add_argument("--coverage-window", type=float, default=0.98)
     ap.add_argument("--min-assets", type=int, default=25)
+    ap.add_argument(
+        "--business-days-only",
+        type=int,
+        default=1,
+        help="Keep only Monday-Friday rows before building windows.",
+    )
     ap.add_argument("--noise-step", type=int, default=5, help="Compute shuffle/bootstrap baseline every N days.")
     ap.add_argument("--bootstrap-block", type=int, default=10)
     ap.add_argument("--seed", type=int, default=123)
@@ -1757,6 +1868,9 @@ def main() -> None:
     ap.add_argument("--max-abs-delta-deff", type=float, default=1.00)
     ap.add_argument("--max-active-cluster-alerts", type=int, default=1)
     ap.add_argument("--alert-lookback", type=int, default=252)
+    ap.add_argument("--max-insufficient-ratio", type=float, default=0.05)
+    ap.add_argument("--min-n-used-ratio", type=float, default=0.90)
+    ap.add_argument("--q-min", type=float, default=0.12)
     ap.add_argument("--case-horizon-days", type=int, default=20)
     ap.add_argument("--case-regimes", type=str, default="stress,transition,dispersion")
     ap.add_argument("--calibrate-exposure-grid", type=int, default=1)
@@ -1783,6 +1897,13 @@ def main() -> None:
         raise SystemExit(f"universe path not found: {universe_path}")
 
     out_base = Path(args.out_base)
+    baseline_dir_resolved, baseline_namespace = _resolve_baseline_dir(
+        args=args,
+        out_base=out_base,
+        policy_path=policy_path,
+        policy=policy,
+    )
+    args.baseline_dir = str(baseline_dir_resolved)
     outdir = out_base / _run_id()
     outdir.mkdir(parents=True, exist_ok=True)
     (outdir / "policy_used.json").write_text(
@@ -1796,6 +1917,7 @@ def main() -> None:
                     "end": args.end,
                     "coverage_core": float(args.coverage_core),
                     "coverage_window": float(args.coverage_window),
+                    "business_days_only": bool(int(args.business_days_only)),
                     "official_window": int(args.official_window),
                     "hysteresis_days": int(args.hysteresis_days),
                     "exp_stress": float(args.exp_stress),
@@ -1807,6 +1929,9 @@ def main() -> None:
                     "max_abs_delta_p1": float(args.max_abs_delta_p1),
                     "max_abs_delta_deff": float(args.max_abs_delta_deff),
                     "max_active_cluster_alerts": int(args.max_active_cluster_alerts),
+                    "max_insufficient_ratio": float(args.max_insufficient_ratio),
+                    "min_n_used_ratio": float(args.min_n_used_ratio),
+                    "q_min": float(args.q_min),
                     "cost_bps": float(args.cost_bps),
                     "max_daily_turnover": float(args.max_daily_turnover),
                     "calibrate_exposure_grid": bool(int(args.calibrate_exposure_grid)),
@@ -1814,6 +1939,8 @@ def main() -> None:
                     "calibration_objective": str(args.calibration_objective),
                     "case_horizon_days": int(args.case_horizon_days),
                     "case_regimes": str(args.case_regimes),
+                    "baseline_dir": str(args.baseline_dir),
+                    "baseline_namespace": str(baseline_namespace),
                 },
             },
             indent=2,
@@ -1828,6 +1955,9 @@ def main() -> None:
     panel["r"] = pd.to_numeric(panel["r"], errors="coerce")
     panel = panel.dropna(subset=["date", "ticker", "sector", "r"]).copy()
     panel = panel[(panel["date"] >= pd.Timestamp(args.start)) & (panel["date"] <= pd.Timestamp(args.end))].sort_values(["date", "ticker"]).reset_index(drop=True)
+    if bool(int(args.business_days_only)):
+        panel = panel[panel["date"].dt.dayofweek < 5].copy()
+        panel = panel.sort_values(["date", "ticker"]).reset_index(drop=True)
     if panel.empty:
         raise SystemExit("No rows in target period after filtering.")
 
@@ -1859,6 +1989,7 @@ def main() -> None:
         f"period: {args.start} -> {args.end}",
         f"coverage_core_threshold: {args.coverage_core}",
         f"coverage_window_threshold: {args.coverage_window}",
+        f"business_days_only: {bool(int(args.business_days_only))}",
         f"N_core: {len(core)}",
         "N_core_by_sector:",
     ]
@@ -2094,11 +2225,28 @@ def main() -> None:
     else:
         summary += ["", "[ACTION_PLAYBOOK]", "none"]
 
-    qa = _qa(ts_map=ts_map, core_counts=core_counts, n_core=int(len(core)), min_assets=int(args.min_assets), official_window=int(args.official_window))
+    qa = _qa(
+        ts_map=ts_map,
+        core_counts=core_counts,
+        n_core=int(len(core)),
+        min_assets=int(args.min_assets),
+        official_window=int(args.official_window),
+        max_insufficient_ratio=float(args.max_insufficient_ratio),
+        min_n_used_ratio=float(args.min_n_used_ratio),
+        q_min=float(args.q_min),
+    )
     (outdir / "qa_checks.json").write_text(json.dumps(qa, indent=2), encoding="utf-8")
     summary += ["", "[QA]", f"qa_ok={qa['ok']}; checks={len(qa['checks'])}"]
     if not qa["ok"]:
-        summary += [f"qa_failed={','.join([c['check'] for c in qa['checks'] if not c.get('ok',False)])}"]
+        failed = [str(x) for x in qa.get("failed_checks", [])]
+        summary += [f"qa_failed={','.join(failed)}"]
+        for c in qa["checks"]:
+            if bool(c.get("ok", False)):
+                continue
+            detail_keys = ["value", "max_allowed", "min_required", "expected", "n_rows", "n_sufficient", "n_last20", "required"]
+            details = [f"{k}={c[k]}" for k in detail_keys if k in c]
+            if details:
+                summary += [f"qa_detail_{c['check']}={','.join(details)}"]
 
     baseline: dict[str, Any] = {}
     if int(args.freeze_baseline) == 1:
@@ -2243,6 +2391,7 @@ def main() -> None:
         "policy_path": str(policy_path),
         "policy_loaded": bool(policy),
         "baseline_dir": str(args.baseline_dir),
+        "baseline_namespace": str(baseline_namespace),
         "freeze_baseline": int(args.freeze_baseline),
         "strict_checks": int(args.strict_checks),
         "qa_ok": bool(qa["ok"]),

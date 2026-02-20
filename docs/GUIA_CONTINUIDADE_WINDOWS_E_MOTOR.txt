@@ -1,0 +1,131 @@
+GUIA DE CONTINUIDADE (WINDOWS + MOTOR + DASHBOARD)
+
+Data: 2026-02-20
+Projeto: Assyntrax
+
+OBJETIVO
+Manter um fluxo simples:
+1) voce edita layout no Windows;
+2) eu toco motor, simulacoes e feedback da dashboard por aqui;
+3) tudo vai para o mesmo GitHub e para a mesma Vercel (assyntrax).
+
+--------------------------------------------------
+PARTE 1 - EDITAR LAYOUT NO WINDOWS
+--------------------------------------------------
+Pasta principal do site:
+- website-ui
+
+Arquivos mais usados de layout:
+- website-ui/app/app/layout.tsx
+- website-ui/app/app/dashboard/page.tsx
+- website-ui/app/app/setores/page.tsx
+- website-ui/components/
+
+Rodar local no Windows:
+1) abrir terminal na pasta website-ui
+2) instalar dependencias (uma vez):
+   npm install
+3) subir ambiente local:
+   npm run dev
+4) abrir no navegador:
+   http://localhost:3000
+
+Checklist rapido antes de subir:
+- testar desktop e mobile
+- checar textos em portugues
+- checar se nao quebrou a rota /app/setores
+- rodar:
+  npm run build
+
+--------------------------------------------------
+PARTE 2 - MOTOR E ANALISES (POR AQUI)
+--------------------------------------------------
+Arquivos principais do motor:
+- scripts/lab/run_corr_macro_offline.py
+- scripts/bench/event_study_validate.py
+- scripts/bench/event_study_validate_sectors.py
+- scripts/ops/run_daily_sector_alerts.py
+- config/lab_corr_policy.json
+- config/sector_alerts_profile.json
+
+Saidas que importam:
+- results/event_study_sectors/
+- results/dual_mode_compare/
+- results/monthly_revalidation/
+- results/hyper_sector_search/
+
+Fluxo de trabalho do motor:
+1) ajustar politica/perfil em config/
+2) rodar simulacao/validacao
+3) comparar com baseline anterior
+4) promover so se melhorar utilidade real (acerto com ruido controlado)
+
+--------------------------------------------------
+PARTE 3 - FEEDBACK DA DASHBOARD
+--------------------------------------------------
+Quando voce testar o site, me mande feedback neste formato curto:
+1) pagina:
+2) problema:
+3) esperado:
+4) prioridade: alta, media ou baixa
+5) print (se tiver)
+
+Com isso eu devolvo:
+- ajuste no codigo
+- explicacao curta do que mudou
+- validacao de build
+
+--------------------------------------------------
+GITHUB (PADRAO OFICIAL)
+--------------------------------------------------
+Repositorio oficial:
+- https://github.com/pemodest0/Assyntrax
+
+Fluxo de commit:
+1) git add -A
+2) git commit -m "mensagem clara"
+3) git push origin main
+
+Mensagem de commit boa:
+- feat: novo bloco da dashboard setorial
+- fix: corrige regra de alerta vermelho
+- chore: atualiza pipeline diario
+
+--------------------------------------------------
+VERCEL (PADRAO OFICIAL)
+--------------------------------------------------
+Projeto unico correto:
+- assyntrax
+- URL: https://assyntrax.vercel.app
+
+Primeira configuracao no Windows (uma vez, dentro de website-ui):
+- npx vercel link -p assyntrax -S pemodest0s-projects
+
+Deploy de producao (sempre que quiser publicar):
+- npx vercel --prod --yes
+
+Confirmar status:
+- npx vercel ls
+
+--------------------------------------------------
+REGRAS PARA EVITAR CONFUSAO
+--------------------------------------------------
+- nao criar projeto novo na Vercel
+- sempre usar projeto assyntrax
+- nao misturar mudanca de layout com tuning pesado do motor no mesmo commit
+- manter docs atualizados quando mudar criterio de alerta
+
+--------------------------------------------------
+COMO VAMOS TRABALHAR JUNTOS
+--------------------------------------------------
+Voce:
+- mexe no visual e me diz o que quer melhorar.
+
+Eu:
+- implemento ajuste tecnico,
+- valido build,
+- valido motor,
+- preparo commit limpo,
+- publico no assyntrax.
+
+Fim.

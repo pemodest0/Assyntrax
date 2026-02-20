@@ -21,6 +21,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <nav className="mt-6 space-y-1 text-sm">
                 <NavItem href="/app/dashboard" label="Dashboard" />
                 <NavItem href="/app/finance" label="Finanças" />
+                <NavItem href="/app/setores" label="Setores" />
                 <NavItem href="/app/real-estate" label="Imobiliário" />
                 <NavItem href="/app/metodologia" label="Metodologia" />
               </nav>
@@ -57,4 +58,3 @@ function NavItem({ href, label }: { href: string; label: string }) {
     </Link>
   );
 }
-

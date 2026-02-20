@@ -1,0 +1,38 @@
+{
+  "profile_version": "sector_profile_aggressive97_v20260220",
+  "generated_at_utc": "2026-02-20T06:20:00Z",
+  "source_run": "results/recall80_search/20260220T060329Z",
+  "params": {
+    "lookbacks": "10,20,30",
+    "n_random": 300,
+    "random_baseline_method": "both",
+    "random_block_size": 8,
+    "min_sector_assets": 10,
+    "min_cal_days": 252,
+    "min_test_days": 252,
+    "alert_policy": "regime_entry_confirm",
+    "two_layer_mode": "off",
+    "q_unstable": 0.7510288367837515,
+    "q_transition": 0.8422734335029625,
+    "q_confidence": 0.4909199966614611,
+    "q_confidence_guarded": 0.6396813117588316,
+    "q_score_balanced": 0.6946753430746939,
+    "q_score_guarded": 0.8271390016802761,
+    "confirm_n": 1,
+    "confirm_m": 2,
+    "min_alert_gap_days": 0,
+    "auto_candidates": "regime_entry_confirm,regime_balanced,regime_guarded"
+  },
+  "gate_mode": "adaptive",
+  "acceptance_gates": {
+    "max_false_alarm_l5_l10": 30.0,
+    "min_drawdown_recall_l10": 0.80,
+    "min_sig_rate_block_draw_l5_l10": 0.05
+  },
+  "drift_monitor": {
+    "baseline_days": 30,
+    "min_history_runs": 7,
+    "warn_zscore": 2.0,
+    "block_zscore": 3.0
+  }
+}

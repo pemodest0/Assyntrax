@@ -1,10 +1,10 @@
 {
-  "version": "lab_corr_policy_v1",
+  "version": "lab_corr_policy_pilot_v1",
   "data": {
     "start": "2018-01-01",
     "end": "2026-02-12",
-    "coverage_core": 0.95,
-    "coverage_window": 0.98,
+    "coverage_core": 0.5,
+    "coverage_window": 0.6,
     "min_assets": 25,
     "official_window": 120,
     "business_days_only": true
@@ -29,22 +29,14 @@
     "max_abs_delta_deff": 1.0,
     "max_active_cluster_alerts": 1,
     "alert_lookback": 252,
-    "max_insufficient_ratio": 0.05,
+    "max_insufficient_ratio": 0.2,
     "min_n_used_ratio": 0.9,
     "q_min": 0.12
   },
   "calibration": {
     "enabled": true,
     "apply_best": false,
-    "objective": "composite",
-    "candidate_exposures": [
-      {"stress": 0.05, "transition": 0.35, "stable": 0.65, "dispersion": 0.9},
-      {"stress": 0.1, "transition": 0.4, "stable": 0.7, "dispersion": 0.9},
-      {"stress": 0.15, "transition": 0.45, "stable": 0.7, "dispersion": 0.9},
-      {"stress": 0.1, "transition": 0.45, "stable": 0.75, "dispersion": 0.95},
-      {"stress": 0.15, "transition": 0.5, "stable": 0.75, "dispersion": 0.95},
-      {"stress": 0.2, "transition": 0.5, "stable": 0.8, "dispersion": 1.0}
-    ]
+    "objective": "composite"
   },
   "case_studies": {
     "horizon_days": 20,

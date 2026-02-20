@@ -52,7 +52,7 @@ def fetch_and_prepare(ticker: str, start: str, end: str) -> pd.DataFrame | None:
 
 
 def build_multivariate_matrix(
-    series: dict[str, pd.DataFrame], start: str, end: str
+    series: dict[str, pd.DataFrame], start: str, end: str, business_days_only: bool
 ) -> tuple[pd.DataFrame, list[str]]:
     frames = []
     tickers = []
@@ -70,6 +70,8 @@ def build_multivariate_matrix(
     if not frames:
         raise RuntimeError("Nenhuma sÃ©rie vÃ¡lida encontrada.")
     merged = pd.concat(frames, axis=1, join="inner").dropna()
+    if business_days_only:
+        merged = merged[merged.index.dayofweek < 5]
     return merged, tickers
 
 
@@ -111,6 +113,7 @@ def main() -> None:
     parser.add_argument("--tau", type=int, default=1)
     parser.add_argument("--pca", type=int, default=10)
     parser.add_argument("--method", type=str, default="auto", choices=("auto", "hdbscan", "kmeans"))
+    parser.add_argument("--business-days-only", type=int, default=1)
     args = parser.parse_args()
 
     out_dir = Path(args.outdir)
@@ -127,7 +130,12 @@ def main() -> None:
                 continue
             series[ticker] = df
 
-    data_df, tickers = build_multivariate_matrix(series, args.start, args.end)
+    data_df, tickers = build_multivariate_matrix(
+        series,
+        args.start,
+        args.end,
+        business_days_only=bool(int(args.business_days_only)),
+    )
     data = data_df.to_numpy()
     scaler = StandardScaler()
     data_scaled = scaler.fit_transform(data)
@@ -184,6 +192,7 @@ def main() -> None:
         "tau": args.tau,
         "pca_components": n_components,
         "method": args.method,
+        "business_days_only": bool(int(args.business_days_only)),
         "n_samples": int(coords.shape[0]),
         "n_assets": int(len(tickers)),
     }
@@ -200,6 +209,7 @@ def main() -> None:
                 f"- Embedding: m={args.m}, tau={args.tau}",
                 f"- PCA: {n_components} componentes",
                 f"- Metodo: {args.method}",
+                f"- Dias uteis apenas: {bool(int(args.business_days_only))}",
                 "",
                 "Arquivos:",
                 "- summary_global.csv",
@@ -214,4 +224,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

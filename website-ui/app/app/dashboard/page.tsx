@@ -104,6 +104,15 @@ export default async function DashboardHome() {
         />
       </section>
 
+      <section className="grid grid-cols-1 md:grid-cols-1 gap-4">
+        <DomainCard
+          title="Setores"
+          text="Niveis verde, amarelo e vermelho por setor, com ranking de antecipacao de estresse em 5 dias."
+          href="/app/setores"
+          cta="Open Sectors"
+        />
+      </section>
+
       <section className="rounded-2xl border border-zinc-800 bg-zinc-950/55 p-5 space-y-3">
         <p className="text-xs uppercase tracking-[0.14em] text-zinc-500">Macro Lab T120</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">

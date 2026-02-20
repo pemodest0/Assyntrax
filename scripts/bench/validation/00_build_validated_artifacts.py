@@ -220,14 +220,26 @@ def main() -> None:
         rec = g.iloc[-1].to_dict()
         group = group_map.get(str(asset), "unknown")
         fb = fallback.get(str(asset), {})
-        quality = rec.get("quality")
-        confidence = rec.get("regime_confidence")
-        if confidence is None:
-            confidence = rec.get("forecast_confidence")
-        if quality is None:
-            quality = fb.get("quality")
-        if confidence is None:
-            confidence = fb.get("confidence")
+        quality_raw = rec.get("quality")
+        confidence_raw = rec.get("regime_confidence")
+        if confidence_raw is None:
+            confidence_raw = rec.get("forecast_confidence")
+        if quality_raw is None:
+            quality_raw = fb.get("quality")
+        if confidence_raw is None:
+            confidence_raw = fb.get("confidence")
+
+        quality = pd.to_numeric(pd.Series([quality_raw]), errors="coerce").iloc[0]
+        confidence = pd.to_numeric(pd.Series([confidence_raw]), errors="coerce").iloc[0]
+
+        # Conservative fallback: when quality is missing, mirror confidence.
+        if pd.isna(quality) and not pd.isna(confidence):
+            quality = confidence
+        if pd.isna(confidence) and not pd.isna(quality):
+            confidence = quality
+        if pd.isna(quality) and pd.isna(confidence):
+            quality = 0.0
+            confidence = 0.0
 
         gate = evaluate_gate(
             asset=str(asset),
@@ -325,4 +337,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

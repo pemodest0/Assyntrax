@@ -146,6 +146,11 @@ def main() -> None:
 
         conf = pd.to_numeric(pd.Series([r.get("confidence")]), errors="coerce").iloc[0]
         qual = pd.to_numeric(pd.Series([r.get("quality")]), errors="coerce").iloc[0]
+        # Keep payload numeric when one metric exists and the other is missing.
+        if pd.isna(qual) and not pd.isna(conf):
+            qual = conf
+        if pd.isna(conf) and not pd.isna(qual):
+            conf = qual
         regime = str(r.get("regime", "INCONCLUSIVE"))
 
         pdcfg = prod_domain_cfg.get(domain, {})

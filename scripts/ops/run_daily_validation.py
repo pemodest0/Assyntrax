@@ -11,6 +11,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[2]
+PY = sys.executable
 
 
 def _run(cmd: list[str]) -> tuple[int, str]:
@@ -37,9 +38,9 @@ def main() -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     steps = [
-        ["python", "scripts/bench/validation/run_product_pipeline.py", "--seed", str(args.seed), "--max-assets", str(args.max_assets)],
+        [PY, "scripts/bench/validation/run_product_pipeline.py", "--seed", str(args.seed), "--max-assets", str(args.max_assets)],
         [
-            "python",
+            PY,
             "scripts/bench/validation/04_universe_mini.py",
             "--outdir",
             "results/validation/universe_mini_full",
@@ -49,7 +50,7 @@ def main() -> None:
             str(args.max_assets),
         ],
         [
-            "python",
+            PY,
             "scripts/bench/validation/10_calibrate_switch_targets.py",
             "--universe-dir",
             "results/validation/universe_mini_full",
@@ -57,7 +58,7 @@ def main() -> None:
             "results/validation/calibration_full",
         ],
         [
-            "python",
+            PY,
             "scripts/bench/validation/11_metric_uncertainty_ci.py",
             "--outdir",
             "results/validation/uncertainty_full",

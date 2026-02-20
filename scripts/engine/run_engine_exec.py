@@ -56,7 +56,7 @@ def rolling_volatility(returns: pd.Series, window: int) -> pd.Series:
 
 
 def load_series(asset: str, allow_downloads: bool) -> pd.DataFrame | None:
-    base_dir = Path(__file__).resolve().parents[1]
+    base_dir = ROOT
     local_candidates = find_local_data(asset, base_dir)
     if (not local_candidates) and asset.startswith("^"):
         local_candidates = find_local_data(asset.replace("^", ""), base_dir)
@@ -111,13 +111,21 @@ def predict_ma(values: np.ndarray, horizon: int, window: int = 5) -> np.ndarray:
     return pred
 
 
-def predict_knn(values: np.ndarray, horizon: int, tau: int = 2, m: int = 4, k: int = 10) -> np.ndarray:
+def predict_knn(
+    values: np.ndarray,
+    horizon: int,
+    tau: int = 2,
+    m: int = 4,
+    k: int = 10,
+    train_end: int | None = None,
+) -> np.ndarray:
     pred = np.full_like(values, np.nan, dtype=float)
     if len(values) <= (m - 1) * tau + horizon + 1:
         return pred
     model = TakensKNN(tau=tau, m=m, k=k)
-    train_end = len(values) - horizon - 1
-    if not model.fit(values, train_end):
+    train_end_idx = len(values) - horizon - 1 if train_end is None else int(train_end)
+    train_end_idx = max((m - 1) * tau + 1, min(train_end_idx, len(values) - horizon - 1))
+    if not model.fit(values, train_end_idx):
         return pred
     for i in range((m - 1) * tau, len(values) - horizon):
         state = np.array([values[i - j * tau] for j in range(m)], dtype=float)
@@ -128,20 +136,25 @@ def predict_knn(values: np.ndarray, horizon: int, tau: int = 2, m: int = 4, k: i
     return pred
 
 
-def predict_markov(values: np.ndarray, horizon: int, n_bins: int = 7) -> np.ndarray:
+def predict_markov(values: np.ndarray, horizon: int, n_bins: int = 7, train_end: int | None = None) -> np.ndarray:
     pred = np.full_like(values, np.nan, dtype=float)
     if len(values) < horizon + 5:
         return pred
-    quantiles = np.quantile(values, np.linspace(0, 1, n_bins + 1))
-    bins = np.digitize(values, quantiles[1:-1], right=True)
+    train_end_idx = len(values) - horizon - 1 if train_end is None else int(train_end)
+    train_end_idx = max(2, min(train_end_idx, len(values) - horizon - 1))
+    train_values = np.asarray(values[: train_end_idx + 1], dtype=float)
+    if train_values.size < 5:
+        return pred
+    quantiles = np.quantile(train_values, np.linspace(0, 1, n_bins + 1))
+    bins = np.digitize(np.asarray(values, dtype=float), quantiles[1:-1], right=True)
     centers = []
     for i in range(n_bins):
-        mask = bins == i
-        centers.append(float(np.mean(values[mask])) if mask.any() else float(np.mean(values)))
+        mask = bins[: train_end_idx + 1] == i
+        centers.append(float(np.mean(train_values[mask])) if mask.any() else float(np.mean(train_values)))
     centers = np.array(centers)
 
     trans = np.zeros((n_bins, n_bins), dtype=float)
-    for i in range(len(bins) - 1):
+    for i in range(train_end_idx):
         trans[bins[i], bins[i + 1]] += 1
     row_sums = trans.sum(axis=1)
     row_sums[row_sums == 0] = 1.0
@@ -261,6 +274,10 @@ def main() -> None:
                     test_start_pos = int(np.where(dates >= test_start)[0].min()) if np.any(dates >= test_start) else None
                     if test_start_pos is None:
                         continue
+                    train_idx = np.where(mask_train)[0]
+                    if len(train_idx) == 0:
+                        continue
+                    train_end_pos = int(train_idx.max())
 
                     for horizon in horizons:
                         min_valid = test_start_pos + horizon
@@ -279,9 +296,9 @@ def main() -> None:
                             elif model == "ma5":
                                 pred = predict_ma(values, horizon, window=5)
                             elif model == "knn_phase":
-                                pred = predict_knn(values, horizon)
+                                pred = predict_knn(values, horizon, train_end=train_end_pos)
                             elif model == "markov_phase":
-                                pred = predict_markov(values, horizon)
+                                pred = predict_markov(values, horizon, train_end=train_end_pos)
                             else:
                                 continue
 
@@ -387,4 +404,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

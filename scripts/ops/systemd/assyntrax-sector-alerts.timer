@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Assyntrax Daily Sector Alerts
+
+[Timer]
+OnCalendar=*-*-* 06:15:00
+Persistent=true
+Unit=assyntrax-sector-alerts.service
+
+[Install]
+WantedBy=timers.target
+

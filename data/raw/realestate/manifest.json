@@ -1,12 +1,12 @@
 {
-  "run_date": "2026-02-13",
+  "run_date": "2026-02-18",
   "fipezap": [
     {
-      "file": "data\\raw\\realestate\\fipezap\\fipezap_serieshistoricas.xlsx",
+      "file": "data/raw/realestate/fipezap/fipezap_serieshistoricas.xlsx",
       "status": "ok"
     },
     {
-      "file": "data\\raw\\realestate\\fipezap\\fipezap_historico.xlsx",
+      "file": "data/raw/realestate/fipezap/fipezap_historico.xlsx",
       "status": "ok"
     }
   ],
@@ -14,50 +14,50 @@
     {
       "series_id": 11,
       "name": "SELIC_D",
-      "rows": 6561,
-      "status": "ok"
+      "status": "fail",
+      "reason": "<urlopen error [Errno 8] nodename nor servname provided, or not known>"
     },
     {
       "series_id": 433,
       "name": "IPCA_M",
-      "rows": 313,
-      "status": "ok"
+      "status": "fail",
+      "reason": "<urlopen error [Errno 8] nodename nor servname provided, or not known>"
     },
     {
       "series_id": 188,
       "name": "INPC_M",
-      "rows": 313,
-      "status": "ok"
+      "status": "fail",
+      "reason": "<urlopen error [Errno 8] nodename nor servname provided, or not known>"
     },
     {
       "series_id": 189,
       "name": "IGPM_M",
-      "rows": 313,
-      "status": "ok"
+      "status": "fail",
+      "reason": "<urlopen error [Errno 8] nodename nor servname provided, or not known>"
     },
     {
       "series_id": 25447,
       "name": "CRED_IMOB_PF_JUROS_MERCADO",
-      "rows": 178,
-      "status": "ok"
+      "status": "fail",
+      "reason": "<urlopen error [Errno 8] nodename nor servname provided, or not known>"
     },
     {
       "series_id": 20038,
       "name": "CRED_IMOB_PF_JUROS_TOTAL",
       "status": "fail",
-      "reason": "Expecting value: line 1 column 1 (char 0)"
+      "reason": "<urlopen error [Errno 8] nodename nor servname provided, or not known>"
     },
     {
       "series_id": 192,
       "name": "INCC_M",
-      "rows": 313,
-      "status": "ok"
+      "status": "fail",
+      "reason": "<urlopen error [Errno 8] nodename nor servname provided, or not known>"
     },
     {
       "series_id": 20540,
       "name": "CRED_IMOB_PF_SALDO",
-      "rows": 226,
-      "status": "ok"
+      "status": "fail",
+      "reason": "<urlopen error [Errno 8] nodename nor servname provided, or not known>"
     }
   ],
   "abrainc": [
