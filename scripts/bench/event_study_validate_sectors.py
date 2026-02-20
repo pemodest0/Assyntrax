@@ -42,7 +42,7 @@ def _load_returns_csv(path: Path) -> pd.DataFrame | None:
         return None
     try:
         df = pd.read_csv(path)
-    except Exception:
+    except (FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError, OSError):
         return None
     if "date" not in df.columns:
         return None
@@ -66,7 +66,7 @@ def _load_sector_map(paths: list[Path]) -> dict[str, str]:
             continue
         try:
             df = pd.read_csv(p)
-        except Exception:
+        except (FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError, OSError):
             continue
         cols = {str(c).lower(): str(c) for c in df.columns}
         a_col = cols.get("asset") or cols.get("ticker") or cols.get("symbol")
@@ -127,7 +127,7 @@ def build_sector_daily_series(
             continue
         try:
             rg = pd.read_csv(rg_path)
-        except Exception:
+        except (FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError, OSError):
             continue
         if rg.empty or "regime" not in rg.columns or "confidence" not in rg.columns:
             continue
@@ -344,7 +344,7 @@ def _apply_min_gap(alert: pd.Series, min_gap_days: int = 0) -> pd.Series:
 def _safe_float(x: float | int | np.floating | None) -> float:
     try:
         v = float(x)
-    except Exception:
+    except (TypeError, ValueError):
         return 0.0
     return v if np.isfinite(v) else 0.0
 
@@ -621,7 +621,7 @@ def choose_auto_policy_for_sector(
         try:
             layered, _ = build_layered_alerts_for_sector(cal=cal_thr, test=cal_eval, policy=cand, params=params)
             alert_eval = layered["confirmed_alert"].astype(bool)
-        except Exception:
+        except (TypeError, ValueError, KeyError, RuntimeError):
             continue
         m_draw5 = evaluate_alerts(cal_eval["date"], alert_eval, ev_local.get("drawdown20", []), lookback_days=5)
         m_draw10 = evaluate_alerts(cal_eval["date"], alert_eval, ev_local.get("drawdown20", []), lookback_days=10)

@@ -42,7 +42,7 @@ def _load_returns_csv(path: Path) -> pd.DataFrame | None:
         return None
     try:
         df = pd.read_csv(path)
-    except Exception:
+    except (FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError, OSError):
         return None
     if "date" not in df.columns:
         return None
@@ -90,7 +90,7 @@ def build_motor_daily_series(tickers: list[str], assets_dir: Path, prices_dir: P
             continue
         try:
             rg = pd.read_csv(rg_path)
-        except Exception:
+        except (FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError, OSError):
             continue
         if rg.empty or "regime" not in rg.columns or "confidence" not in rg.columns:
             continue
@@ -646,7 +646,7 @@ def main() -> None:
             fig.tight_layout()
             fig.savefig(outdir / "tradeoff_detection_false_alarm.png", dpi=140)
             plt.close(fig)
-        except Exception as exc:
+        except (ImportError, OSError, ValueError, RuntimeError) as exc:
             (outdir / "plot_error.txt").write_text(str(exc), encoding="utf-8")
 
     log("step: write_config")

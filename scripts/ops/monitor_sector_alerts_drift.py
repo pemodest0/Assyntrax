@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 def _safe_float(x: object) -> float | None:
     try:
         v = float(x)
-    except Exception:
+    except (TypeError, ValueError):
         return None
     return v if math.isfinite(v) else None
 
@@ -31,7 +31,7 @@ def _load_profile_defaults(path: Path) -> dict[str, float]:
         return {}
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, json.JSONDecodeError):
         return {}
     drift_cfg = payload.get("drift_monitor", {})
     if not isinstance(drift_cfg, dict):

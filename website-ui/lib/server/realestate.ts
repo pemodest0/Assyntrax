@@ -238,6 +238,16 @@ function rollingMean(values: number[], window: number) {
   return out;
 }
 
+function zscoreArray(values: number[]) {
+  const clean = values.map((v) => (Number.isFinite(v) ? v : 0));
+  if (!clean.length) return [];
+  const mean = clean.reduce((a, b) => a + b, 0) / clean.length;
+  const variance = clean.reduce((acc, v) => acc + (v - mean) * (v - mean), 0) / clean.length;
+  const sd = Math.sqrt(Math.max(variance, 0));
+  if (!Number.isFinite(sd) || sd <= 1e-9) return clean.map(() => 0);
+  return clean.map((v) => (v - mean) / sd);
+}
+
 function inferMeta(asset: string): RealEstateAssetMeta {
   const clean = asset.replace(/^FipeZap_/i, "").replace(/_Total$/i, "").replace(/_core$/i, "");
   const city = clean.replace(/_/g, " ");
@@ -403,7 +413,15 @@ function buildDataLayerFromNormalized(asset: string, price: Point[], rate: Point
     return { date: p.date, value: Number.isFinite(exact as number) ? (exact as number) : lastRate };
   });
 
-  const D: Point[] = [];
+  const retSimple = priceVals.map((v, i) => (i === 0 ? 0 : v / Math.max(priceVals[i - 1], 1e-9) - 1));
+  const negRet = retSimple.map((v) => Math.max(0, -v));
+  const negRetSmooth = rollingMean(negRet, 3);
+  const zNegRet = zscoreArray(negRetSmooth);
+  const zIlliq = zscoreArray(L.map((p) => -p.value));
+  const D: Point[] = priceAligned.map((p, i) => ({
+    date: p.date,
+    value: Math.max(0, Math.min(25, 5 + 2.5 * (0.65 * (zNegRet[i] || 0) + 0.35 * (zIlliq[i] || 0)))),
+  }));
 
   let missingGap = 0;
   for (let i = 1; i < priceAligned.length; i++) {
@@ -426,11 +444,11 @@ function buildDataLayerFromNormalized(asset: string, price: Point[], rate: Point
         P: priceAligned.length > 0,
         L: L.length > 0,
         J: J.length > 0,
-        D: false,
+        D: D.length > 0,
       },
       notes: [
         "L(t) usa proxy de liquidez via estabilidade local de retornos.",
-        "D(t) ainda nao existe no repositorio; TODO: integrar desconto pedido x fechamento.",
+        "D(t) usa desconto proxy derivado de queda de preco e iliquidez local.",
       ],
     },
     series: {
