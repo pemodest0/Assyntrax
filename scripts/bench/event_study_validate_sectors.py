@@ -25,6 +25,8 @@ class EvalResult:
     n_events: int
     n_alert_days: int
     n_false_alert_days: int
+    n_alert_episodes: int
+    n_false_alert_episodes: int
 
 
 def _ts_id() -> str:
@@ -240,6 +242,12 @@ def evaluate_alerts(
             good_alerts += 1
     n_alert_episodes = int(len(alert_episode_idx))
     n_false_episodes = int(max(0, n_alert_episodes - good_alerts))
+    good_alert_days = 0
+    for a in alert_days_idx:
+        has_future_event = any((ev >= a + 1) and (ev <= a + int(assoc_horizon_days)) for ev in event_idx)
+        if has_future_event:
+            good_alert_days += 1
+    n_false_alert_days = int(max(0, len(alert_days_idx) - good_alert_days))
     years = max(1e-9, len(dts) / 252.0)
 
     return EvalResult(
@@ -250,7 +258,9 @@ def evaluate_alerts(
         coincident_rate=float(coincident / len(event_idx)) if event_idx else float("nan"),
         n_events=int(len(event_idx)),
         n_alert_days=int(len(alert_days_idx)),
-        n_false_alert_days=n_false_episodes,
+        n_false_alert_days=n_false_alert_days,
+        n_alert_episodes=n_alert_episodes,
+        n_false_alert_episodes=n_false_episodes,
     )
 
 
@@ -985,12 +995,13 @@ def main() -> None:
                 confirmed_ev = evaluate_alerts(test["date"], test["alert_confirmed"], ev_dates, lookback_days=L)
                 b1_ev = evaluate_alerts(test["date"], test["alert_vol95"], ev_dates, lookback_days=L)
                 b2_ev = evaluate_alerts(test["date"], test["alert_ret1"], ev_dates, lookback_days=L)
+                motor_alert_episodes = int(_entry_alert(test["alert_motor"]).sum())
                 rnd_iid = None
                 rnd_block = None
                 if args.random_baseline_method in {"iid", "both"}:
                     rnd_iid = random_baseline_distribution(
                         dates=test["date"],
-                        n_alert_days=int(test["alert_motor"].sum()),
+                        n_alert_days=motor_alert_episodes,
                         event_dates=ev_dates,
                         lookback_days=L,
                         n_boot=int(args.n_random),
@@ -1001,7 +1012,7 @@ def main() -> None:
                 if args.random_baseline_method in {"block", "both"}:
                     rnd_block = random_baseline_distribution(
                         dates=test["date"],
-                        n_alert_days=int(test["alert_motor"].sum()),
+                        n_alert_days=motor_alert_episodes,
                         event_dates=ev_dates,
                         lookback_days=L,
                         n_boot=int(args.n_random),
@@ -1053,6 +1064,8 @@ def main() -> None:
                             "n_events": evm.n_events,
                             "n_alert_days": evm.n_alert_days,
                             "n_false_alert_days": evm.n_false_alert_days,
+                            "n_alert_episodes": evm.n_alert_episodes,
+                            "n_false_alert_episodes": evm.n_false_alert_episodes,
                             "p_vs_random_recall": p_vs_random if model_name in {"motor", "motor_confirmed"} else float("nan"),
                             "p_vs_random_recall_iid": p_vs_random_iid if model_name in {"motor", "motor_confirmed"} else float("nan"),
                             "p_vs_random_recall_block": p_vs_random_block if model_name in {"motor", "motor_confirmed"} else float("nan"),

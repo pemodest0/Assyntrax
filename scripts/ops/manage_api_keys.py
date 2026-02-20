@@ -45,7 +45,7 @@ def set_var(lines: list[str], key: str, value: str) -> list[str]:
 def main() -> None:
     ap = argparse.ArgumentParser(description="Generate/update Assyntrax API keys in env file.")
     ap.add_argument("--env-file", type=str, default="website-ui/.env.local")
-    ap.add_argument("--create", type=int, default=1, help="How many keys to create.")
+    ap.add_argument("--create", type=int, default=0, help="How many keys to create.")
     ap.add_argument("--show-current", action="store_true")
     args = ap.parse_args()
 
@@ -58,11 +58,13 @@ def main() -> None:
             break
     current_keys = [x.strip() for x in current.split(",") if x.strip()]
 
-    new_keys = [secrets.token_urlsafe(24) for _ in range(max(1, int(args.create)))]
+    n_create = max(0, int(args.create))
+    new_keys = [secrets.token_urlsafe(24) for _ in range(n_create)]
     merged = current_keys + new_keys
 
-    lines = set_var(lines, "ASSYNTRAX_API_KEYS", ",".join(merged))
-    write_env(env_path, lines)
+    if n_create > 0:
+        lines = set_var(lines, "ASSYNTRAX_API_KEYS", ",".join(merged))
+        write_env(env_path, lines)
 
     print(
         {

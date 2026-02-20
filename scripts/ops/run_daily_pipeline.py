@@ -10,9 +10,17 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 
 
-def run(cmd: str) -> None:
-    print(f"[run] {cmd}")
-    subprocess.run(cmd, shell=True, check=True, cwd=REPO)
+def run(cmd: list[str]) -> None:
+    print("[run] " + " ".join(cmd))
+    subprocess.run(cmd, check=True, cwd=REPO)
+
+
+def _default_tickers_csv() -> str:
+    base = REPO / "data/raw/finance/yfinance_daily"
+    if not base.exists():
+        return ""
+    tickers = sorted(p.stem for p in base.glob("*.csv") if p.is_file())
+    return ",".join(tickers)
 
 
 def main() -> None:
@@ -28,27 +36,21 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.fred_key:
-        run(f"python3 scripts/data/fetch_finance.py --fred-key {args.fred_key}")
-    run("python3 scripts/data/fetch_logistics.py")
-    run("python3 scripts/data/fetch_realestate.py")
+        run(["python3", "scripts/data/fetch_finance.py", "--fred-key", args.fred_key])
+    run(["python3", "scripts/data/fetch_logistics.py"])
+    run(["python3", "scripts/data/fetch_realestate.py"])
 
     tickers = args.tickers
     if not tickers:
-        # default: use existing yfinance tickers
-        tickers = "$(ls data/raw/finance/yfinance_daily | sed 's/\\.csv$//' | paste -sd, -)"
+        tickers = _default_tickers_csv()
+        if not tickers:
+            raise RuntimeError("No tickers found in data/raw/finance/yfinance_daily and --tickers was not provided.")
 
-    cmd = [
-        "python3 scripts/bench/run_graph_regime_universe.py",
-        f"--tickers \"{tickers}\"",
-        f"--timeframes {args.timeframes}",
-        f"--mode {args.mode}",
-        f"--outdir {args.outdir}",
-    ]
+    cmd = ["python3", "scripts/bench/run_graph_regime_universe.py", "--tickers", tickers, "--timeframes", args.timeframes, "--mode", args.mode, "--outdir", args.outdir]
     if args.auto_embed:
         cmd.append("--auto-embed")
-        cmd.append(f"--tau-method {args.tau_method}")
-        cmd.append(f"--m-method {args.m_method}")
-    run(" ".join(cmd))
+        cmd.extend(["--tau-method", args.tau_method, "--m-method", args.m_method])
+    run(cmd)
 
 
 if __name__ == "__main__":
