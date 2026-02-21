@@ -656,17 +656,24 @@ export default function AplicacoesPage() {
         <div className="mt-4 rounded-xl border border-zinc-800 bg-black/30 p-3">
           <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Fontes prioritárias</div>
           <div className="mt-2 flex flex-wrap gap-2 text-xs">
-            {sourceLinks.map((src) => (
-              <a
-                key={src.href}
-                href={src.href}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-md border border-zinc-700 px-2 py-1 text-zinc-200 hover:border-zinc-500"
-              >
-                {src.label}
-              </a>
-            ))}
+            {sourceLinks.map((src, idx) => {
+              const href = String(src.href || "").trim();
+              return href ? (
+                <a
+                  key={href}
+                  href={href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-md border border-zinc-700 px-2 py-1 text-zinc-200 hover:border-zinc-500"
+                >
+                  {src.label}
+                </a>
+              ) : (
+                <span key={`nolink-${idx}`} className="rounded-md border border-zinc-800 px-2 py-1 text-zinc-500">
+                  {src.label} (link indisponível)
+                </span>
+              );
+            })}
           </div>
         </div>
         <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/40 p-3 text-xs text-zinc-400">

@@ -24,9 +24,9 @@ const labelsByLocale: Record<Locale, Record<string, string>> = {
     sending: "Enviando...",
     successTitle: "Pedido enviado",
     successText: "Recebemos seu contato com protocolo",
-    errorTitle: "Nao foi possivel enviar agora",
-    errorText: "Tente novamente em alguns minutos ou use o email direto.",
-    help: "Resposta esperada em ate 1 dia util.",
+    errorTitle: "Não foi possível enviar agora",
+    errorText: "Tente novamente em alguns minutos ou use o e-mail direto.",
+    help: "Resposta esperada em até 1 dia útil.",
   },
   en: {
     name: "Name",
@@ -68,7 +68,7 @@ export default function ContactForm({ locale = "pt" }: { locale?: Locale }) {
       setStatus("error");
       setError(
         locale === "pt"
-          ? "Preencha um e-mail valido e uma mensagem com pelo menos 20 caracteres."
+          ? "Preencha um e-mail válido e uma mensagem com pelo menos 20 caracteres."
           : "Please provide a valid email and a message with at least 20 characters."
       );
       return;
@@ -131,7 +131,7 @@ export default function ContactForm({ locale = "pt" }: { locale?: Locale }) {
             type="email"
             required
             className="w-full rounded-xl border border-zinc-700 bg-black/40 px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
-            placeholder={locale === "pt" ? "voce@empresa.com" : "you@company.com"}
+            placeholder={locale === "pt" ? "seu.email@empresa.com" : "you@company.com"}
           />
         </Field>
         <Field label={labels.company}>
@@ -147,7 +147,7 @@ export default function ContactForm({ locale = "pt" }: { locale?: Locale }) {
             value={sector}
             onChange={(e) => setSector(e.target.value)}
             className="w-full rounded-xl border border-zinc-700 bg-black/40 px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
-            placeholder={locale === "pt" ? "Ex: finanças, renda fixa, ações" : "Ex: finance, fixed income, equities"}
+            placeholder={locale === "pt" ? "Ex.: finanças, renda fixa, ações" : "Ex: finance, fixed income, equities"}
           />
         </Field>
       </div>
@@ -157,7 +157,7 @@ export default function ContactForm({ locale = "pt" }: { locale?: Locale }) {
           value={horizon}
           onChange={(e) => setHorizon(e.target.value)}
           className="w-full rounded-xl border border-zinc-700 bg-black/40 px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
-          placeholder={locale === "pt" ? "Ex: diario, semanal, 20 dias" : "Ex: daily, weekly, 20 days"}
+          placeholder={locale === "pt" ? "Ex.: diário, semanal, 20 dias" : "Ex: daily, weekly, 20 days"}
         />
       </Field>
 
@@ -170,7 +170,7 @@ export default function ContactForm({ locale = "pt" }: { locale?: Locale }) {
           className="w-full rounded-xl border border-zinc-700 bg-black/40 px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
           placeholder={
             locale === "pt"
-              ? "Descreva o contexto, os ativos, o objetivo e como quer consumir a saida."
+              ? "Descreva o contexto, os ativos, o objetivo e como quer consumir a saída."
               : "Describe context, assets, objective, and how you want to consume outputs."
           }
         />

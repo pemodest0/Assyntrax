@@ -58,14 +58,22 @@ export default async function CasosPage() {
             <div className="mt-4">
               <h3 className="text-xs tracking-[0.12em] uppercase text-zinc-500">Fontes</h3>
               <ul className="mt-2 space-y-1 text-sm">
-                {item.sources.map((src) => (
-                  <li key={`${item.id}-${src.url}`} className="text-zinc-300">
-                    [{src.level}] {src.title} -{" "}
-                    <a className="text-emerald-300 hover:text-emerald-200 underline underline-offset-2" href={src.url} target="_blank" rel="noreferrer">
-                      link
-                    </a>
-                  </li>
-                ))}
+                {item.sources.map((src, idx) => {
+                  const href = String(src.url || "").trim();
+                  const title = String(src.title || "").trim() || "Fonte sem título";
+                  return (
+                    <li key={`${item.id}-${idx}`} className="text-zinc-300">
+                      [{src.level}] {title} -{" "}
+                      {href ? (
+                        <a className="text-emerald-300 hover:text-emerald-200 underline underline-offset-2" href={href} target="_blank" rel="noreferrer">
+                          link
+                        </a>
+                      ) : (
+                        <span className="text-zinc-500">link indisponível</span>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           </article>

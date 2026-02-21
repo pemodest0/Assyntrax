@@ -209,18 +209,27 @@ export default function MethodsPageClient() {
       <section className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-6">
         <div className="text-xs uppercase tracking-[0.3em] text-zinc-500">Referências metodológicas</div>
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-          {methodReferences.map((ref) => (
-            <a
-              key={ref.id}
-              href={ref.href}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 hover:border-zinc-600 transition"
-            >
-              <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">{ref.id}</div>
-              <div className="mt-1 text-sm text-zinc-200">{ref.title}</div>
-            </a>
-          ))}
+          {methodReferences.map((ref) => {
+            const href = String(ref.href || "").trim();
+            return href ? (
+              <a
+                key={ref.id}
+                href={href}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 hover:border-zinc-600 transition"
+              >
+                <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">{ref.id}</div>
+                <div className="mt-1 text-sm text-zinc-200">{ref.title}</div>
+              </a>
+            ) : (
+              <div key={ref.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+                <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">{ref.id}</div>
+                <div className="mt-1 text-sm text-zinc-200">{ref.title}</div>
+                <div className="mt-1 text-xs text-zinc-500">Link indisponível.</div>
+              </div>
+            );
+          })}
         </div>
       </section>
     </div>

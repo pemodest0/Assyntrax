@@ -642,10 +642,10 @@ export default function SectorAlertsDashboard() {
         <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 md:p-5">
           <div className="text-sm uppercase tracking-widest text-zinc-400">Qualidade dos dados</div>
           <div className="mt-2 text-xs text-zinc-300">
-            setores elegiveis: {data.data_quality?.sectors_eligible ?? "--"}/{data.data_quality?.sectors_total ?? "--"}
+            setores elegíveis: {data.data_quality?.sectors_eligible ?? "--"}/{data.data_quality?.sectors_total ?? "--"}
           </div>
           <div className="mt-1 text-xs text-zinc-300">
-            ativos em setores elegiveis: {data.data_quality?.assets_in_eligible_sectors ?? "--"}
+            ativos em setores elegíveis: {data.data_quality?.assets_in_eligible_sectors ?? "--"}
           </div>
           <div className="mt-1 text-xs text-zinc-300">
             ativos fora de elegibilidade: {data.data_quality?.assets_in_ineligible_sectors ?? "--"}
@@ -658,7 +658,7 @@ export default function SectorAlertsDashboard() {
         <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 md:p-5">
           <div className="text-sm uppercase tracking-widest text-zinc-400">Limites do motor</div>
           <div className="mt-2 text-xs text-zinc-300">faz: {data.limits?.what_it_does || "--"}</div>
-          <div className="mt-1 text-xs text-zinc-300">nao faz: {data.limits?.what_it_does_not || "--"}</div>
+          <div className="mt-1 text-xs text-zinc-300">não faz: {data.limits?.what_it_does_not || "--"}</div>
           <div className="mt-2 space-y-1 text-xs text-zinc-500">
             {(data.limits?.methodological_limits || []).map((x) => (
               <div key={x}>- {x}</div>
