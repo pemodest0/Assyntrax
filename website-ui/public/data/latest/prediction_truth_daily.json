@@ -1,7 +1,7 @@
 {
   "status": "ok",
-  "run_id": "20260220T235131Z",
-  "generated_at_utc": "2026-02-20T23:51:32.685741+00:00",
+  "run_id": "20260221T222415Z",
+  "generated_at_utc": "2026-02-21T22:24:17.640449+00:00",
   "snapshot_path": "/Users/PedroHenrique/Desktop/A-firma/website-ui/public/data/latest/api_records.jsonl",
   "config": {
     "lookback": 252,
@@ -33,7 +33,7 @@
   },
   "top_misses": [
     {
-      "run_id": "20260220T235131Z",
+      "run_id": "20260221T222415Z",
       "asset": "DBA",
       "prediction_date": "2022-12-31",
       "evaluation_date": "2023-01-03",
@@ -47,7 +47,7 @@
       "abs_threshold": 0.012108372525079148
     },
     {
-      "run_id": "20260220T235131Z",
+      "run_id": "20260221T222415Z",
       "asset": "IEF",
       "prediction_date": "2023-12-31",
       "evaluation_date": "2024-01-02",
@@ -61,7 +61,7 @@
       "abs_threshold": 0.007583157451668399
     },
     {
-      "run_id": "20260220T235131Z",
+      "run_id": "20260221T222415Z",
       "asset": "QQQ",
       "prediction_date": "2025-12-31",
       "evaluation_date": "2026-01-02",
@@ -75,7 +75,7 @@
       "abs_threshold": 0.014365645060842704
     }
   ],
-  "details_csv": "/Users/PedroHenrique/Desktop/A-firma/results/ops/prediction_truth/details/20260220T235131Z.csv",
+  "details_csv": "/Users/PedroHenrique/Desktop/A-firma/results/ops/prediction_truth/details/20260221T222415Z.csv",
   "history_tail": [
     {
       "run_id": "20260218",
@@ -128,6 +128,22 @@
     {
       "run_id": "20260220T235131Z",
       "generated_at_utc": "2026-02-20T23:51:32.685741+00:00",
+      "predictions_scored": "3",
+      "accuracy": "0.0",
+      "precision_risk": "0.0",
+      "recall_risk": "",
+      "false_alarm_rate": "1.0",
+      "event_rate": "0.0",
+      "hits": "0",
+      "misses": "3",
+      "tp": "0",
+      "tn": "0",
+      "fp": "3",
+      "fn": "0"
+    },
+    {
+      "run_id": "20260221T222415Z",
+      "generated_at_utc": "2026-02-21T22:24:17.640449+00:00",
       "predictions_scored": 3,
       "accuracy": 0.0,
       "precision_risk": 0.0,

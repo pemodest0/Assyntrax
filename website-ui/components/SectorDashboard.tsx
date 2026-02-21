@@ -37,7 +37,7 @@ type AssetRow = {
   retH10: number | null;
 };
 
-const MISSING = "--";
+const MISSING = "n/d";
 
 const groupLabels: Record<string, string> = {
   crypto: "Cripto",
@@ -73,13 +73,14 @@ const PREFERRED_BY_DOMAIN: Record<Domain, string[]> = {
 };
 
 function mean(values: number[]) {
-  if (!values.length) return 0;
+  if (!values.length) return null;
   return values.reduce((acc, value) => acc + value, 0) / values.length;
 }
 
 function std(values: number[]) {
   if (values.length < 2) return 0;
   const avg = mean(values);
+  if (avg == null) return 0;
   const variance = values.reduce((acc, value) => acc + (value - avg) ** 2, 0) / values.length;
   return Math.sqrt(variance);
 }
@@ -122,8 +123,8 @@ function toneFromPct(value: number | null | undefined) {
 function buildAssetNarrative(row: AssetRow | null, horizon: 1 | 5 | 10) {
   if (!row) return "Selecione um ativo para ver a leitura do comportamento recente.";
   const hKey = horizon === 1 ? row.retH1 : horizon === 5 ? row.retH5 : row.retH10;
-  const daily = isFiniteNumber(row.changePct) ? row.changePct : 0;
-  const tone = daily > 0 ? "de força" : daily < 0 ? "de pressão" : "lateral";
+  const daily = isFiniteNumber(row.changePct) ? row.changePct : null;
+  const tone = daily == null ? "com variação diária indisponível" : daily > 0 ? "de força" : daily < 0 ? "de pressão" : "lateral";
   const vol = isFiniteNumber(row.vol20d) ? row.vol20d : null;
   const volText = vol == null ? "sem vol 20d suficiente" : vol > 0.02 ? "volatilidade alta" : "volatilidade controlada";
   const hText = isFiniteNumber(hKey) ? formatPercent(hKey) : "sem leitura";
@@ -360,13 +361,13 @@ export default function SectorDashboard({
 
   const summary = useMemo(() => {
     const withDaily = tableRows.filter((row) => isFiniteNumber(row.changePct));
-    const topGain = [...withDaily].sort((a, b) => (b.changePct || 0) - (a.changePct || 0))[0];
-    const topDrop = [...withDaily].sort((a, b) => (a.changePct || 0) - (b.changePct || 0))[0];
+    const topGain = [...withDaily].sort((a, b) => (b.changePct as number) - (a.changePct as number))[0];
+    const topDrop = [...withDaily].sort((a, b) => (a.changePct as number) - (b.changePct as number))[0];
 
     const horizonKey = summaryHorizon === 1 ? "retH1" : summaryHorizon === 5 ? "retH5" : "retH10";
     const withHorizon = tableRows.filter((row) => isFiniteNumber(row[horizonKey] as number | null));
-    const topGainH = [...withHorizon].sort((a, b) => ((b[horizonKey] as number) || 0) - ((a[horizonKey] as number) || 0))[0];
-    const topDropH = [...withHorizon].sort((a, b) => ((a[horizonKey] as number) || 0) - ((b[horizonKey] as number) || 0))[0];
+    const topGainH = [...withHorizon].sort((a, b) => (b[horizonKey] as number) - (a[horizonKey] as number))[0];
+    const topDropH = [...withHorizon].sort((a, b) => (a[horizonKey] as number) - (b[horizonKey] as number))[0];
 
     const starts = tableRows.map((row) => row.startDate).filter((value): value is string => Boolean(value));
     const ends = tableRows.map((row) => row.endDate).filter((value): value is string => Boolean(value));
@@ -381,7 +382,7 @@ export default function SectorDashboard({
       topDrop,
       topGainH,
       topDropH,
-      avgVol20d: isFiniteNumber(avgVol20d) && avgVol20d > 0 ? avgVol20d : null,
+      avgVol20d: avgVol20d != null && avgVol20d > 0 ? avgVol20d : null,
     };
   }, [tableRows, summaryHorizon]);
 

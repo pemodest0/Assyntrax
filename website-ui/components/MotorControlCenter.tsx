@@ -97,17 +97,17 @@ type LabResponse = {
 };
 
 function num(v: number | null | undefined, d = 3) {
-  if (v == null || !Number.isFinite(v)) return "--";
+  if (v == null || !Number.isFinite(v)) return "n/d";
   return v.toFixed(d);
 }
 
 function pct(v: number | null | undefined, d = 1) {
-  if (v == null || !Number.isFinite(v)) return "--";
+  if (v == null || !Number.isFinite(v)) return "n/d";
   return `${(v * 100).toFixed(d)}%`;
 }
 
 function fmtPrice(v: number | null | undefined) {
-  if (v == null || !Number.isFinite(v)) return "--";
+  if (v == null || !Number.isFinite(v)) return "n/d";
   return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
@@ -148,7 +148,7 @@ function shortRegime(regime: string) {
   if (key.includes("transition") || key.includes("trans")) return "Transição";
   if (key.includes("dispersion")) return "Dispersão";
   if (key.includes("stable") || key.includes("estavel")) return "Estável";
-  return "Sem dado";
+  return "Sem regime publicado";
 }
 
 function dotTone(regime: string) {
@@ -215,8 +215,14 @@ function safeNum(v: number | null | undefined) {
 
 function clamp01(v: number | null | undefined) {
   const n = safeNum(v);
-  if (n == null) return 0;
+  if (n == null) return null;
   return Math.max(0, Math.min(1, n));
+}
+
+function textOrNd(value: unknown) {
+  if (value == null) return "n/d";
+  const text = String(value).trim();
+  return text.length ? text : "n/d";
 }
 
 export default function MotorControlCenter() {
@@ -325,10 +331,11 @@ export default function MotorControlCenter() {
         const risk = clamp01(row.risk_mean ?? null);
         const instavel = clamp01(row.pct_instavel ?? null);
         const conf = clamp01(row.confidence_mean ?? null);
+        if (risk == null || instavel == null || conf == null) return null;
         const score = 0.5 * risk + 0.35 * instavel + 0.15 * (1 - conf);
         return {
           sector: String(row.sector || "sem setor"),
-          alerta: String(row.alerta_setor || "verde"),
+          alerta: String(row.alerta_setor || ""),
           score,
           risk,
           instavel,
@@ -336,28 +343,46 @@ export default function MotorControlCenter() {
           nAssets: safeNum(row.n_assets ?? null),
         };
       })
+      .filter(
+        (
+          row
+        ): row is {
+          sector: string;
+          alerta: string;
+          score: number;
+          risk: number;
+          instavel: number;
+          confidence: number;
+          nAssets: number | null;
+        } => row !== null
+      )
       .sort((a, b) => b.score - a.score)
       .slice(0, 10);
   }, [sectorRows]);
+  const incompleteSectorRows = Math.max(0, sectorRows.length - sectorMathRows.length);
   const maxSectorScore = useMemo(
     () => sectorMathRows.reduce((acc, row) => Math.max(acc, row.score), 0.01),
     [sectorMathRows]
   );
   const universeRisk = useMemo(() => {
     if (!sectorMathRows.length) return null;
-    const weighted = sectorMathRows.map((x) => x.score * Math.max(1, x.nAssets || 1));
-    const weights = sectorMathRows.map((x) => Math.max(1, x.nAssets || 1));
-    const wSum = weights.reduce((acc, w) => acc + w, 0);
-    if (!wSum) return null;
-    return weighted.reduce((acc, value) => acc + value, 0) / wSum;
+    const withWeight = sectorMathRows.filter((x) => x.nAssets != null && x.nAssets > 0);
+    if (withWeight.length) {
+      const weightedSum = withWeight.reduce((acc, row) => acc + row.score * (row.nAssets as number), 0);
+      const weightSum = withWeight.reduce((acc, row) => acc + (row.nAssets as number), 0);
+      if (weightSum > 0) return weightedSum / weightSum;
+    }
+    return sectorMathRows.reduce((acc, row) => acc + row.score, 0) / sectorMathRows.length;
   }, [sectorMathRows]);
   const universeConfidence = useMemo(() => {
     if (!sectorMathRows.length) return null;
-    const weighted = sectorMathRows.map((x) => x.confidence * Math.max(1, x.nAssets || 1));
-    const weights = sectorMathRows.map((x) => Math.max(1, x.nAssets || 1));
-    const wSum = weights.reduce((acc, w) => acc + w, 0);
-    if (!wSum) return null;
-    return weighted.reduce((acc, value) => acc + value, 0) / wSum;
+    const withWeight = sectorMathRows.filter((x) => x.nAssets != null && x.nAssets > 0);
+    if (withWeight.length) {
+      const weightedSum = withWeight.reduce((acc, row) => acc + row.confidence * (row.nAssets as number), 0);
+      const weightSum = withWeight.reduce((acc, row) => acc + (row.nAssets as number), 0);
+      if (weightSum > 0) return weightedSum / weightSum;
+    }
+    return sectorMathRows.reduce((acc, row) => acc + row.confidence, 0) / sectorMathRows.length;
   }, [sectorMathRows]);
   const assetRows = useMemo(
     () => (Array.isArray(data?.asset_diagnostics?.items) ? data.asset_diagnostics?.items : []),
@@ -369,7 +394,14 @@ export default function MotorControlCenter() {
     return assetRows
       .filter((x) => (!a ? true : String(x.ticker || "").toUpperCase().includes(a)))
       .filter((x) => (!s ? true : normalizeText(cleanSectorName(String(x.sector || ""))).includes(s)))
-      .sort((x, y) => Number(y.risk_score || 0) - Number(x.risk_score || 0));
+      .sort((x, y) => {
+        const xr = safeNum(x.risk_score ?? null);
+        const yr = safeNum(y.risk_score ?? null);
+        if (xr == null && yr == null) return String(x.ticker || "").localeCompare(String(y.ticker || ""));
+        if (xr == null) return 1;
+        if (yr == null) return -1;
+        return yr - xr;
+      });
   }, [assetRows, assetSearch, sectorSearch]);
   const topAssetsForPrice = useMemo(() => filteredAssetsAll.slice(0, 40), [filteredAssetsAll]);
 
@@ -378,7 +410,8 @@ export default function MotorControlCenter() {
     for (const row of sectorRows) {
       const key = normalizeText(cleanSectorName(String(row.sector || "")));
       if (!key) continue;
-      map.set(key, String(row.alerta_setor || "verde"));
+      const alerta = String(row.alerta_setor || "").trim();
+      if (alerta) map.set(key, alerta);
     }
     return map;
   }, [sectorRows]);
@@ -421,11 +454,11 @@ export default function MotorControlCenter() {
       const risk = safeNum(row.risk_score ?? null);
       const conf = safeNum(row.confidence_score ?? null);
       if (risk != null) {
-        bucket.riskSum += clamp01(risk);
+        bucket.riskSum += Math.max(0, Math.min(1, risk));
         bucket.riskCount += 1;
       }
       if (conf != null) {
-        bucket.confSum += clamp01(conf);
+        bucket.confSum += Math.max(0, Math.min(1, conf));
         bucket.confCount += 1;
       }
       const regime = normalizeText(String(row.regime_asset || ""));
@@ -436,14 +469,15 @@ export default function MotorControlCenter() {
     }
     return Array.from(grouped.values())
       .map((row) => {
-        const riskMean = row.riskCount ? row.riskSum / row.riskCount : 0;
-        const confMean = row.confCount ? row.confSum / row.confCount : 0;
+        const riskMean = row.riskCount ? row.riskSum / row.riskCount : null;
+        const confMean = row.confCount ? row.confSum / row.confCount : null;
         const pctStress = row.count ? row.stress / row.count : 0;
         const pctTrans = row.count ? row.trans / row.count : 0;
-        const score = 0.55 * riskMean + 0.3 * pctStress + 0.15 * (1 - confMean);
+        const score = riskMean != null && confMean != null ? 0.55 * riskMean + 0.3 * pctStress + 0.15 * (1 - confMean) : null;
+        const sectorDataAlert = sectorAlertMap.get(normalizeText(row.sector)) || "";
         const alerta =
-          sectorAlertMap.get(normalizeText(row.sector)) ||
-          (score >= 0.7 ? "vermelho" : score >= 0.45 ? "amarelo" : "verde");
+          sectorDataAlert ||
+          (score == null ? "sem classificação" : score >= 0.7 ? "vermelho" : score >= 0.45 ? "amarelo" : "verde");
         return {
           ...row,
           riskMean,
@@ -454,7 +488,12 @@ export default function MotorControlCenter() {
           alerta,
         };
       })
-      .sort((a, b) => b.score - a.score);
+      .sort((a, b) => {
+        if (a.score == null && b.score == null) return a.sector.localeCompare(b.sector);
+        if (a.score == null) return 1;
+        if (b.score == null) return -1;
+        return b.score - a.score;
+      });
   }, [filteredAssetsAll, sectorAlertMap]);
 
   const universeByAsset = useMemo(() => {
@@ -471,11 +510,11 @@ export default function MotorControlCenter() {
       const risk = safeNum(row.risk_score ?? null);
       const conf = safeNum(row.confidence_score ?? null);
       if (risk != null) {
-        riskSum += clamp01(risk);
+        riskSum += Math.max(0, Math.min(1, risk));
         riskCount += 1;
       }
       if (conf != null) {
-        confSum += clamp01(conf);
+        confSum += Math.max(0, Math.min(1, conf));
         confCount += 1;
       }
       const regime = normalizeText(String(row.regime_asset || ""));
@@ -503,12 +542,14 @@ export default function MotorControlCenter() {
       const risk = safeNum(row.risk_score ?? null);
       const confidence = safeNum(row.confidence_score ?? null);
       if (risk == null || confidence == null) continue;
+      const ticker = String(row.ticker || "").trim();
+      if (!ticker) continue;
       points.push({
-        ticker: String(row.ticker || "--"),
+        ticker,
         sector: cleanSectorName(String(row.sector || "Sem setor")),
         regime: String(row.regime_asset || ""),
-        risk: clamp01(risk),
-        confidence: clamp01(confidence),
+        risk: Math.max(0, Math.min(1, risk)),
+        confidence: Math.max(0, Math.min(1, confidence)),
       });
     }
     return points;
@@ -566,12 +607,22 @@ export default function MotorControlCenter() {
     return sliced;
   }, [regimeHistory, periodDays]);
   const activeDot = hoveredDot || (regimeDots.length ? regimeDots[regimeDots.length - 1] : null);
-  const displayRegime = String(play.regime || "--");
+  const displayRegimeRaw =
+    String(play.regime || "").trim() || String(data?.view_model?.latest_regime?.regime || "").trim();
+  const displayRegime = displayRegimeRaw || "Sem regime publicado";
   const displayInterpretation = readableInterpretation(String(play.action_code || ""), displayRegime);
-  const latestDate = latest?.date || "--";
-  const latestNUsed = latest?.N_used ?? "--";
+  const latestDate = textOrNd(latest?.date);
+  const latestNUsed = latest?.N_used != null ? num(latest.N_used, 0) : "n/d";
   const latestP1 = latest?.p1 ?? null;
   const latestDeff = latest?.deff ?? null;
+  const latestAlertLevel = String(latestAlert?.alert_level || "").trim();
+  const hasLatestAlert = latestAlertLevel.length > 0;
+  const topRiskAsset = String(data?.asset_sector_summary?.top_risk_asset || "").trim();
+  const topRiskSectorRaw = String(data?.asset_sector_summary?.top_risk_sector || "").trim();
+  const topRiskSector = topRiskSectorRaw ? cleanSectorName(topRiskSectorRaw) : "";
+  const topRiskSummary = topRiskAsset ? `${topRiskAsset}${topRiskSector ? ` | ${topRiskSector}` : ""}` : "n/d";
+  const universeAssetsCount = safeNum(data?.asset_sector_summary?.n_assets ?? latest?.N_used ?? null);
+  const sectorsCount = safeNum(data?.asset_sector_summary?.n_sectors ?? null);
 
   useEffect(() => {
     setHoveredDot(null);
@@ -624,14 +675,14 @@ export default function MotorControlCenter() {
           <K label="Leitura" value={displayInterpretation} hint="Interpretação estatística em linguagem humana. Não é recomendação de compra ou venda." />
           <K
             label="Confiança média"
-            value={universeConfidence == null ? "--" : num(universeConfidence, 3)}
+            value={num(universeConfidence, 3)}
             hint="Confiança agregada do diagnóstico, ponderada pelo número de ativos por setor."
           />
         </div>
         <details className="mt-3 rounded-lg border border-zinc-800 bg-black/20 p-2 text-xs text-zinc-400">
           <summary className="cursor-pointer text-zinc-300">Detalhes técnicos</summary>
           <div className="mt-2">
-            data={latestDate} | universo analisado={latestNUsed} | p1={num(latestP1, 4)} | deff={num(latestDeff, 2)} | id_execucao={String(data?.run?.id || "--")}
+            data={latestDate} | universo analisado={latestNUsed} | p1={num(latestP1, 4)} | deff={num(latestDeff, 2)} | id_execucao={textOrNd(data?.run?.id)}
           </div>
         </details>
         <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-zinc-400">
@@ -671,12 +722,12 @@ export default function MotorControlCenter() {
           />
           <K
             label="Universo analisado"
-            value={`${String(data?.asset_sector_summary?.n_assets ?? latestNUsed ?? "--")} ativos`}
+            value={universeAssetsCount == null ? "n/d" : `${num(universeAssetsCount, 0)} ativos`}
             hint="Total de ativos que entraram na leitura estrutural."
           />
           <K
             label="Setores analisados"
-            value={String(data?.asset_sector_summary?.n_sectors ?? sectorRows.length ?? 0)}
+            value={sectorsCount == null ? "n/d" : num(sectorsCount, 0)}
             hint="Total de setores representados no universo atual."
           />
         </div>
@@ -698,14 +749,14 @@ export default function MotorControlCenter() {
           />
           <K
             label="Alertas de cluster"
-            value={String(gateChecks.active_cluster_alerts ?? "--")}
+            value={textOrNd(gateChecks.active_cluster_alerts)}
             hint="Contagem de alertas de estrutura de cluster ativos no run."
           />
         </div>
         <details className="mt-3 rounded-lg border border-zinc-800 bg-black/20 p-2 text-xs text-zinc-400">
           <summary className="cursor-pointer text-zinc-300">Ver regras do gate</summary>
           <div className="mt-2 break-all">
-            min_majority_60d={String(gateThresholds.min_joint_majority_60d ?? "--")} | max_delta_p1={String(gateThresholds.max_abs_delta_p1 ?? "--")} | max_delta_deff={String(gateThresholds.max_abs_delta_deff ?? "--")} | max_cluster_alerts={String(gateThresholds.max_active_cluster_alerts ?? "--")}
+            min_majority_60d={textOrNd(gateThresholds.min_joint_majority_60d)} | max_delta_p1={textOrNd(gateThresholds.max_abs_delta_p1)} | max_delta_deff={textOrNd(gateThresholds.max_abs_delta_deff)} | max_cluster_alerts={textOrNd(gateThresholds.max_active_cluster_alerts)}
           </div>
         </details>
       </section>
@@ -720,27 +771,31 @@ export default function MotorControlCenter() {
               <Hint text="Leitura operacional diária do motor: verde, amarelo ou vermelho." />
             </div>
             <div className="mt-2">
-              <span className={`rounded-md border px-2 py-1 text-xs ${alertLevelBadge(String(latestAlert?.alert_level || "green"))}`}>
-                {String(latestAlert?.alert_level || "green")}
-              </span>
+              {hasLatestAlert ? (
+                <span className={`rounded-md border px-2 py-1 text-xs ${alertLevelBadge(latestAlertLevel)}`}>{latestAlertLevel}</span>
+              ) : (
+                <span className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-300">sem leitura publicada</span>
+              )}
             </div>
             <div className="mt-2 text-xs text-zinc-400">
-              risco={num(latestAlert?.risk_score ?? null, 3)} | confiança={num(latestAlert?.signal_confidence ?? null, 3)}
+              {hasLatestAlert
+                ? `risco=${num(latestAlert?.risk_score ?? null, 3)} | confiança=${num(latestAlert?.signal_confidence ?? null, 3)}`
+                : "Sem dados de alerta para a janela atual."}
             </div>
           </div>
           <K
             label="Eventos (60 dias)"
-            value={String(op.n_events_last_60d ?? "--")}
+            value={textOrNd(op.n_events_last_60d)}
             hint="Quantidade de eventos estruturais recentes no histórico curto."
           />
           <K
             label="Eventos (total)"
-            value={String(op.n_events_total ?? "--")}
+            value={textOrNd(op.n_events_total)}
             hint="Quantidade total de eventos acumulados no run."
           />
           <K
             label="Topo de risco"
-            value={`${String(data?.asset_sector_summary?.top_risk_asset || "--")} | ${cleanSectorName(String(data?.asset_sector_summary?.top_risk_sector || "--"))}`}
+            value={topRiskSummary}
             hint="Ativo e setor mais sensíveis no diagnóstico atual."
           />
         </div>
@@ -840,10 +895,13 @@ export default function MotorControlCenter() {
             </div>
             <div className="mt-2 text-xs text-zinc-400">
               Risco agregado atual:{" "}
-              <span className="text-zinc-200">
-                {universeRisk == null ? "--" : `${num(universeRisk, 3)} (${bandByScore(universeRisk)})`}
-              </span>
+              <span className="text-zinc-200">{universeRisk == null ? "n/d" : `${num(universeRisk, 3)} (${bandByScore(universeRisk)})`}</span>
             </div>
+            {incompleteSectorRows > 0 ? (
+              <div className="mt-2 text-[11px] text-zinc-500">
+                {incompleteSectorRows} setor(es) não entraram no score por dados incompletos nesta execução.
+              </div>
+            ) : null}
             <div className="mt-2 space-y-2 text-xs">
               {sectorMathRows.map((r, idx) => {
                 const width = Math.max(4, Math.round((r.score / maxSectorScore) * 100));
@@ -942,7 +1000,7 @@ export default function MotorControlCenter() {
                   <td className="py-2">{fmtPrice(assetPrices[String(r.ticker || "")]?.prev)}</td>
                   <td className="py-2">{num(r.risk_score, 3)}</td>
                   <td className="py-2">{num(r.confidence_score, 3)}</td>
-                  <td className="py-2">{r.regime_asset || "--"}</td>
+                  <td className="py-2">{shortRegime(String(r.regime_asset || ""))}</td>
                   <td className="py-2">{num(r.switches_30d, 0)}</td>
                   <td className="py-2">{num(r.switches_90d, 0)}</td>
                 </tr>
@@ -986,16 +1044,16 @@ export default function MotorControlCenter() {
         </div>
 
         <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-          <K label="Ativos no filtro" value={String(universeByAsset?.total ?? 0)} hint="Total de ativos carregados para o filtro atual." />
-          <K label="Setores no filtro" value={String(universeByAsset?.sectors ?? 0)} hint="Total de setores presentes nos ativos filtrados." />
+          <K label="Ativos no filtro" value={universeByAsset ? String(universeByAsset.total) : "n/d"} hint="Total de ativos carregados para o filtro atual." />
+          <K label="Setores no filtro" value={universeByAsset ? String(universeByAsset.sectors) : "n/d"} hint="Total de setores presentes nos ativos filtrados." />
           <K
             label="Risco médio (ativos)"
-            value={universeByAsset?.riskMean == null ? "--" : num(universeByAsset.riskMean, 3)}
+            value={num(universeByAsset?.riskMean ?? null, 3)}
             hint="Média de risco estrutural por ativo."
           />
           <K
             label="Confiança média (ativos)"
-            value={universeByAsset?.confMean == null ? "--" : num(universeByAsset.confMean, 3)}
+            value={num(universeByAsset?.confMean ?? null, 3)}
             hint="Média de confiança do diagnóstico por ativo."
           />
         </div>

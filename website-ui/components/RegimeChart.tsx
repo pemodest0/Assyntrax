@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from "react";
 
-type Point = { date: string; price: number | null; confidence: number; regime: string };
-type LegacyPoint = { t: number; confidence: number; regime: string };
+type Point = { date: string; price: number | null; confidence: number | null; regime: string };
+type LegacyPoint = { t: number; confidence: number | null; regime: string };
 
 type SeriesMap = Record<string, Point[]>;
 
@@ -21,6 +21,7 @@ const regimeColors: Record<string, string> = {
   STABLE: "rgba(52,211,153,0.14)",
   TRANSITION: "rgba(251,191,36,0.14)",
   UNSTABLE: "rgba(251,113,133,0.14)",
+  UNKNOWN: "rgba(113,113,122,0.10)",
 };
 
 const lineColors = ["#38bdf8", "#22c55e", "#f97316", "#a855f7", "#facc15", "#14b8a6", "#f472b6", "#60a5fa"];
@@ -84,8 +85,8 @@ export default function RegimeChart(props: Props) {
         return {
           date: String(p.t ?? i),
           price: Number.isFinite(p.confidence) ? p.confidence : null,
-          confidence: p.confidence ?? 0,
-          regime: p.regime ?? "TRANSITION",
+          confidence: Number.isFinite(p.confidence) ? p.confidence : null,
+          regime: p.regime ?? "UNKNOWN",
         };
       });
 
@@ -176,7 +177,7 @@ export default function RegimeChart(props: Props) {
                 if (i === 0) return null;
                 const x0 = scaleX(i - 1, arr.length);
                 const x1 = scaleX(i, arr.length);
-                const regime = p.regime in regimeColors ? p.regime : "TRANSITION";
+                const regime = p.regime in regimeColors ? p.regime : "UNKNOWN";
                 return <rect key={`band-${i}`} x={x0} y={pad} width={Math.max(1, x1 - x0)} height={h - 2 * pad} fill={regimeColors[regime]} />;
               })
             : null}
@@ -250,18 +251,24 @@ export default function RegimeChart(props: Props) {
 
       {hover != null ? (
         <div className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-300">
-          <div>Data: {prepared.series[0].points[hover]?.date || "--"}</div>
+          <div>Data: {prepared.series[0].points[hover]?.date || "n/d"}</div>
           {tooltipMode === "price_only" ? (
             prepared.series.map((series) => (
               <div key={`${series.asset}-hover`}>
-                {series.asset}: {Number.isFinite(series.values[hover]) ? formatValue(series.values[hover]) : "--"}
+                {series.asset}: {Number.isFinite(series.values[hover]) ? formatValue(series.values[hover]) : "n/d"}
               </div>
             ))
           ) : (
             <>
-              <div>Regime: {prepared.series[0].points[hover]?.regime || "--"}</div>
-              <div>Confiança: {((prepared.series[0].points[hover]?.confidence || 0) * 100).toFixed(1)}%</div>
-              <div>Qualidade: {((prepared.series[0].points[hover]?.confidence || 0) * 0.92 * 100).toFixed(1)}%</div>
+              <div>Regime: {prepared.series[0].points[hover]?.regime || "n/d"}</div>
+              <div>
+                Confiança:{" "}
+                {(() => {
+                  const confidence = prepared.series[0].points[hover]?.confidence;
+                  if (!Number.isFinite(confidence as number)) return "n/d";
+                  return `${((confidence as number) * 100).toFixed(1)}%`;
+                })()}
+              </div>
             </>
           )}
         </div>

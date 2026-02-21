@@ -145,7 +145,7 @@ export default function DashboardFilters(props: Props) {
                       className="h-3 w-3 accent-cyan-400"
                     />
                     <span className="font-medium">{a.asset}</span>
-                    <span className="text-zinc-500">{groupLabels[a.group || ""] || a.group || ""}</span>
+                    <span className="text-zinc-500">{groupLabels[a.group || ""] || a.group || "Sem grupo"}</span>
                   </label>
                 ))}
               </div>

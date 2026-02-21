@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 
@@ -51,6 +52,12 @@ def main() -> None:
     ap.add_argument("--results-dir", type=str, default="results/finance_download")
     ap.add_argument("--business-days-only", type=int, default=1)
     ap.add_argument("--min-rows", type=int, default=252)
+    ap.add_argument(
+        "--min-date-coverage",
+        type=float,
+        default=0.90,
+        help="Drop dates where active tickers are below this fraction of assets_ok (avoids holiday/sparse dates).",
+    )
     args = ap.parse_args()
 
     prices_dir = ROOT / args.prices_dir
@@ -108,6 +115,15 @@ def main() -> None:
     panel = pd.concat(panel_parts, ignore_index=True).sort_values(["date", "ticker"]).reset_index(drop=True)
     universe = pd.DataFrame(universe_rows).sort_values(["sector", "ticker"]).reset_index(drop=True)
 
+    # Remove sparse calendar dates (typically non-trading holidays for most assets) that
+    # would otherwise break rolling coverage checks in the macro engine.
+    assets_ok = int(universe.shape[0])
+    min_count = int(np.ceil(max(0.0, min(1.0, float(args.min_date_coverage))) * max(1, assets_ok)))
+    date_counts = panel.groupby("date")["ticker"].nunique()
+    keep_dates = set(date_counts[date_counts >= min_count].index.to_list())
+    dropped_sparse_dates = int((date_counts < min_count).sum())
+    panel = panel[panel["date"].isin(keep_dates)].copy().sort_values(["date", "ticker"]).reset_index(drop=True)
+
     panel.to_csv(outdir / "panel_long_sector.csv", index=False)
     universe.to_csv(outdir / "universe_fixed.csv", index=False)
 
@@ -122,6 +138,9 @@ def main() -> None:
         "assets_ok": int(universe.shape[0]),
         "assets_missing": int(len(missing)),
         "assets_skipped_low_rows": int(len(skipped_low_rows)),
+        "min_date_coverage": float(args.min_date_coverage),
+        "min_date_coverage_count": int(min_count),
+        "sparse_dates_dropped": int(dropped_sparse_dates),
         "missing_tickers": missing,
         "skipped_low_rows_tickers": skipped_low_rows,
         "period_start": str(panel["date"].min()),

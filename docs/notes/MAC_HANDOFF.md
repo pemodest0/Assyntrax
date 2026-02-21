@@ -36,7 +36,7 @@ Guia de continuidade para Mac com foco no fluxo oficial do motor e do produto.
 
 ## Documentacao relacionada
 - `README.md`
-- `METHODOLOGY.md`
+- `docs/notes/METHODOLOGY.md`
 - `docs/OPS_EXECUTION_FLOW.md`
 - `docs/DAILY_PIPELINE.md`
 - `docs/ENGINE_GUIDE.md`

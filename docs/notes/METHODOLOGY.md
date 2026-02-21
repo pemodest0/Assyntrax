@@ -27,6 +27,7 @@ Nao e motor de previsao de preco por si so.
 - Data adequacy gate obrigatorio antes do diagnostico.
 - Gate adaptativo por dominio/ativo (sem threshold global unico).
 - Histerese de status para evitar troca diaria espuria.
+- Regime com calibracao causal walk-forward (limiares em t usam apenas historico ate t-1).
 - Saida padronizada para API e auditoria.
 
 ## Evidencia minima exigida
@@ -44,8 +45,8 @@ Nao e motor de previsao de preco por si so.
 
 ## Documentacao relacionada
 - `README.md`
-- `SCOPE.md`
-- `BUSINESS_OUTCOME.md`
+- `docs/notes/SCOPE.md`
+- `docs/notes/BUSINESS_OUTCOME.md`
 - `docs/ENGINE_GUIDE.md`
 - `docs/OPS_EXECUTION_FLOW.md`
 - `docs/INDEX.md`

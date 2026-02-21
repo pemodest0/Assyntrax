@@ -59,7 +59,7 @@ def main() -> None:
         OUT.parent.mkdir(parents=True, exist_ok=True)
         OUT.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
         print("[frontend_audit] fail no_valid_run")
-        return
+        raise SystemExit(1)
 
     rows = _read_jsonl(snap_path)
     required = ["asset", "domain", "timestamp", "regime", "confidence", "quality", "signal_status", "reason"]
@@ -106,19 +106,26 @@ def main() -> None:
             "all_required_present": all(v == 0 for v in missing_counts.values()),
             "signal_status_clean": bad_signal_status == 0,
             "numeric_clean": all(v == 0 for v in bad_numeric.values()),
+            "encoding_clean": not any([mojibake_summary, mojibake_status, mojibake_risk_truth]),
         },
         "summary_source": str(snap_path.parent / "summary.json"),
         "snapshot_source": str(snap_path),
     }
+    if not all(bool(v) for v in payload["checks"].values()):
+        payload["status"] = "fail"
+        payload["reason"] = "frontend_payload_contract_violation"
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     print(
-        f"[frontend_audit] run={run_id} rows={len(rows)} "
+        f"[frontend_audit] status={payload['status']} run={run_id} rows={len(rows)} "
         f"required_ok={payload['checks']['all_required_present']} "
         f"signal_ok={payload['checks']['signal_status_clean']} "
-        f"numeric_ok={payload['checks']['numeric_clean']}"
+        f"numeric_ok={payload['checks']['numeric_clean']} "
+        f"encoding_ok={payload['checks']['encoding_clean']}"
     )
+    if payload["status"] != "ok":
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

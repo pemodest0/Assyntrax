@@ -4,8 +4,8 @@ Checklist objetivo para fechar o estado do repo antes de commitar.
 
 ## 1) Documentacao
 - [ ] `README.md` atualizado para estado atual.
-- [ ] `METHODOLOGY.md` e `SCOPE.md` coerentes com o que roda hoje.
-- [ ] `MAC_HANDOFF.md` atualizado para continuidade operacional.
+- [ ] `docs/notes/METHODOLOGY.md` e `docs/notes/SCOPE.md` coerentes com o que roda hoje.
+- [ ] `docs/notes/MAC_HANDOFF.md` atualizado para continuidade operacional.
 - [ ] `docs/INDEX.md` revisado (sem links quebrados).
 
 ## 2) Engine e scripts
