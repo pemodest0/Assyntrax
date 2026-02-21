@@ -43,37 +43,34 @@ const groupLabels: Record<string, string> = {
   crypto: "Cripto",
   volatility: "Volatilidade",
   commodities_broad: "Commodities",
-  energy: "Energia",
+  energy: "Commodities cíclicas",
   metals: "Metais",
   bonds_rates: "Juros e Bonds",
   fx: "Moedas",
-  equities_us_broad: "Acoes EUA - indice amplo",
-  equities_us_sectors: "Acoes EUA - setores",
-  equities_international: "Acoes internacionais",
-  realestate: "Imobiliario",
+  equities_us_broad: "Ações EUA - índice amplo",
+  equities_us_sectors: "Ações EUA - setores",
+  equities_international: "Ações internacionais",
+  realestate: "Imobiliário",
 };
 
 const financeGroupFilter: Array<{ value: string; label: string }> = [
   { value: "all", label: "Todos os grupos" },
-  { value: "equities_us_broad", label: "Acoes EUA - indice amplo" },
-  { value: "equities_us_sectors", label: "Acoes EUA - setores" },
-  { value: "equities_international", label: "Acoes internacionais" },
+  { value: "equities_us_broad", label: "Ações EUA - índice amplo" },
+  { value: "equities_us_sectors", label: "Ações EUA - setores" },
+  { value: "equities_international", label: "Ações internacionais" },
   { value: "commodities_broad", label: "Commodities" },
   { value: "metals", label: "Metais" },
   { value: "bonds_rates", label: "Juros e Bonds" },
-  { value: "fx", label: "Cambio" },
+  { value: "fx", label: "Câmbio" },
   { value: "crypto", label: "Cripto" },
   { value: "volatility", label: "Volatilidade" },
 ];
 
-const FALLBACK_UNIVERSE: UniverseAsset[] = [
-  { asset: "SPY", group: "equities_us_broad" },
-  { asset: "QQQ", group: "equities_us_broad" },
-  { asset: "IWM", group: "equities_us_broad" },
-  { asset: "TLT", group: "bonds_rates" },
-  { asset: "GLD", group: "metals" },
-  { asset: "BTC-USD", group: "crypto" },
-];
+const PREFERRED_BY_DOMAIN: Record<Domain, string[]> = {
+  finance: ["SPY", "QQQ", "IWM", "TLT", "GLD", "BTC-USD"],
+  energy: ["XLE", "USO", "XOP"],
+  realestate: ["FipeZap_Índice_FipeZAP_Total", "FipeZap_São_Paulo_Total", "FipeZap_Rio_de_Janeiro_Total"],
+};
 
 function mean(values: number[]) {
   if (!values.length) return 0;
@@ -96,6 +93,11 @@ function formatNumber(value: number | null | undefined, digits = 2) {
   return value.toFixed(digits);
 }
 
+function formatPrice(value: number | null | undefined, digits = 2) {
+  if (!isFiniteNumber(value)) return MISSING;
+  return `${value.toFixed(digits)}`;
+}
+
 function formatPercent(value: number | null | undefined, digits = 2) {
   if (!isFiniteNumber(value)) return MISSING;
   const sign = value > 0 ? "+" : "";
@@ -108,6 +110,64 @@ function computeReturn(points: Array<SeriesPoint & { price: number }>, horizonBa
   const ref = points[points.length - 1 - horizonBars];
   if (!isFiniteNumber(last?.price) || !isFiniteNumber(ref?.price) || ref.price === 0) return null;
   return (last.price - ref.price) / ref.price;
+}
+
+function toneFromPct(value: number | null | undefined) {
+  if (!isFiniteNumber(value)) return "text-zinc-300";
+  if (value > 0) return "text-emerald-300";
+  if (value < 0) return "text-rose-300";
+  return "text-zinc-300";
+}
+
+function buildAssetNarrative(row: AssetRow | null, horizon: 1 | 5 | 10) {
+  if (!row) return "Selecione um ativo para ver a leitura do comportamento recente.";
+  const hKey = horizon === 1 ? row.retH1 : horizon === 5 ? row.retH5 : row.retH10;
+  const daily = isFiniteNumber(row.changePct) ? row.changePct : 0;
+  const tone = daily > 0 ? "de força" : daily < 0 ? "de pressão" : "lateral";
+  const vol = isFiniteNumber(row.vol20d) ? row.vol20d : null;
+  const volText = vol == null ? "sem vol 20d suficiente" : vol > 0.02 ? "volatilidade alta" : "volatilidade controlada";
+  const hText = isFiniteNumber(hKey) ? formatPercent(hKey) : "sem leitura";
+
+  return `Hoje o ativo está em movimento ${tone}, com ${volText}. No horizonte h${horizon}, a variação é ${hText}. Use como diagnóstico de risco e contexto de exposição, não como ordem automática.`;
+}
+
+function buildAssetTips(row: AssetRow | null, horizon: 1 | 5 | 10) {
+  if (!row) {
+    return ["Selecione um ativo para liberar as dicas de leitura contextual."];
+  }
+  const hRet = horizon === 1 ? row.retH1 : horizon === 5 ? row.retH5 : row.retH10;
+  const changePct = isFiniteNumber(row.changePct) ? row.changePct : null;
+  const vol20d = isFiniteNumber(row.vol20d) ? row.vol20d : null;
+
+  const tips: string[] = [];
+
+  if (changePct != null && vol20d != null && Math.abs(changePct) >= 0.02 && vol20d >= 0.025) {
+    tips.push("Movimento forte com volatilidade alta: trate como fase de risco elevado e revise tamanho de exposição.");
+  } else if (changePct != null && vol20d != null && Math.abs(changePct) <= 0.005 && vol20d <= 0.015) {
+    tips.push("Movimento curto e vol baixa: cenário mais estável para comparar com outros ativos do grupo.");
+  } else {
+    tips.push("Use a leitura de preço junto da volatilidade para separar ruído de mudança estrutural.");
+  }
+
+  if (hRet != null) {
+    if (hRet <= -0.05) {
+      tips.push(`No h${horizon}, queda forte (${formatPercent(hRet)}): observar persistência antes de mudar posição.`);
+    } else if (hRet >= 0.05) {
+      tips.push(`No h${horizon}, alta forte (${formatPercent(hRet)}): monitorar se a vol acompanha ou se o movimento perde fôlego.`);
+    } else {
+      tips.push(`No h${horizon}, variação moderada (${formatPercent(hRet)}): útil para manter leitura de tendência sem exagero.`);
+    }
+  } else {
+    tips.push(`Sem histórico suficiente para h${horizon}: interpretar com cautela até completar a amostra.`);
+  }
+
+  if (vol20d != null) {
+    tips.push(vol20d >= 0.03 ? "Vol 20d elevada: aumente atenção ao risco de reversão curta." : "Vol 20d controlada: bom cenário para comparar estabilidade relativa.");
+  } else {
+    tips.push("Vol 20d indisponível: a série ainda não tem pontos suficientes para medir risco de curto prazo.");
+  }
+
+  return tips.slice(0, 3);
 }
 
 export default function SectorDashboard({
@@ -126,11 +186,24 @@ export default function SectorDashboard({
   const [showRegimeBands, setShowRegimeBands] = useState(true);
   const [smoothing, setSmoothing] = useState<"none" | "ema_short" | "ema_long">("none");
   const [summaryHorizon, setSummaryHorizon] = useState<1 | 5 | 10>(5);
+  const [focusAsset, setFocusAsset] = useState<string>("");
 
   const [universe, setUniverse] = useState<UniverseAsset[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [seriesByAsset, setSeriesByAsset] = useState<Record<string, SeriesPoint[]>>({});
   const [loading, setLoading] = useState(false);
+  const [universeLoaded, setUniverseLoaded] = useState(true);
+
+  const loadExamples = () => {
+    const preferred = PREFERRED_BY_DOMAIN[initialDomain] || [];
+    const available = new Set(universe.map((x) => x.asset));
+    const picked = preferred.filter((asset) => available.has(asset));
+    if (picked.length) {
+      setSelected(picked.slice(0, 8));
+      return;
+    }
+    setSelected(universe.slice(0, 8).map((u) => u.asset));
+  };
 
   useEffect(() => {
     const loadUniverse = async () => {
@@ -153,36 +226,35 @@ export default function SectorDashboard({
         }
 
         if (!data.length) {
-          const fallbackRes = await fetch(`/api/graph/universe?tf=${encodeURIComponent(timeframe)}`);
-          if (fallbackRes.ok) {
-            const fallbackJson = await fallbackRes.json();
-            const parsedFallback = Array.isArray(fallbackJson)
-              ? (fallbackJson as UniverseAsset[])
-              : Array.isArray(fallbackJson?.records)
-              ? (fallbackJson.records as UniverseAsset[])
-              : [];
-            data = parsedFallback.filter((row) => typeof row?.asset === "string" && row.asset.length > 0);
-          }
+          setUniverse([]);
+          setSelected([]);
+          setUniverseLoaded(false);
+          return;
         }
 
-        const byGroupRaw = groupFilter === "all" ? data : data.filter((r) => (r.group || "") === groupFilter);
-        const byGroup = byGroupRaw.length ? byGroupRaw : FALLBACK_UNIVERSE;
+        const normalized = data.map((r) => ({
+          asset: String(r.asset || ""),
+          group: String(r.group || ""),
+        }));
+        const byGroup = groupFilter === "all" ? normalized : normalized.filter((r) => (r.group || "") === groupFilter);
 
+        setUniverseLoaded(true);
         setUniverse(byGroup);
         setSelected((prev) => {
           const scoped = byGroup.map((u) => u.asset);
           const keep = prev.filter((asset) => scoped.includes(asset));
           if (keep.length) return keep;
-          return scoped.slice(0, 6).length ? scoped.slice(0, 6) : FALLBACK_UNIVERSE.map((u) => u.asset);
+          return scoped.slice(0, 8);
         });
       } catch {
-        setUniverse(FALLBACK_UNIVERSE);
-        setSelected(FALLBACK_UNIVERSE.map((u) => u.asset));
+        setUniverse([]);
+        setSelected([]);
+        setUniverseLoaded(false);
       }
     };
 
     loadUniverse();
-  }, [initialDomain, groupFilter, timeframe]);
+  }, [initialDomain, groupFilter]);
 
   useEffect(() => {
     const loadSeries = async () => {
@@ -207,6 +279,16 @@ export default function SectorDashboard({
 
     loadSeries();
   }, [selected, timeframe]);
+
+  useEffect(() => {
+    if (!selected.length) {
+      setFocusAsset("");
+      return;
+    }
+    if (!focusAsset || !selected.includes(focusAsset)) {
+      setFocusAsset(selected[0]);
+    }
+  }, [selected, focusAsset]);
 
   const tableRows = useMemo<AssetRow[]>(() => {
     const rows = selected.map((asset) => {
@@ -238,10 +320,10 @@ export default function SectorDashboard({
 
       return {
         asset,
-        group: groupLabels[rowMeta?.group || ""] || rowMeta?.group || "",
+        group: groupLabels[String(rowMeta?.group || "")] || String(rowMeta?.group || "Sem classificação"),
         startDate: first?.date,
         endDate: last?.date,
-        period: first && last ? `${first.date} -> ${last.date}` : MISSING,
+        period: first && last ? `${first.date} até ${last.date}` : MISSING,
         priceToday,
         pricePrev,
         changeAbs,
@@ -294,7 +376,7 @@ export default function SectorDashboard({
     const avgVol20d = mean(tableRows.map((row) => row.vol20d).filter(isFiniteNumber));
 
     return {
-      period: periodStart && periodEnd ? `${periodStart} -> ${periodEnd}` : MISSING,
+      period: periodStart && periodEnd ? `${periodStart} até ${periodEnd}` : MISSING,
       topGain,
       topDrop,
       topGainH,
@@ -302,6 +384,8 @@ export default function SectorDashboard({
       avgVol20d: isFiniteNumber(avgVol20d) && avgVol20d > 0 ? avgVol20d : null,
     };
   }, [tableRows, summaryHorizon]);
+
+  const focusRow = useMemo(() => tableRows.find((row) => row.asset === focusAsset) || null, [tableRows, focusAsset]);
 
   const sectors =
     initialDomain === "finance"
@@ -311,21 +395,14 @@ export default function SectorDashboard({
           { value: "all", label: "Todos os grupos" },
           { value: "energy", label: "Energia" },
         ]
-      : [{ value: "all", label: "Todos os grupos imobiliarios" }];
+      : [{ value: "all", label: "Todos os grupos imobiliários" }];
 
   return (
     <div className="p-4 md:p-5 space-y-4 md:space-y-5">
       <div className="space-y-2">
         <div className="text-xs uppercase tracking-[0.2em] text-zinc-400">{title}</div>
         <h1 className="text-2xl font-semibold">Painel financeiro por ativo</h1>
-        <p className="text-sm text-zinc-400">Leitura direta de preco e variacao com base nas series carregadas.</p>
-      </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Card label="Ativos" value={String(selected.length)} helper="Ativos selecionados no painel." />
-        <Card label="Amostras" value={String(metrics.sampleSize)} helper="Total de pontos carregados no grafico." />
-        <Card label="|Delta %| medio" value={formatPercent(metrics.avgAbsChange)} helper="Media da variacao absoluta diaria." />
-        <Card label="Vol media 20d" value={formatPercent(metrics.avgVol20d)} helper="Desvio padrao dos retornos diarios (janela 20)." />
+        <p className="text-sm text-zinc-400">Leitura de comportamento de preço, risco e estabilidade por ativo selecionado.</p>
       </div>
 
       <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 md:p-5 space-y-4">
@@ -345,13 +422,37 @@ export default function SectorDashboard({
           showRegimeBands={showRegimeBands}
           onShowRegimeBandsChange={setShowRegimeBands}
           regimeBandsLabel="Destaques"
-          regimeBandsTitle="Exibir ou ocultar destaques de fundo no grafico"
+          regimeBandsTitle="Exibir ou ocultar destaques de fundo no gráfico"
           smoothing={smoothing}
           onSmoothingChange={setSmoothing}
         />
-        <p className="text-xs text-zinc-500">Grafico: eixo X = tempo, eixo Y = preco (ou indice base 100 se normalizado).</p>
 
-        {loading ? <div className="text-sm text-zinc-500">Carregando series...</div> : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={loadExamples}
+            className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:border-zinc-500"
+            aria-label="Carregar ativos de exemplo"
+          >
+            Carregar exemplos
+          </button>
+          <span className="text-xs text-zinc-500">Sugestão: use de 3 a 8 ativos para leitura rápida.</span>
+        </div>
+        {!universeLoaded ? (
+          <div className="rounded-lg border border-rose-800/60 bg-rose-950/20 p-3 text-xs text-rose-200">
+            Não foi possível carregar o universo de ativos no momento. Verifique os artefatos publicados para o app.
+          </div>
+        ) : null}
+
+        <p className="text-xs text-zinc-500">
+          Gráfico central: eixo X = tempo do período selecionado. Eixo Y = preço (ou índice base 100 quando normalizar estiver ativo).
+        </p>
+
+        {loading ? <div className="text-sm text-zinc-500">Carregando séries...</div> : null}
+        {!selected.length ? (
+          <div className="rounded-lg border border-zinc-800 bg-black/30 p-3 text-xs text-zinc-400">
+            Sem ativos selecionados. Clique em <strong>Carregar exemplos</strong> para iniciar.
+          </div>
+        ) : null}
 
         <RegimeChart
           data={seriesByAsset}
@@ -362,55 +463,73 @@ export default function SectorDashboard({
           rangePreset={rangePreset}
           tooltipMode="price_only"
         />
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Card label="Ativos" value={String(selected.length)} helper="Quantidade de ativos selecionados na leitura atual." compact />
+          <Card label="|Delta %| médio" value={formatPercent(metrics.avgAbsChange)} helper="Média da variação percentual absoluta diária." compact />
+          <Card label="Vol média 20d" value={formatPercent(metrics.avgVol20d)} helper="Média da volatilidade de 20 períodos." compact />
+          <Card label="Período" value={summary.period} helper="Janela temporal usada na leitura atual." compact />
+        </div>
+
+        <details className="rounded-xl border border-zinc-800 bg-black/20 p-3">
+          <summary className="cursor-pointer text-sm text-zinc-200">Saiba mais: métricas adicionais do painel</summary>
+            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Card
+              label="Preço médio"
+              value={`${formatPrice(metrics.avgPrice)}`}
+              helper="Média simples do preço mais recente. A unidade depende de cada ativo (ex.: USD, pontos ou índice)."
+            />
+            <Card
+              label="Ativos com volume"
+              value={String(tableRows.filter((r) => isFiniteNumber(r.volume)).length)}
+              helper="Quantidade de ativos com volume disponível na fonte atual."
+            />
+          </div>
+        </details>
       </div>
 
       {showTable ? (
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 md:gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-4 md:gap-5">
           <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 md:p-5">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <div className="text-sm uppercase tracking-widest text-zinc-400">Tabela por ativo</div>
-              <div className="text-xs text-zinc-500" title="Metricas derivadas da serie exibida">
-                Valores em unidade de preco do ativo
+              <div
+                className="text-xs text-zinc-500"
+                title="Unidade base do preço: padrão USD. Exceções principais: VIX em pontos e séries FIPEZAP em índice."
+              >
+                Unidade do preço: USD (VIX=pts, FIPEZAP=índice)
               </div>
             </div>
-            <div className="mt-3 overflow-auto">
+            <div className="mt-3 overflow-auto max-h-[560px]">
               <table className="w-full text-xs">
-                <thead className="text-zinc-500 uppercase">
+                <thead className="text-zinc-500 uppercase sticky top-0 bg-zinc-950">
                   <tr>
-                    <th className="text-left py-2">Ativo</th>
-                    <th className="text-left py-2">Setor</th>
-                    <th className="text-left py-2">Periodo</th>
-                    <th className="text-left py-2">Preco hoje</th>
-                    <th className="text-left py-2">Preco ontem</th>
-                    <th className="text-left py-2">Delta abs</th>
-                    <th className="text-left py-2">Delta %</th>
-                    <th className="text-left py-2">Ret 5D</th>
-                    <th className="text-left py-2">Vol 20D</th>
-                    <th className="text-left py-2">Volume</th>
+                    <th className="text-left py-2" title="Ticker do ativo.">Ativo</th>
+                    <th className="text-left py-2" title="Grupo/setor de classificação.">Setor</th>
+                    <th className="text-left py-2" title="Intervalo de datas disponível no ativo.">Período</th>
+                    <th className="text-left py-2" title="Último preço disponível no período (na unidade da série).">Preço hoje</th>
+                    <th className="text-left py-2" title="Preço do ponto imediatamente anterior (na unidade da série).">Preço ontem</th>
+                    <th className="text-left py-2" title="Diferença absoluta entre preço hoje e ontem (na unidade da série).">Delta abs</th>
+                    <th className="text-left py-2" title="Variação percentual diária.">Delta %</th>
+                    <th className="text-left py-2" title="Retorno acumulado dos últimos 5 pontos.">Ret 5D</th>
+                    <th className="text-left py-2" title="Volatilidade dos retornos em 20 pontos.">Vol 20D</th>
+                    <th className="text-left py-2" title="Volume do último ponto. Se ausente na fonte, aparece n/d.">Volume</th>
                   </tr>
                 </thead>
                 <tbody>
                   {tableRows.map((row) => {
-                    const deltaTone = !isFiniteNumber(row.changePct)
-                      ? "text-zinc-300"
-                      : row.changePct > 0
-                      ? "text-emerald-300"
-                      : row.changePct < 0
-                      ? "text-rose-300"
-                      : "text-zinc-300";
-
                     return (
                       <tr key={row.asset} className="border-t border-zinc-800/70 text-zinc-300">
-                        <td className="py-2">{row.asset}</td>
+                        <td className="py-2 font-medium">{row.asset}</td>
                         <td className="py-2 text-zinc-400">{row.group || MISSING}</td>
                         <td className="py-2 text-zinc-400">{row.period}</td>
-                        <td className="py-2">{formatNumber(row.priceToday)}</td>
-                        <td className="py-2">{formatNumber(row.pricePrev)}</td>
+                        <td className="py-2">{formatPrice(row.priceToday)}</td>
+                        <td className="py-2">{formatPrice(row.pricePrev)}</td>
                         <td className="py-2">{formatNumber(row.changeAbs)}</td>
-                        <td className={`py-2 ${deltaTone}`}>{formatPercent(row.changePct)}</td>
+                        <td className={`py-2 ${toneFromPct(row.changePct)}`}>{formatPercent(row.changePct)}</td>
                         <td className="py-2">{formatPercent(row.ret5d)}</td>
                         <td className="py-2">{formatPercent(row.vol20d)}</td>
-                        <td className="py-2">{isFiniteNumber(row.volume) ? row.volume.toLocaleString("en-US") : MISSING}</td>
+                        <td className="py-2">{isFiniteNumber(row.volume) ? row.volume.toLocaleString("en-US") : "n/d"}</td>
                       </tr>
                     );
                   })}
@@ -419,12 +538,43 @@ export default function SectorDashboard({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 md:p-5 space-y-3">
-            <div className="text-sm uppercase tracking-widest text-zinc-400">Resumo</div>
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 md:p-5 space-y-4">
+            <div className="text-sm uppercase tracking-widest text-zinc-400">Resumo por ativo</div>
+
+            <div>
+              <div className="mb-1 flex items-center gap-1 text-[11px] uppercase tracking-[0.12em] text-zinc-500">
+                <span>Ativo selecionado</span>
+                <Help text="Mostra o resumo detalhado de um ativo por vez. Use este seletor para trocar o foco." />
+              </div>
+              <select
+                value={focusAsset}
+                onChange={(e) => setFocusAsset(e.target.value)}
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+                aria-label="Selecionar ativo para resumo"
+              >
+                {selected.map((asset) => (
+                  <option key={asset} value={asset}>
+                    {asset}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="rounded-xl border border-zinc-800 bg-black/20 p-3 text-sm text-zinc-200 leading-relaxed">
+              {buildAssetNarrative(focusRow, summaryHorizon)}
+            </div>
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
+              <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">Dicas rápidas de uso</div>
+              <div className="mt-2 space-y-1.5 text-xs text-zinc-300">
+                {buildAssetTips(focusRow, summaryHorizon).map((tip, idx) => (
+                  <div key={`tip-${idx}`}>{idx + 1}. {tip}</div>
+                ))}
+              </div>
+            </div>
+
             <div className="flex items-center gap-2 text-xs">
-              <span className="text-zinc-400" title="Horizonte visual de retorno em barras">
-                Horizonte:
-              </span>
+              <span className="text-zinc-400">Horizonte</span>
+              <Help text="h1 = retorno de 1 barra, h5 = 5 barras, h10 = 10 barras (na frequência atual: diário ou semanal)." />
               {[1, 5, 10].map((h) => (
                 <button
                   key={h}
@@ -438,24 +588,50 @@ export default function SectorDashboard({
                 </button>
               ))}
             </div>
-            <div className="text-xs text-zinc-300">Amostras no grafico: {metrics.sampleSize}</div>
-            <div className="text-xs text-zinc-300">Ativos selecionados: {selected.length}</div>
-            <div className="text-xs text-zinc-300">Periodo exibido: {summary.period}</div>
-            <div className="text-xs text-zinc-300">
-              Maior alta do dia: {summary.topGain ? `${summary.topGain.asset} (${formatPercent(summary.topGain.changePct)})` : MISSING}
+
+            <div className="space-y-1 text-xs text-zinc-300">
+              <div>
+                Nome do ativo: <strong>{focusRow?.asset || MISSING}</strong>
+              </div>
+              <div>
+                Período exibido: <strong>{summary.period}</strong>
+              </div>
             </div>
-            <div className="text-xs text-zinc-300">
-              Maior queda do dia: {summary.topDrop ? `${summary.topDrop.asset} (${formatPercent(summary.topDrop.changePct)})` : MISSING}
-            </div>
-            <div className="text-xs text-zinc-300">
-              Maior alta H{summaryHorizon}: {summary.topGainH ? `${summary.topGainH.asset} (${formatPercent(summary.topGainH[summaryHorizon === 1 ? "retH1" : summaryHorizon === 5 ? "retH5" : "retH10"] as number)})` : MISSING}
-            </div>
-            <div className="text-xs text-zinc-300">
-              Maior queda H{summaryHorizon}: {summary.topDropH ? `${summary.topDropH.asset} (${formatPercent(summary.topDropH[summaryHorizon === 1 ? "retH1" : summaryHorizon === 5 ? "retH5" : "retH10"] as number)})` : MISSING}
-            </div>
-            <div className="text-xs text-zinc-300">
-              Volatilidade media (20d): {summary.avgVol20d != null ? formatPercent(summary.avgVol20d) : MISSING}
-            </div>
+
+            <details className="rounded-xl border border-zinc-800 bg-black/20 p-3">
+              <summary className="cursor-pointer text-sm text-zinc-200">Ver mais métricas associadas</summary>
+              <div className="mt-3 space-y-1 text-xs text-zinc-300">
+                <div title="Maior variação percentual positiva no dia entre os ativos selecionados.">
+                  Maior alta do dia: {summary.topGain ? `${summary.topGain.asset} (${formatPercent(summary.topGain.changePct)})` : MISSING}
+                </div>
+                <div title="Maior variação percentual negativa no dia entre os ativos selecionados.">
+                  Maior queda do dia: {summary.topDrop ? `${summary.topDrop.asset} (${formatPercent(summary.topDrop.changePct)})` : MISSING}
+                </div>
+                <div title="Maior variação positiva no horizonte H selecionado.">
+                  Maior alta H{summaryHorizon}:{" "}
+                  {summary.topGainH
+                    ? `${summary.topGainH.asset} (${formatPercent(
+                        summary.topGainH[
+                          summaryHorizon === 1 ? "retH1" : summaryHorizon === 5 ? "retH5" : "retH10"
+                        ] as number
+                      )})`
+                    : MISSING}
+                </div>
+                <div title="Maior variação negativa no horizonte H selecionado.">
+                  Maior queda H{summaryHorizon}:{" "}
+                  {summary.topDropH
+                    ? `${summary.topDropH.asset} (${formatPercent(
+                        summary.topDropH[
+                          summaryHorizon === 1 ? "retH1" : summaryHorizon === 5 ? "retH5" : "retH10"
+                        ] as number
+                      )})`
+                    : MISSING}
+                </div>
+                <div title="Média da volatilidade de 20 dias dos ativos atualmente selecionados.">
+                  Volatilidade média (20d): {summary.avgVol20d != null ? formatPercent(summary.avgVol20d) : MISSING}
+                </div>
+              </div>
+            </details>
           </div>
         </div>
       ) : null}
@@ -463,20 +639,37 @@ export default function SectorDashboard({
   );
 }
 
+function Help({ text }: { text: string }) {
+  return (
+    <span
+      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-zinc-700 text-[10px] text-zinc-400"
+      title={text}
+      aria-label={text}
+    >
+      ?
+    </span>
+  );
+}
+
 function Card({
   label,
   value,
   helper,
+  compact = false,
 }: {
   label: string;
   value: string;
   helper: string;
+  compact?: boolean;
 }) {
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 md:p-4" title={helper}>
-      <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">{label}</div>
-      <div className="mt-1 text-lg md:text-xl font-semibold text-zinc-100">{value}</div>
-      <div className="mt-1 text-[11px] text-zinc-500">{helper}</div>
+      <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.14em] text-zinc-500">
+        <span>{label}</span>
+        <Help text={helper} />
+      </div>
+      <div className={`mt-1 font-semibold text-zinc-100 ${compact ? "text-lg" : "text-xl"}`}>{value}</div>
+      {!compact ? <div className="mt-1 text-[11px] text-zinc-500">{helper}</div> : null}
     </div>
   );
 }

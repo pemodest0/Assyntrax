@@ -1,9 +1,7 @@
 ﻿import Link from "next/link";
 
 const sectors = [
-  { id: "finance", label: "Financeiro" },
-  { id: "logistics", label: "Logistico" },
-  { id: "realestate", label: "ImobiliÃ¡rio" },
+  { id: "finance", label: "Finanças" },
 ];
 
 export default function DashboardLayout({
@@ -19,21 +17,21 @@ export default function DashboardLayout({
         <div className="flex items-center justify-between">
           <div>
             <div className="text-lg font-semibold tracking-tight">Assyntrax</div>
-            <div className="text-xs text-zinc-400">Eigen Engine Dashboard</div>
+            <div className="text-xs text-zinc-400">Dashboard de regime</div>
           </div>
           <span className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">Live</span>
         </div>
         <nav className="mt-6 space-y-2 text-sm">
           <Link
-            href="/app/global-regimes"
+            href="/app/dashboard"
             className="block rounded-2xl border border-zinc-800 bg-black/40 px-3 py-2 text-zinc-200 hover:border-cyan-400/50 transition"
           >
-            Overview
+            Visão geral
           </Link>
           {sectors.map((s) => (
             <Link
               key={s.id}
-              href={`/app/global-regimes?sector=${s.id}`}
+              href={`/app/dashboard?sector=${s.id}`}
               className={`block rounded-2xl border px-3 py-2 transition ${
                 active === s.id
                   ? "border-cyan-400/60 bg-cyan-950/30 text-cyan-100"
@@ -47,7 +45,7 @@ export default function DashboardLayout({
         <div className="mt-6 border-t border-zinc-800 pt-4 text-xs text-zinc-400">
           <div className="flex items-center justify-between">
             <span>Voltar</span>
-            <Link className="underline hover:text-zinc-200" href="/ativos">
+            <Link className="underline hover:text-zinc-200" href="/app/dashboard">
               Dashboard
             </Link>
           </div>
@@ -58,4 +56,3 @@ export default function DashboardLayout({
     </div>
   );
 }
-

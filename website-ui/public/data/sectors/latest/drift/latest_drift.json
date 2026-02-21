@@ -1,0 +1,74 @@
+{
+  "status": "ok",
+  "generated_at_utc": "2026-02-20T15:48:24.250879+00:00",
+  "current_run_id": "20260220T154729Z",
+  "current_generated_at_utc": "2026-02-20T15:48:21.384038+00:00",
+  "previous_run_id": null,
+  "config": {
+    "baseline_days": 30,
+    "min_history_runs": 7,
+    "warn_zscore": 2.0,
+    "block_zscore": 3.0
+  },
+  "baseline_window": {
+    "start_utc": "2026-01-21T15:48:21.384038+00:00",
+    "end_utc": "2026-02-20T15:48:21.384038+00:00",
+    "n_runs": 0,
+    "run_ids": []
+  },
+  "current_metrics": {
+    "sectors_total": 10.0,
+    "red_ratio": 0.0,
+    "yellow_ratio": 0.0,
+    "mean_score": 0.35633118508058903,
+    "mean_unstable": 0.05187390475954305,
+    "mean_transition": 0.2597657720530061,
+    "mean_confidence": 0.6285054572768942
+  },
+  "baseline_metrics": {
+    "red_ratio": {
+      "mean": null,
+      "std": null,
+      "n": 0.0
+    },
+    "yellow_ratio": {
+      "mean": null,
+      "std": null,
+      "n": 0.0
+    },
+    "mean_score": {
+      "mean": null,
+      "std": null,
+      "n": 0.0
+    },
+    "mean_unstable": {
+      "mean": null,
+      "std": null,
+      "n": 0.0
+    },
+    "mean_transition": {
+      "mean": null,
+      "std": null,
+      "n": 0.0
+    },
+    "mean_confidence": {
+      "mean": null,
+      "std": null,
+      "n": 0.0
+    }
+  },
+  "z_scores": {
+    "red_ratio": null,
+    "yellow_ratio": null,
+    "mean_score": null,
+    "mean_unstable": null,
+    "mean_transition": null,
+    "mean_confidence": null
+  },
+  "changed_ratio_vs_prev_run": null,
+  "drift_score": null,
+  "drift_level": "unknown",
+  "reasons": [
+    "historico insuficiente para drift confiavel"
+  ]
+}

@@ -1,7 +1,3 @@
-﻿"use client";
-
-import { motion } from "framer-motion";
-
 const metrics = [
   {
     label: "F1",
@@ -31,12 +27,7 @@ const metrics = [
 
 export default function ProofMatrix() {
   return (
-    <motion.div
-      className="rounded-3xl border border-zinc-800 bg-zinc-950/70 p-6"
-      initial={{ opacity: 0, y: 8 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-    >
+    <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 p-6">
       <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Benchmarks</div>
       <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
         {metrics.map((m) => (
@@ -62,6 +53,6 @@ export default function ProofMatrix() {
         ))}
       </div>
       <div className="mt-4 text-xs text-zinc-500">Resultados indicativos. Sem promessa de retorno financeiro.</div>
-    </motion.div>
+    </div>
   );
 }

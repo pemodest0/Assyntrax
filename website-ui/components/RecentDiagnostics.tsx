@@ -6,7 +6,6 @@ type IndexFile = {
   rel_path: string;
   filename: string;
   mtime_iso: string;
-  run_id: string;
   asset: string;
   freq?: string;
   artifact_type: string;
@@ -19,7 +18,7 @@ type IndexPayload = {
 };
 
 const PLOT_NAMES = new Set([
-  "embedding_2d.png",
+  "regime_structure_map.png",
   "timeline_regime.png",
   "transition_matrix.png",
 ]);
@@ -66,7 +65,7 @@ export default function RecentDiagnostics() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <div className="text-sm uppercase tracking-[0.2em] text-zinc-400">
-          Recent Diagnostics
+          Diagnósticos recentes
         </div>
         <div className="flex flex-wrap gap-2 ml-auto">
           <select
@@ -74,15 +73,15 @@ export default function RecentDiagnostics() {
             value={freq}
             onChange={(e) => setFreq(e.target.value)}
           >
-            <option value="weekly">Weekly</option>
-            <option value="daily">Daily</option>
+            <option value="weekly">Semanal</option>
+            <option value="daily">Diário</option>
           </select>
           <select
             className="rounded-lg border border-zinc-800 bg-black/40 px-3 py-2 text-xs"
             value={asset}
             onChange={(e) => setAsset(e.target.value)}
           >
-            <option value="">All assets</option>
+            <option value="">Todos os ativos</option>
             {assetList.map((a) => (
               <option key={a} value={a}>
                 {a}
@@ -116,13 +115,13 @@ export default function RecentDiagnostics() {
         ))}
         {!items.length && (
           <div className="col-span-full rounded-2xl border border-zinc-800 bg-zinc-950/60 p-6 text-sm text-zinc-400">
-            Nenhum plot encontrado. Rode o Graph Engine para gerar
-            <span className="text-zinc-200"> embedding_2d / timeline_regime / transition_matrix</span>.
+            Nenhum gráfico encontrado. Rode o motor para gerar
+            <span className="text-zinc-200"> regime_structure_map / timeline_regime / transition_matrix</span>.
           </div>
         )}
       </div>
       <div className="text-xs text-zinc-500">
-        O que você está vendo: mapas do embedding, linha temporal do regime e matriz de transição.
+        O que você está vendo: mapa estrutural, linha temporal do regime e matriz de transição.
       </div>
     </div>
   );

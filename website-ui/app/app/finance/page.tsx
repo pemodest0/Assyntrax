@@ -1,5 +1,5 @@
-import SectorDashboard from "@/components/SectorDashboard";
+import { redirect } from "next/navigation";
 
 export default function FinancePage() {
-  return <SectorDashboard title="Finance / Trading" showTable initialDomain="finance" />;
+  redirect("/app/dashboard");
 }

@@ -260,7 +260,7 @@ export default function RegimeChart(props: Props) {
           ) : (
             <>
               <div>Regime: {prepared.series[0].points[hover]?.regime || "--"}</div>
-              <div>Confianca: {((prepared.series[0].points[hover]?.confidence || 0) * 100).toFixed(1)}%</div>
+              <div>Confiança: {((prepared.series[0].points[hover]?.confidence || 0) * 100).toFixed(1)}%</div>
               <div>Qualidade: {((prepared.series[0].points[hover]?.confidence || 0) * 0.92 * 100).toFixed(1)}%</div>
             </>
           )}

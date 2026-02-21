@@ -30,7 +30,12 @@ export default function SectorPanel({
   benchmarks: BenchmarkPoint[];
 }) {
   const lead = assets.find((a) => a.asset === leadAsset) || assets[0];
-  const recTone = lead?.recommendation === "USE" ? "good" : lead?.recommendation === "AVOID" ? "bad" : "warn";
+  const recTone =
+    lead?.recommendation === "STABILITY_OK" || lead?.recommendation === "USE"
+      ? "good"
+      : lead?.recommendation === "INSTABILITY_RISK" || lead?.recommendation === "AVOID"
+      ? "bad"
+      : "warn";
   if (!assets.length) {
     return (
       <section className="rounded-3xl border border-zinc-800 bg-zinc-950/60 p-6 space-y-4">
@@ -80,10 +85,10 @@ export default function SectorPanel({
           hint="Probabilidade de sair do regime atual."
         />
         <MetricsCard
-          title="Recomendação"
+          title="Interpretacao estatistica"
           value={lead?.recommendation ?? "--"}
           subtitle={`Previsibilidade ${(lead?.scores?.predictability_score ?? 0).toFixed(2)}`}
-          hint="Use / Caution / Avoid baseado em regime, confiança e qualidade."
+          hint="Leitura derivada de regime, confiança e qualidade do sinal."
           tone={recTone}
         />
       </div>

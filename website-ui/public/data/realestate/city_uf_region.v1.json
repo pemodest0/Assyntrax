@@ -1,0 +1,520 @@
+{
+  "version": "v1.0.0",
+  "generated_from": "C:\\Users\\Pedro Henrique\\Desktop\\A-firma\\data\\realestate\\core",
+  "total_assets": 57,
+  "entries": [
+    {
+      "asset": "FipeZap_Aracaju_Total",
+      "city": "Aracaju",
+      "city_key": "aracaju",
+      "uf": "SE",
+      "region": "Nordeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Balneário_Camboriú_Total",
+      "city": "Balneário Camboriú",
+      "city_key": "balneario camboriu",
+      "uf": "SC",
+      "region": "Sul",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Barueri_Total",
+      "city": "Barueri",
+      "city_key": "barueri",
+      "uf": "SP",
+      "region": "Sudeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Belo_Horizonte_Total",
+      "city": "Belo Horizonte",
+      "city_key": "belo horizonte",
+      "uf": "MG",
+      "region": "Sudeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Belém_Total",
+      "city": "Belém",
+      "city_key": "belem",
+      "uf": "PA",
+      "region": "Norte",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Betim_Total",
+      "city": "Betim",
+      "city_key": "betim",
+      "uf": "MG",
+      "region": "Sudeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Blumenau_Total",
+      "city": "Blumenau",
+      "city_key": "blumenau",
+      "uf": "SC",
+      "region": "Sul",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Brasília_Total",
+      "city": "Brasília",
+      "city_key": "brasilia",
+      "uf": "DF",
+      "region": "Centro-Oeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Campinas_Total",
+      "city": "Campinas",
+      "city_key": "campinas",
+      "uf": "SP",
+      "region": "Sudeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Campo_Grande_Total",
+      "city": "Campo Grande",
+      "city_key": "campo grande",
+      "uf": "MS",
+      "region": "Centro-Oeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Canoas_Total",
+      "city": "Canoas",
+      "city_key": "canoas",
+      "uf": "RS",
+      "region": "Sul",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Caxias_do_Sul_Total",
+      "city": "Caxias do Sul",
+      "city_key": "caxias do sul",
+      "uf": "RS",
+      "region": "Sul",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Contagem_Total",
+      "city": "Contagem",
+      "city_key": "contagem",
+      "uf": "MG",
+      "region": "Sudeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Cuiabá_Total",
+      "city": "Cuiabá",
+      "city_key": "cuiaba",
+      "uf": "MT",
+      "region": "Centro-Oeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Curitiba_Total",
+      "city": "Curitiba",
+      "city_key": "curitiba",
+      "uf": "PR",
+      "region": "Sul",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Diadema_Total",
+      "city": "Diadema",
+      "city_key": "diadema",
+      "uf": "SP",
+      "region": "Sudeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Florianópolis_Total",
+      "city": "Florianópolis",
+      "city_key": "florianopolis",
+      "uf": "SC",
+      "region": "Sul",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Fortaleza_Total",
+      "city": "Fortaleza",
+      "city_key": "fortaleza",
+      "uf": "CE",
+      "region": "Nordeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Goiânia_Total",
+      "city": "Goiânia",
+      "city_key": "goiania",
+      "uf": "GO",
+      "region": "Centro-Oeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Guarujá_Total",
+      "city": "Guarujá",
+      "city_key": "guaruja",
+      "uf": "SP",
+      "region": "Sudeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Guarulhos_Total",
+      "city": "Guarulhos",
+      "city_key": "guarulhos",
+      "uf": "SP",
+      "region": "Sudeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Itajaí_Total",
+      "city": "Itajaí",
+      "city_key": "itajai",
+      "uf": "SC",
+      "region": "Sul",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Itapema_Total",
+      "city": "Itapema",
+      "city_key": "itapema",
+      "uf": "SC",
+      "region": "Sul",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Jaboatão_dos_Guararapes_Total",
+      "city": "Jaboatão dos Guararapes",
+      "city_key": "jaboatao dos guararapes",
+      "uf": "PE",
+      "region": "Nordeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Joinville_Total",
+      "city": "Joinville",
+      "city_key": "joinville",
+      "uf": "SC",
+      "region": "Sul",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_João_Pessoa_Total",
+      "city": "João Pessoa",
+      "city_key": "joao pessoa",
+      "uf": "PB",
+      "region": "Nordeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Londrina_Total",
+      "city": "Londrina",
+      "city_key": "londrina",
+      "uf": "PR",
+      "region": "Sul",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Maceió_Total",
+      "city": "Maceió",
+      "city_key": "maceio",
+      "uf": "AL",
+      "region": "Nordeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Manaus_Total",
+      "city": "Manaus",
+      "city_key": "manaus",
+      "uf": "AM",
+      "region": "Norte",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Natal_Total",
+      "city": "Natal",
+      "city_key": "natal",
+      "uf": "RN",
+      "region": "Nordeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Niterói_Total",
+      "city": "Niterói",
+      "city_key": "niteroi",
+      "uf": "RJ",
+      "region": "Sudeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Novo_Hamburgo_Total",
+      "city": "Novo Hamburgo",
+      "city_key": "novo hamburgo",
+      "uf": "RS",
+      "region": "Sul",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Osasco_Total",
+      "city": "Osasco",
+      "city_key": "osasco",
+      "uf": "SP",
+      "region": "Sudeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Pelotas_Total",
+      "city": "Pelotas",
+      "city_key": "pelotas",
+      "uf": "RS",
+      "region": "Sul",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Porto_Alegre_Total",
+      "city": "Porto Alegre",
+      "city_key": "porto alegre",
+      "uf": "RS",
+      "region": "Sul",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Praia_Grande_Total",
+      "city": "Praia Grande",
+      "city_key": "praia grande",
+      "uf": "SP",
+      "region": "Sudeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Recife_Total",
+      "city": "Recife",
+      "city_key": "recife",
+      "uf": "PE",
+      "region": "Nordeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Ribeirão_Preto_Total",
+      "city": "Ribeirão Preto",
+      "city_key": "ribeirao preto",
+      "uf": "SP",
+      "region": "Sudeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Rio_de_Janeiro_Total",
+      "city": "Rio de Janeiro",
+      "city_key": "rio de janeiro",
+      "uf": "RJ",
+      "region": "Sudeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Salvador_Total",
+      "city": "Salvador",
+      "city_key": "salvador",
+      "uf": "BA",
+      "region": "Nordeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Santa_Maria_Total",
+      "city": "Santa Maria",
+      "city_key": "santa maria",
+      "uf": "RS",
+      "region": "Sul",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Santo_André_Total",
+      "city": "Santo André",
+      "city_key": "santo andre",
+      "uf": "SP",
+      "region": "Sudeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Santos_Total",
+      "city": "Santos",
+      "city_key": "santos",
+      "uf": "SP",
+      "region": "Sudeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_São_Bernardo_do_Campo_Total",
+      "city": "São Bernardo do Campo",
+      "city_key": "sao bernardo do campo",
+      "uf": "SP",
+      "region": "Sudeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_São_Caetano_do_Sul_Total",
+      "city": "São Caetano do Sul",
+      "city_key": "sao caetano do sul",
+      "uf": "SP",
+      "region": "Sudeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_São_José_do_Rio_Preto_Total",
+      "city": "São José do Rio Preto",
+      "city_key": "sao jose do rio preto",
+      "uf": "SP",
+      "region": "Sudeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_São_José_dos_Campos_Total",
+      "city": "São José dos Campos",
+      "city_key": "sao jose dos campos",
+      "uf": "SP",
+      "region": "Sudeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_São_José_dos_Pinhais_Total",
+      "city": "São José dos Pinhais",
+      "city_key": "sao jose dos pinhais",
+      "uf": "PR",
+      "region": "Sul",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_São_José_Total",
+      "city": "São José",
+      "city_key": "sao jose",
+      "uf": "SC",
+      "region": "Sul",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_São_Leopoldo_Total",
+      "city": "São Leopoldo",
+      "city_key": "sao leopoldo",
+      "uf": "RS",
+      "region": "Sul",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_São_Luís_Total",
+      "city": "São Luís",
+      "city_key": "sao luis",
+      "uf": "MA",
+      "region": "Nordeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_São_Paulo_Total",
+      "city": "São Paulo",
+      "city_key": "sao paulo",
+      "uf": "SP",
+      "region": "Sudeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_São_Vicente_Total",
+      "city": "São Vicente",
+      "city_key": "sao vicente",
+      "uf": "SP",
+      "region": "Sudeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Teresina_Total",
+      "city": "Teresina",
+      "city_key": "teresina",
+      "uf": "PI",
+      "region": "Nordeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Vila_Velha_Total",
+      "city": "Vila Velha",
+      "city_key": "vila velha",
+      "uf": "ES",
+      "region": "Sudeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Vitória_Total",
+      "city": "Vitória",
+      "city_key": "vitoria",
+      "uf": "ES",
+      "region": "Sudeste",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    },
+    {
+      "asset": "FipeZap_Índice_FipeZAP_Total",
+      "city": "Índice FipeZAP",
+      "city_key": "indice fipezap",
+      "uf": "BR",
+      "region": "Brasil",
+      "source_type": "official",
+      "source_name": "fipezap_core"
+    }
+  ]
+}

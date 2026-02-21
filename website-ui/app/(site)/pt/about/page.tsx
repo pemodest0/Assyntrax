@@ -1,4 +1,15 @@
-﻿import MethodLattice from "@/components/visuals/MethodLattice";
+﻿import type { Metadata } from "next";
+import MethodLattice from "@/components/visuals/MethodLattice";
+import { buildPageMetadata } from "@/lib/site/metadata";
+
+export const metadata: Metadata = buildPageMetadata({
+  title: "Sobre o motor Assyntrax",
+  description: "Versão espelhada em /pt. Conteúdo principal publicado em /about.",
+  path: "/pt/about",
+  locale: "pt-BR",
+  noIndex: true,
+  canonicalPath: "/about",
+});
 
 export default function AboutPage() {
   return (
@@ -7,11 +18,11 @@ export default function AboutPage() {
         <div className="space-y-4">
           <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Sobre</div>
           <h1 className="text-4xl md:text-5xl font-semibold tracking-tight">
-            Por que o Eigen Engine existe
+            Por que o motor Assyntrax existe
           </h1>
           <p className="text-zinc-300 max-w-3xl text-lg">
             Mercados mudam de regime. Modelos lineares continuam extrapolando como se nada tivesse
-            mudado. O Eigen Engine existe para diagnosticar estrutura, risco e confiabilidade antes da ação.
+            mudado. O Assyntrax existe para diagnosticar estrutura, risco e confiabilidade com trilha auditável.
           </p>
         </div>
         <div className="overflow-hidden rounded-[28px]">
@@ -44,8 +55,8 @@ export default function AboutPage() {
             quando o risco mais importa? A resposta levou ao foco em estrutura dinâmica e controle de decisão.
           </p>
           <p className="mt-3 text-zinc-300">
-            Hoje, o núcleo combina embedding, microestados, grafos, validação contínua e gates operacionais,
-            com trilha auditável por execução.
+            Hoje, o núcleo combina análise espectral de correlações, validação causal walk-forward,
+            winsorização de outliers e gate de publicação com trilha auditável por execução.
           </p>
         </div>
         <div className="rounded-[28px] border border-zinc-800 bg-zinc-950/60 p-8">
@@ -60,5 +71,3 @@ export default function AboutPage() {
     </div>
   );
 }
-
-

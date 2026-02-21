@@ -68,6 +68,15 @@ type DriftPayload = {
   reasons?: string[];
 };
 
+type DataQualitySummary = {
+  sectors_total: number;
+  sectors_eligible: number;
+  sectors_ineligible: number;
+  assets_in_eligible_sectors: number;
+  assets_in_ineligible_sectors: number;
+  most_common_ineligible_reason: string;
+};
+
 function toNum(value: string | undefined): number | null {
   if (typeof value !== "string") return null;
   const n = Number(value);
@@ -77,19 +86,19 @@ function toNum(value: string | undefined): number | null {
 function actionByLevel(level: string) {
   const key = String(level || "").toLowerCase();
   if (key === "vermelho") {
-    return "Cautela alta: reduzir exposicao, reforcar protecao e evitar novas posicoes agressivas.";
+    return "Leitura estrutural em cautela alta: elevacao de fragilidade e sincronizacao de risco.";
   }
   if (key === "amarelo") {
-    return "Atencao: reduzir risco tatico e apertar limites de perda.";
+    return "Leitura estrutural em atencao: transicao ativa e risco acima da media recente.";
   }
-  return "Operacao normal: manter exposicao base e monitorar.";
+  return "Leitura estrutural normal: sem sinal relevante de deterioracao no horizonte curto.";
 }
 
 function exposureRangeByLevel(level: string) {
   const key = String(level || "").toLowerCase();
-  if (key === "vermelho") return "reduzir 40% a 70% do risco";
-  if (key === "amarelo") return "reduzir 15% a 35% do risco";
-  return "manter risco base (0% a 10% de ajuste)";
+  if (key === "vermelho") return "faixa tipica de ajuste observada: 40% a 70%";
+  if (key === "amarelo") return "faixa tipica de ajuste observada: 15% a 35%";
+  return "faixa tipica de ajuste observada: 0% a 10%";
 }
 
 function pctRange(minV: number | null | undefined, maxV: number | null | undefined, digits = 0) {
@@ -175,27 +184,44 @@ function parseCsv(text: string): CsvRow[] {
 }
 
 function authState(request: Request): { authorized: boolean; misconfigured: boolean } {
+  const strict = process.env.ASSYNTRAX_REQUIRE_API_KEY_FOR_SECTORS === "1";
+  if (!strict) {
+    return { authorized: true, misconfigured: false };
+  }
   const raw = process.env.ASSYNTRAX_API_KEYS || "";
   const keys = raw
     .split(",")
     .map((x) => x.trim())
     .filter(Boolean);
   if (!keys.length) {
-    const isProd = process.env.NODE_ENV === "production";
-    return { authorized: !isProd, misconfigured: isProd };
+    return { authorized: false, misconfigured: true };
   }
   const fromHeader = request.headers.get("x-assyntrax-key") || "";
   const provided = fromHeader.trim();
   return { authorized: keys.includes(provided), misconfigured: false };
 }
 
+async function fileExists(filePath: string) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function findLatestSectorRun() {
   const root = resultsRoot();
   const base = path.join(root, "event_study_sectors");
-  const entries = await fs.readdir(base, { withFileTypes: true });
+  let entries: Array<{ isDirectory: () => boolean; name: string | Buffer }>;
+  try {
+    entries = (await fs.readdir(base, { withFileTypes: true })) as Array<{ isDirectory: () => boolean; name: string | Buffer }>;
+  } catch {
+    return null;
+  }
   const dirs = entries
     .filter((e) => e.isDirectory())
-    .map((e) => e.name)
+    .map((e) => String(e.name))
     .sort()
     .reverse();
 
@@ -213,6 +239,23 @@ async function findLatestSectorRun() {
   return null;
 }
 
+async function findPublicSectorSnapshot() {
+  const runDir = path.join(process.cwd(), "public", "data", "sectors", "latest");
+  const levelsPath = path.join(runDir, "sector_alert_levels_latest.csv");
+  const rankPath = path.join(runDir, "sector_rank_l5.csv");
+  const ok = (await fileExists(levelsPath)) && (await fileExists(rankPath));
+  if (!ok) return null;
+  let runId = "public_latest";
+  try {
+    const latestRunRaw = await fs.readFile(path.join(runDir, "latest_run.json"), "utf-8");
+    const latestRun = JSON.parse(latestRunRaw) as Record<string, unknown>;
+    runId = String(latestRun.run_id || runId);
+  } catch {
+    // keep default
+  }
+  return { runId, runDir, levelsPath, rankPath };
+}
+
 export async function GET(request: Request) {
   try {
     const auth = authState(request);
@@ -227,14 +270,27 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const days = Math.max(10, Math.min(180, Number(searchParams.get("days") || 60)));
+    const daysRaw = Number(searchParams.get("days") || 60);
+    const days = Number.isFinite(daysRaw) ? Math.max(10, Math.min(180, daysRaw)) : 60;
+    const levelFilter = String(searchParams.get("level") || "all").toLowerCase();
+    const sectorFilter = String(searchParams.get("sector") || "").trim().toLowerCase();
+    const minAssetsRaw = Number(searchParams.get("min_assets") || 0);
+    const minAssets = Number.isFinite(minAssetsRaw) ? Math.max(0, minAssetsRaw) : 0;
 
-    const run = await findLatestSectorRun();
+    let run = await findLatestSectorRun();
+    let source: "results" | "public" = "results";
+    if (!run) {
+      run = await findPublicSectorSnapshot();
+      source = "public";
+    }
     if (!run) {
       return NextResponse.json({ error: "no_sector_run" }, { status: 404 });
     }
 
-    const alertsRoot = path.join(resultsRoot(), "event_study_sectors");
+    const alertsRoot =
+      source === "results"
+        ? path.join(resultsRoot(), "event_study_sectors")
+        : path.join(process.cwd(), "public", "data", "sectors", "latest");
     const latestRunMetaPath = path.join(alertsRoot, "latest_run.json");
     const latestAlertPath = path.join(alertsRoot, "alerts", "latest_alert.json");
     const latestDriftPath = path.join(alertsRoot, "drift", "latest_drift.json");
@@ -333,7 +389,7 @@ export async function GET(request: Request) {
       trendBySector.set(sector, { score_delta_5d: delta, level_changes_30d: changes });
     }
 
-    const levels: AlertLevelRow[] = levelsBase.map((row) => {
+    const levelsAll: AlertLevelRow[] = levelsBase.map((row) => {
       const t = trendBySector.get(row.sector);
       const band = confidenceBand(row.mean_confidence);
       return {
@@ -348,14 +404,23 @@ export async function GET(request: Request) {
         confidence_reason: confidenceReason(row, t),
       };
     });
+    const levels = levelsAll.filter((row) => {
+      const passLevel = levelFilter === "all" ? true : String(row.alert_level).toLowerCase() === levelFilter;
+      const passSector = sectorFilter ? String(row.sector).toLowerCase().includes(sectorFilter) : true;
+      const passAssets = Number(row.n_assets || 0) >= minAssets;
+      return passLevel && passSector && passAssets;
+    });
 
     let weeklyCompare: { reference_run_id: string | null; summary: Record<string, unknown>; rows: WeeklyCompareRow[] } = {
       reference_run_id: null,
       summary: {},
       rows: [],
     };
-    const weeklyPathFromMeta = String(latestRunMeta.weekly_compare_file || "");
-    const weeklyPath = weeklyPathFromMeta || path.join(run.runDir, "weekly_compare.json");
+    const weeklyPathFromMeta = source === "results" ? String(latestRunMeta.weekly_compare_file || "") : "";
+    const weeklyPath =
+      weeklyPathFromMeta && (await fileExists(weeklyPathFromMeta))
+        ? weeklyPathFromMeta
+        : path.join(run.runDir, "weekly_compare.json");
     try {
       const t = await fs.readFile(weeklyPath, "utf-8");
       const j = JSON.parse(t) as Record<string, unknown>;
@@ -377,10 +442,58 @@ export async function GET(request: Request) {
       { verde: 0, amarelo: 0, vermelho: 0 }
     );
 
+    const ineligible = eligibility.filter((x) => !x.eligible);
+    const reasonCount = new Map<string, number>();
+    for (const row of ineligible) {
+      const key = (row.reason || "unknown").trim() || "unknown";
+      reasonCount.set(key, (reasonCount.get(key) || 0) + 1);
+    }
+    const mostCommonIneligibleReason = [...reasonCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "none";
+    const eligibleSetFromRows = new Set(eligibility.filter((x) => x.eligible).map((x) => x.sector));
+    const assetsEligible = levelsAll
+      .filter((x) => eligibleSetFromRows.has(x.sector))
+      .reduce((acc, x) => acc + Number(x.n_assets || 0), 0);
+    const assetsIneligible = levelsAll
+      .filter((x) => !eligibleSetFromRows.has(x.sector))
+      .reduce((acc, x) => acc + Number(x.n_assets || 0), 0);
+    const dataQuality: DataQualitySummary = {
+      sectors_total: eligibility.length,
+      sectors_eligible: eligibility.filter((x) => x.eligible).length,
+      sectors_ineligible: ineligible.length,
+      assets_in_eligible_sectors: assetsEligible,
+      assets_in_ineligible_sectors: assetsIneligible,
+      most_common_ineligible_reason: mostCommonIneligibleReason,
+    };
+
+    const summarySimple = {
+      short_state:
+        counts.vermelho > 0
+          ? "Risco alto em pelo menos um setor."
+          : counts.amarelo > 0
+          ? "Risco moderado em alguns setores."
+          : "Sem alerta relevante no momento.",
+      top_warning_sectors: levels
+        .filter((x) => x.alert_level === "vermelho" || x.alert_level === "amarelo")
+        .sort((a, b) => (b.sector_score || 0) - (a.sector_score || 0))
+        .slice(0, 5)
+        .map((x) => x.sector),
+    };
+
+    const limits = {
+      what_it_does: "Detecta mudanca estrutural e aumento de sincronizacao de risco por setor.",
+      what_it_does_not: "Nao preve o dia exato de crise e nao garante retorno.",
+      methodological_limits: [
+        "Sinal depende de cobertura minima de ativos por setor.",
+        "Resultados variam por janela e periodo analisado.",
+        "Pode gerar falso alerta em fases de transicao curta.",
+      ],
+    };
+
     return NextResponse.json({
       status: "ok",
       contract_version: CONTRACT_VERSION,
       run_id: run.runId,
+      source,
       generated_at: new Date().toISOString(),
       lookback_days: days,
       counts,
@@ -388,6 +501,9 @@ export async function GET(request: Request) {
       ranking,
       eligibility,
       timeline,
+      summary_simple: summarySimple,
+      data_quality: dataQuality,
+      limits,
       weekly_compare: weeklyCompare,
       notification: {
         run_id: String(latestAlert.run_id || ""),

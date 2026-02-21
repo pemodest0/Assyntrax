@@ -1,39 +1,31 @@
-﻿"use client";
-
-import { motion } from "framer-motion";
+import Link from "next/link";
 
 export default function CTASection() {
   return (
-    <motion.section
-      className="rounded-[28px] border border-zinc-800 bg-zinc-950/70 p-8 lg:p-10 flex flex-col md:flex-row items-center justify-between gap-5 ax-glow py-10 md:py-12 lg:py-14 xl:py-16"
-      initial={{ opacity: 0, y: 10 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-    >
+    <section className="rounded-[28px] border border-zinc-800 bg-zinc-950/70 p-8 lg:p-10 flex flex-col md:flex-row items-center justify-between gap-5 ax-glow py-10 md:py-12 lg:py-14 xl:py-16">
       <div>
-        <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Pronto para explorar</div>
+        <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Proximo passo</div>
         <h3 className="mt-3 text-3xl md:text-4xl font-semibold tracking-tight">
-          Abra a Dashboard
+          Pronto para validar em piloto?
         </h3>
         <p className="mt-2 text-zinc-300 max-w-2xl text-base lg:text-lg">
-          Diagnóstico de regimes com alertas explícitos e forecast condicional.
+          Em uma conversa curta, a gente mostra como o motor entra na sua rotina e quais limites devem ficar claros.
         </p>
       </div>
       <div className="flex gap-3">
-        <a
+        <Link
           className="rounded-xl bg-zinc-100 text-black px-6 py-3 font-medium hover:bg-white transition"
-          href="/app/dashboard"
-        >
-          Abrir App
-        </a>
-        <a
-          className="rounded-xl border border-zinc-800 px-6 py-3 text-zinc-200 hover:border-zinc-600 transition"
           href="/contact"
         >
-          Falar com a equipe
-        </a>
+          Pedir demo
+        </Link>
+        <Link
+          className="rounded-xl border border-zinc-800 px-6 py-3 text-zinc-200 hover:border-zinc-600 transition"
+          href="/app/dashboard"
+        >
+          Abrir app
+        </Link>
       </div>
-    </motion.section>
+    </section>
   );
 }
-

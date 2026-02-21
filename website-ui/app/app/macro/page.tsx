@@ -1,5 +1,5 @@
-import SectorDashboard from "@/components/SectorDashboard";
+import { redirect } from "next/navigation";
 
 export default function MacroPage() {
-  return <SectorDashboard title="Macro / Operacoes" showTable initialDomain="energy" />;
+  redirect("/app/dashboard");
 }

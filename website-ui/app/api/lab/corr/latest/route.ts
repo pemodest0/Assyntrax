@@ -1,8 +1,15 @@
 import { NextResponse } from "next/server";
 import {
+  readLatestLabCorrAlertLevels,
   findLatestLabCorrRun,
   readLatestLabCorrActionPlaybook,
+  readLatestLabCorrAssetDiagnostics,
+  readLatestLabCorrAssetSectorSummary,
   readLatestLabCorrEraEvaluation,
+  readLatestLabCorrQaChecks,
+  readLatestLabCorrRegimeSeries,
+  readLatestLabCorrSectorDiagnostics,
+  readLatestLabCorrSignificanceSummary,
   readLatestLabCorrOperationalAlerts,
   readLatestLabCorrCaseStudies,
   readLatestLabCorrTimeseries,
@@ -39,6 +46,20 @@ function emptyContract(windowValue: number) {
     view_model: null,
     summary: null,
     summary_compact: "",
+    qa_checks: null,
+    qa_failed_checks: [],
+    period_days: 180,
+    regime_history: [],
+    alert_levels: [],
+    significance: [],
+    asset_diagnostics: { count: 0, items: [] },
+    sector_diagnostics: { count: 0, items: [] },
+    asset_sector_summary: {},
+    limits: {
+      what_it_does: "",
+      what_it_does_not: "",
+      methodological_limits: [],
+    },
     contract_checks: { case_rows_dropped: 0, has_view_model: false },
     timeseries: [],
   };
@@ -48,6 +69,9 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const windowParam = Number(searchParams.get("window") || "120");
   const includeRows = searchParams.get("include_rows") === "1";
+  const periodDays = Math.max(7, Math.min(1500, Number(searchParams.get("period_days") || "180")));
+  const assetFilter = String(searchParams.get("asset") || "").trim().toUpperCase();
+  const sectorFilter = String(searchParams.get("sector") || "").trim().toLowerCase();
 
   if (!Number.isFinite(windowParam) || windowParam <= 0) {
     return NextResponse.json(
@@ -60,7 +84,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const [run, ts, cases, opAlerts, eraEval, playbook, viewModel] = await Promise.all([
+  const [run, ts, cases, opAlerts, eraEval, playbook, viewModel, qaChecks, regimeHistoryRaw, alertLevelsRaw, significance, assetDiagRaw, sectorDiagRaw, assetSectorSummary] = await Promise.all([
     findLatestLabCorrRun(),
     readLatestLabCorrTimeseries(windowParam),
     readLatestLabCorrCaseStudies(windowParam),
@@ -68,6 +92,13 @@ export async function GET(request: Request) {
     readLatestLabCorrEraEvaluation(windowParam),
     readLatestLabCorrActionPlaybook(windowParam),
     readLatestLabCorrUiViewModel(windowParam),
+    readLatestLabCorrQaChecks(),
+    readLatestLabCorrRegimeSeries(windowParam, 2000),
+    readLatestLabCorrAlertLevels(windowParam, 2000),
+    readLatestLabCorrSignificanceSummary(),
+    readLatestLabCorrAssetDiagnostics(2000),
+    readLatestLabCorrSectorDiagnostics(),
+    readLatestLabCorrAssetSectorSummary(),
   ]);
 
   if (!run) {
@@ -84,6 +115,37 @@ export async function GET(request: Request) {
 
   const playbookRows = Array.isArray(playbook) ? playbook : [];
   const latestPlaybook = playbookRows.length ? playbookRows[playbookRows.length - 1] : null;
+  const nowDate = ts?.end ? new Date(`${ts.end}T00:00:00Z`) : new Date();
+  const cutoff = new Date(nowDate.getTime() - periodDays * 24 * 3600 * 1000);
+
+  // Mantemos o histórico completo de regime para evitar truncamento inesperado na timeline da UI.
+  // O recorte visual por período é feito no front.
+  const regimeHistory = regimeHistoryRaw;
+  const alertLevels = alertLevelsRaw.filter((row) => new Date(`${String(row.date)}T00:00:00Z`) >= cutoff);
+  const sectorDiag = sectorDiagRaw.filter((row) =>
+    sectorFilter ? String(row.sector || "").toLowerCase().includes(sectorFilter) : true
+  );
+  const assetDiag = assetDiagRaw.filter((row) => {
+    const t = String(row.ticker || "");
+    const sec = String(row.sector || "").toLowerCase();
+    if (assetFilter && !t.includes(assetFilter)) return false;
+    if (sectorFilter && !sec.includes(sectorFilter)) return false;
+    return true;
+  });
+  const qaObj = qaChecks && typeof qaChecks === "object" ? (qaChecks as Record<string, unknown>) : {};
+  const failedChecks = Array.isArray(qaObj.failed_checks) ? qaObj.failed_checks : [];
+  const limits = {
+    what_it_does:
+      "Le risco estrutural do mercado e oferece interpretacao estatistica por nivel de alerta.",
+    what_it_does_not:
+      "Nao prevê dia exato de crash, nao garante retorno e nao substitui decisao humana.",
+    methodological_limits: [
+      "Sensivel a qualidade e cobertura dos dados de entrada.",
+      "Pode atrasar em choque totalmente exogeno.",
+      "Funciona melhor como monitor de risco do que gerador puro de alpha.",
+    ],
+  };
+
   const payload = {
     schema_version: SCHEMA_VERSION,
     generated_at_utc: new Date().toISOString(),
@@ -116,6 +178,22 @@ export async function GET(request: Request) {
     view_model: viewModel || null,
     summary: run.summary,
     summary_compact: run.summaryCompact || "",
+    qa_checks: qaObj,
+    qa_failed_checks: failedChecks,
+    period_days: periodDays,
+    regime_history: regimeHistory,
+    alert_levels: alertLevels,
+    significance,
+    asset_diagnostics: {
+      count: assetDiag.length,
+      items: assetDiag.slice(0, 500),
+    },
+    sector_diagnostics: {
+      count: sectorDiag.length,
+      items: sectorDiag,
+    },
+    asset_sector_summary: assetSectorSummary,
+    limits,
     contract_checks: {
       case_rows_dropped: cases?.dropped_rows ?? 0,
       has_view_model: Boolean(viewModel && typeof viewModel === "object"),

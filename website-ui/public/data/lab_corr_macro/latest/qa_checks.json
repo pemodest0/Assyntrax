@@ -1,0 +1,123 @@
+{
+  "ok": true,
+  "checks": [
+    {
+      "check": "core_counts_match_n_core",
+      "ok": true,
+      "value": 470,
+      "expected": 470
+    },
+    {
+      "check": "all_sectors_nonzero_in_core",
+      "ok": true,
+      "min_sector_count": 1
+    },
+    {
+      "check": "T60_insufficient_ratio",
+      "ok": true,
+      "value": 0.0,
+      "max_allowed": 0.05
+    },
+    {
+      "check": "T60_N_used_min_sufficient",
+      "ok": true,
+      "value": 465.0,
+      "min_required": 423.0
+    },
+    {
+      "check": "T60_q_min",
+      "ok": true,
+      "value": 0.1276595744680851,
+      "min_required": 0.12
+    },
+    {
+      "check": "T60_p1_range",
+      "ok": true
+    },
+    {
+      "check": "T60_deff_range",
+      "ok": true
+    },
+    {
+      "check": "T60_last20_complete",
+      "ok": true,
+      "n_last20": 20,
+      "required": 20
+    },
+    {
+      "check": "T120_insufficient_ratio",
+      "ok": true,
+      "value": 0.0,
+      "max_allowed": 0.05
+    },
+    {
+      "check": "T120_N_used_min_sufficient",
+      "ok": true,
+      "value": 465.0,
+      "min_required": 423.0
+    },
+    {
+      "check": "T120_q_min",
+      "ok": true,
+      "value": 0.2553191489361702,
+      "min_required": 0.12
+    },
+    {
+      "check": "T120_p1_range",
+      "ok": true
+    },
+    {
+      "check": "T120_deff_range",
+      "ok": true
+    },
+    {
+      "check": "T120_last20_complete",
+      "ok": true,
+      "n_last20": 20,
+      "required": 20
+    },
+    {
+      "check": "T252_insufficient_ratio",
+      "ok": true,
+      "value": 0.0,
+      "max_allowed": 0.05
+    },
+    {
+      "check": "T252_N_used_min_sufficient",
+      "ok": true,
+      "value": 465.0,
+      "min_required": 423.0
+    },
+    {
+      "check": "T252_q_min",
+      "ok": true,
+      "value": 0.5361702127659574,
+      "min_required": 0.12
+    },
+    {
+      "check": "T252_p1_range",
+      "ok": true
+    },
+    {
+      "check": "T252_deff_range",
+      "ok": true
+    },
+    {
+      "check": "T252_last20_complete",
+      "ok": true,
+      "n_last20": 20,
+      "required": 20
+    },
+    {
+      "check": "official_window_present",
+      "ok": true,
+      "official_window": 120,
+      "available_windows": [
+        60,
+        120,
+        252
+      ]
+    }
+  ],
+  "failed_checks": []
+}

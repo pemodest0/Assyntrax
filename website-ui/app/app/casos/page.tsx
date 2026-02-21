@@ -22,11 +22,11 @@ export default async function CasosPage() {
   return (
     <div className="p-5 md:p-6 lg:p-8 space-y-6">
       <section className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-5">
-        <p className="text-xs tracking-[0.14em] uppercase text-zinc-500">Nivel 1 - Storyline</p>
+        <p className="text-xs tracking-[0.14em] uppercase text-zinc-500">Nível 1 - Storyline</p>
         <h1 className="mt-2 text-2xl md:text-3xl font-semibold text-zinc-100">Casos reais de transição de regime</h1>
         <p className="mt-3 text-sm text-zinc-300">
-          Esta pagina mostra uso operacional do motor como radar de risco. Os textos sao narrativos, mas o status exibido
-          vem do run valido mais recente e do painel de verdade de risco.
+          Esta página mostra uso operacional do motor como radar de risco. Os textos são narrativos, mas o status exibido
+          vem da execução válida mais recente e do painel de verdade de risco.
         </p>
         <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
           {(["finance", "macro", "realestate"] as Domain[]).map((domain) => (
@@ -37,7 +37,7 @@ export default async function CasosPage() {
             </div>
           ))}
         </div>
-        <div className="mt-4 text-xs text-zinc-500">run_id: {snap?.runId || "indisponivel"}</div>
+        <div className="mt-4 text-xs text-zinc-500">execução de referência: {snap?.runId || "indisponível"}</div>
       </section>
 
       <section className="space-y-4">
@@ -52,7 +52,7 @@ export default async function CasosPage() {
               <p><span className="text-zinc-400">Contexto:</span> {item.why_matters}</p>
               <p><span className="text-zinc-400">Evento:</span> {item.what_happened}</p>
               <p><span className="text-zinc-400">Leitura do motor:</span> {item.motor_reading}</p>
-              <p><span className="text-zinc-400">Uso pratico:</span> {item.operational_use}</p>
+              <p><span className="text-zinc-400">Uso prático:</span> {item.operational_use}</p>
               <p><span className="text-zinc-400">Limite:</span> {item.risk_limit}</p>
             </div>
             <div className="mt-4">

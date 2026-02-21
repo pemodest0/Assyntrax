@@ -1,0 +1,11 @@
+{
+  "n_assets": 470,
+  "n_sectors": 14,
+  "regime_mix_assets": {
+    "transicao": 0.7319148936170212,
+    "estavel": 0.14893617021276595,
+    "instavel": 0.11914893617021277
+  },
+  "top_risk_asset": "KRO",
+  "top_risk_sector": "crypto"
+}

@@ -1,22 +1,13 @@
-﻿"use client";
-
-import { motion } from "framer-motion";
-
 export default function ProductMock() {
   return (
-    <motion.div
-      className="relative rounded-3xl border border-zinc-800 bg-black/70 p-6 overflow-hidden"
-      initial={{ opacity: 0, y: 12 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6 }}
-    >
+    <div className="relative rounded-3xl border border-zinc-800 bg-black/70 p-6 overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.2),_transparent_55%)]" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,_rgba(249,115,22,0.14),_transparent_60%)]" />
 
       <div className="relative z-10 space-y-4">
         <div className="flex items-center justify-between">
           <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Painel operacional</div>
-          <div className="text-[10px] text-zinc-500">run_id: ativo</div>
+          <div className="text-[10px] text-zinc-500">execução rastreada</div>
         </div>
 
         <div className="grid grid-cols-3 gap-3">
@@ -42,7 +33,7 @@ export default function ProductMock() {
           </div>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -81,4 +72,3 @@ function HeatCell({
     </div>
   );
 }
-

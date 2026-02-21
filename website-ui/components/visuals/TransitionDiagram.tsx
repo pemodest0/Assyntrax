@@ -1,7 +1,3 @@
-﻿"use client";
-
-import { motion } from "framer-motion";
-
 export default function TransitionDiagram() {
   return (
     <div className="relative rounded-3xl border border-zinc-800 bg-black/70 p-8 overflow-hidden">
@@ -10,12 +6,9 @@ export default function TransitionDiagram() {
       <div className="relative z-10">
         <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Regime Shift</div>
         <div className="mt-4 grid grid-cols-1 gap-6">
-          <motion.svg
+          <svg
             viewBox="0 0 640 220"
             className="w-full h-52"
-            initial={{ opacity: 0, y: 12 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
           >
             <defs>
               <linearGradient id="reg-line" x1="0" x2="1">
@@ -37,7 +30,7 @@ export default function TransitionDiagram() {
             <text x="36" y="190" fill="#94a3b8" fontSize="12">Regime estável</text>
             <text x="300" y="30" fill="#f97316" fontSize="12">Transição crítica</text>
             <text x="480" y="28" fill="#a855f7" fontSize="12">Novo regime</text>
-          </motion.svg>
+          </svg>
         </div>
       </div>
     </div>

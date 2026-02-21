@@ -1,19 +1,45 @@
 ﻿import ProductMock from "@/components/visuals/ProductMock";
 import SignalWeave from "@/components/visuals/SignalWeave";
 import ProofMatrix from "@/components/visuals/ProofMatrix";
+import type { Metadata } from "next";
+import { buildPageMetadata } from "@/lib/site/metadata";
+
+export const metadata: Metadata = buildPageMetadata({
+  title: "Produto: painel e API com gates auditáveis",
+  description:
+    "Painel + API com regime, confiança, qualidade, status operacional e motivo do gate. Integração direta para operação.",
+  path: "/product",
+  locale: "pt-BR",
+  keywords: ["dashboard de risco", "api de risco", "gate operacional", "trilha auditável"],
+});
 
 export default function ProductPage() {
+  const productJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: "Assyntrax Motor de Regime",
+    applicationCategory: "BusinessApplication",
+    operatingSystem: "Web",
+    description:
+      "Painel e API para diagnóstico causal de regime e risco estrutural com trilha auditável.",
+    url: "https://assyntrax.vercel.app/product",
+  };
+
   return (
     <div className="space-y-16">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }}
+      />
       <section className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-10 items-center">
         <div className="space-y-4">
           <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Produto</div>
           <h1 className="text-4xl md:text-5xl font-semibold tracking-tight">
-            Estrutura, métricas e decisão em um fluxo único
+            Estrutura, métricas e diagnóstico em um fluxo único
           </h1>
           <p className="text-zinc-300 max-w-3xl text-lg">
-            O Eigen Engine combina diagnóstico de regime, risco estrutural e forecast condicional com
-            rastreabilidade operacional. O foco é reduzir erro de decisão, não adivinhar preço.
+            O motor combina análise espectral de correlações, classificação de regime e governança de publicação.
+            O foco é leitura de risco estrutural com transparência técnica.
           </p>
         </div>
         <SignalWeave />
@@ -23,28 +49,28 @@ export default function ProductPage() {
         <div className="space-y-4">
           <h2 className="text-3xl font-semibold">Dashboard operacional</h2>
           <p className="text-zinc-300 text-lg">
-            Leitura de regime com confiança, qualidade, status de gate e motivo explícito de uso.
-            Quando o sistema está inconclusivo, a ação fica bloqueada em modo diagnóstico.
+            Leitura de regime com confiança, qualidade, status do gate e motivo explícito.
+            Quando o sistema está inconclusivo, a publicação permanece em modo diagnóstico.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-zinc-300">
             <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-5">
               Estado atual: o que mudou no sistema hoje.
             </div>
             <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-5">
-              Regra operacional: o que evitar para não forçar decisão frágil.
+              Governança operacional: quando a publicação é bloqueada por qualidade.
             </div>
           </div>
         </div>
         <ProductMock />
       </section>
 
-      <section className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] gap-10 items-center">
+      <section id="saida-json" className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] gap-10 items-center">
         <ProofMatrix />
         <div className="space-y-4">
           <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">API e integração</div>
           <h2 className="text-3xl font-semibold">Saídas prontas para produção</h2>
           <p className="text-zinc-300 text-lg">
-            Respostas em JSON com regime, confiança, qualidade, status, motivo e run_id para auditoria.
+            Respostas em JSON com regime, confiança, qualidade, status, motivo e id de execução para auditoria.
             Integração direta com BI, alertas e sistemas internos.
           </p>
           <pre className="rounded-2xl border border-zinc-800 bg-black/60 p-4 text-xs text-zinc-200 overflow-x-auto">
@@ -54,30 +80,30 @@ export default function ProductPage() {
   "quality": 0.78,
   "status": "watch",
   "reason": "transição persistente",
-  "run_id": "20260210_xxx"
+  "id_execucao": "20260210_xxx"
 }`}
           </pre>
         </div>
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold">Setores de aplicação</h2>
+        <h2 className="text-2xl font-semibold">Escopo de aplicação</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card title="Finanças">
-            Regime diário para ativos líquidos. Útil para reduzir overtrading, evitar extrapolação em
-            transição e bloquear ação quando a estrutura degrada.
-          </Card>
-          <Card title="Imobiliário">
-            Diagnóstico por cidade e estado com preço, liquidez, juros e crédito. Separa expansão,
-            maturação, estagnação e estresse local com explicação operacional.
-          </Card>
-          <Card title="Energia e infraestrutura">
-            Leitura de estabilidade em séries de carga, custo e risco operacional, com alerta para
-            mudança estrutural antes de ajuste tático.
+            Regime diário para ativos líquidos, com leitura causal e rastreamento por id de execução.
+            O produto está em fase simplificada com foco exclusivo em Finanças.
           </Card>
           <Card title="Operações e risco institucional">
-            Base para comitês e governança: status validado/observação/inconclusivo, motivo do gate
-            e trilha de decisão por execução.
+            Base para comitês e governança: status, motivo do gate, limites de uso
+            e trilha auditável por execução.
+          </Card>
+          <Card title="Limites do produto">
+            Sem promessa de retorno e sem recomendação de compra ou venda.
+            Uso focado em risco estrutural, governança e auditoria.
+          </Card>
+          <Card title="Garantias técnicas">
+            Cálculo causal sem look-ahead, artefatos completos por execução
+            e bloqueio automático de publicação quando critérios mínimos falham.
           </Card>
         </div>
       </section>
@@ -93,4 +119,3 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
     </div>
   );
 }
-

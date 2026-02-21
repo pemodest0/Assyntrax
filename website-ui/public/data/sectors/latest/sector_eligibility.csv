@@ -1,0 +1,15 @@
+sector,eligible,reason,n_days_cal,n_days_test,n_assets_median_test
+bonds_rates,False,insufficient_assets_or_history,503,1525,1.0
+consumer_discretionary,True,ok,503,1537,47.0
+consumer_staples,True,ok,503,1537,32.0
+crypto,False,insufficient_assets_or_history,730,2220,1.0
+energy,True,ok,503,1537,46.0
+equities_us_broad,False,insufficient_assets_or_history,503,1525,1.0
+equities_us_other,False,insufficient_assets_or_history,503,1537,5.0
+financials,True,ok,503,1537,55.0
+health_care,True,ok,503,1537,42.0
+industrials,True,ok,503,1537,94.0
+materials,True,ok,503,1537,26.0
+real_estate,True,ok,503,1537,36.0
+technology,True,ok,503,1537,56.0
+utilities,True,ok,503,1537,28.0

@@ -31,7 +31,7 @@ export default function MethodLattice() {
         ))}
       </svg>
       <div className="relative z-10 mt-2 text-xs text-zinc-400">
-        Arquitetura em camadas: embedding, estados, transições, gates e auditoria.
+        Arquitetura em camadas: séries, espectro, estados estruturais, gate e auditoria.
       </div>
     </motion.div>
   );
