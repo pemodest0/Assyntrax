@@ -209,3 +209,62 @@ body {
   transform-origin: center;
   animation: axCoinsUp 2.8s ease-in-out infinite;
 }
+
+@keyframes axOrbitSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes axOrbitSpinReverse {
+  0% { transform: rotate(360deg); }
+  100% { transform: rotate(0deg); }
+}
+
+@keyframes axWavePulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.86);
+    opacity: 0.25;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.05);
+    opacity: 0.5;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(0.86);
+    opacity: 0.25;
+  }
+}
+
+@keyframes axEqFade {
+  0% { transform: translateY(8px); opacity: 0.66; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes axGridFlow {
+  0% { background-position: 0 0, 0 0; }
+  100% { background-position: 48px 48px, -48px -48px; }
+}
+
+.ax-orbit-spin {
+  animation: axOrbitSpin 20s linear infinite;
+}
+
+.ax-orbit-spin-rev {
+  animation: axOrbitSpinReverse 16s linear infinite;
+}
+
+.ax-wave-ring {
+  animation: axWavePulse 6.8s ease-in-out infinite;
+}
+
+.ax-eq-fade {
+  animation: axEqFade 0.7s ease both;
+}
+
+.ax-theory-grid {
+  background-image:
+    linear-gradient(rgba(56, 189, 248, 0.13) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 185, 129, 0.12) 1px, transparent 1px);
+  background-size: 48px 48px;
+  animation: axGridFlow 18s linear infinite;
+}

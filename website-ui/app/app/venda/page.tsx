@@ -20,6 +20,9 @@ export default function VendaPage() {
             <Link href="/app/dashboard" className="rounded-md border border-zinc-700 px-3 py-2 text-xs text-zinc-100 hover:border-zinc-500 transition">
               Abrir painel
             </Link>
+            <Link href="/app/teoria" className="rounded-md border border-emerald-700/70 bg-emerald-950/20 px-3 py-2 text-xs text-emerald-200 hover:border-emerald-500 transition">
+              Ver teoria completa
+            </Link>
           </div>
         </div>
       </section>

@@ -28,6 +28,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 {featureFlags.showSetoresNav ? <NavItem href="/app/setores" label="Setores" /> : null}
                 {featureFlags.showRealEstateNav ? <NavItem href="/app/real-estate" label="Imobiliário" /> : null}
                 <NavItem href="/app/venda" label="Venda" />
+                <NavItem href="/app/teoria" label="Teoria do Motor" />
               </nav>
 
               <div className="mt-6 border-t border-zinc-800 pt-4 text-xs text-zinc-400">

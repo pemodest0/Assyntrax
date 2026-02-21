@@ -96,6 +96,49 @@ const dataSources = [
   },
 ];
 
+const methodReferences = [
+  {
+    id: "M1",
+    title: "Financial Applications of Random Matrix Theory (arXiv:0910.1205)",
+    href: "https://arxiv.org/abs/0910.1205",
+  },
+  {
+    id: "M2",
+    title: "Principal Components as a Measure of Systemic Risk (MIT)",
+    href: "https://web.mit.edu/~finlunch/Fall10/PCASystemicRisk.pdf",
+  },
+  {
+    id: "M3",
+    title: "Estimation of Large Financial Covariances (arXiv)",
+    href: "https://arxiv.org/abs/1909.12064",
+  },
+  {
+    id: "M4",
+    title: "Walk-forward optimization (conceito)",
+    href: "https://en.wikipedia.org/wiki/Walk_forward_optimization",
+  },
+  {
+    id: "M5",
+    title: "Block bootstrapping technique (scores docs)",
+    href: "https://scores.readthedocs.io/en/stable/tutorials/Block_Bootstrapping.html",
+  },
+  {
+    id: "M6",
+    title: "Basel III LCR (BIS)",
+    href: "https://www.bis.org/publ/bcbs238.htm",
+  },
+  {
+    id: "M7",
+    title: "SR 11-7 Model Risk Management (Federal Reserve)",
+    href: "https://www.federalreserve.gov/supervisionreg/srletters/sr1107.htm",
+  },
+  {
+    id: "M8",
+    title: "FRTB revised market risk framework (BIS)",
+    href: "https://www.bis.org/bcbs/publ/d305.htm",
+  },
+];
+
 export default function MethodsPageClient() {
   return (
     <div className="space-y-10">
@@ -159,6 +202,24 @@ export default function MethodsPageClient() {
               <h3 className="text-sm font-semibold text-zinc-100">{src.nome}</h3>
               <p className="mt-2 text-sm text-zinc-300 leading-relaxed">{src.detalhe}</p>
             </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-6">
+        <div className="text-xs uppercase tracking-[0.3em] text-zinc-500">Referências metodológicas</div>
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+          {methodReferences.map((ref) => (
+            <a
+              key={ref.id}
+              href={ref.href}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 hover:border-zinc-600 transition"
+            >
+              <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">{ref.id}</div>
+              <div className="mt-1 text-sm text-zinc-200">{ref.title}</div>
+            </a>
           ))}
         </div>
       </section>
