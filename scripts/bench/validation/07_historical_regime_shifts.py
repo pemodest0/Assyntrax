@@ -31,6 +31,12 @@ def _json_dump(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+def _write_status(outdir: Path, payload: dict[str, Any]) -> None:
+    # Keep STATUS as canonical; VERDICT is written only for backward compatibility.
+    _json_dump(outdir / "STATUS.json", payload)
+    _json_dump(outdir / "VERDICT.json", payload)
+
+
 def _detect_dataset(user_path: str | None) -> tuple[Path, str, str]:
     if user_path:
         p = Path(user_path)
@@ -417,21 +423,21 @@ def main() -> None:
 
     dataset, vc_auto, dc_auto = _detect_dataset(args.dataset)
     if not dataset.exists():
-        _json_dump(outdir / "VERDICT.json", {"status": "fail", "reason": f"missing_data: {dataset}"})
+        _write_status(outdir, {"status": "fail", "reason": f"missing_data: {dataset}"})
         print(f"[fail] dataset not found: {dataset}")
         return
 
     try:
         df = pd.read_csv(dataset)
     except Exception as exc:
-        _json_dump(outdir / "VERDICT.json", {"status": "fail", "reason": f"read_error: {exc}"})
+        _write_status(outdir, {"status": "fail", "reason": f"read_error: {exc}"})
         print(f"[fail] read_error: {exc}")
         return
 
     value_col = _resolve_col(df, args.value_col) or _resolve_col(df, vc_auto) or _auto_value_col(df)
     date_col = _resolve_col(df, args.date_col) or _resolve_col(df, dc_auto) or _auto_date_col(df)
     if value_col is None or date_col is None:
-        _json_dump(outdir / "VERDICT.json", {"status": "fail", "reason": "missing required columns"})
+        _write_status(outdir, {"status": "fail", "reason": "missing required columns"})
         print("[fail] missing required columns")
         return
 
@@ -442,14 +448,14 @@ def main() -> None:
     d = d[valid].reset_index(drop=True)
 
     if x.shape[0] < MIN_POINTS:
-        _json_dump(outdir / "VERDICT.json", {"status": "fail", "reason": f"insufficient_points<{MIN_POINTS}", "n_points": int(x.shape[0])})
+        _write_status(outdir, {"status": "fail", "reason": f"insufficient_points<{MIN_POINTS}", "n_points": int(x.shape[0])})
         print(f"[fail] insufficient points: {x.shape[0]}")
         return
 
     result, m, tau = _run_motor(x, seed=args.seed, timeframe=args.timeframe)
     n = int(result.state_labels.shape[0])
     if n <= 0:
-        _json_dump(outdir / "VERDICT.json", {"status": "fail", "reason": "empty_motor_output"})
+        _write_status(outdir, {"status": "fail", "reason": "empty_motor_output"})
         print("[fail] empty motor output")
         return
 
@@ -611,7 +617,7 @@ def main() -> None:
                     }
 
     if best_payload is None:
-        _json_dump(outdir / "VERDICT.json", {"status": "fail", "reason": "no_sweep_candidates"})
+        _write_status(outdir, {"status": "fail", "reason": "no_sweep_candidates"})
         print("[fail] no sweep candidates")
         return
 
@@ -757,7 +763,7 @@ def main() -> None:
             ]
         }
     )
-    _json_dump(outdir / "VERDICT.json", verdict)
+    _write_status(outdir, verdict)
 
     profile = {
         "asset": dataset.stem,
@@ -796,4 +802,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

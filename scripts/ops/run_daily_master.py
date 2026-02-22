@@ -27,9 +27,15 @@ def _read_json(path: Path) -> dict[str, Any]:
         return {}
 
 
-def _run(cmd: list[str], *, cwd: Path) -> tuple[int, str, str]:
-    proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
-    return proc.returncode, (proc.stdout or "").strip(), (proc.stderr or "").strip()
+def _run(cmd: list[str], *, cwd: Path, timeout_sec: float) -> tuple[int, str, str]:
+    try:
+        proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout_sec)
+        return proc.returncode, (proc.stdout or "").strip(), (proc.stderr or "").strip()
+    except subprocess.TimeoutExpired as exc:
+        out = (exc.stdout or "").strip() if isinstance(exc.stdout, str) else ""
+        err = (exc.stderr or "").strip() if isinstance(exc.stderr, str) else ""
+        timeout_msg = f"timeout_after_{int(timeout_sec)}s"
+        return 124, (out + "\n" + timeout_msg).strip(), (err + "\n" + timeout_msg).strip()
 
 
 def _as_float(v: Any) -> float | None:
@@ -58,6 +64,7 @@ def main() -> None:
     ap.add_argument("--with-heavy", action="store_true", help="Inclui diagnostico motor 470 e suite de crise.")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--out-root", type=str, default="results/ops/runs")
+    ap.add_argument("--step-timeout-sec", type=float, default=900.0, help="Timeout por etapa em segundos")
     args = ap.parse_args()
 
     run_id = str(args.run_id).strip() or _ts_id()
@@ -72,7 +79,7 @@ def main() -> None:
             row.update({"status": "skipped_dry_run", "code": 0})
             steps.append(row)
             return row
-        code, out, err = _run(cmd, cwd=ROOT)
+        code, out, err = _run(cmd, cwd=ROOT, timeout_sec=float(args.step_timeout_sec))
         row.update(
             {
                 "status": "ok" if code == 0 else "fail",
@@ -92,7 +99,18 @@ def main() -> None:
     try:
         do_step(
             "daily_validation",
-            [PY, "scripts/ops/run_daily_validation.py", "--seed", str(args.seed), "--max-assets", str(args.max_assets), "--run-id", run_id],
+            [
+                PY,
+                "scripts/ops/run_daily_validation.py",
+                "--seed",
+                str(args.seed),
+                "--max-assets",
+                str(args.max_assets),
+                "--run-id",
+                run_id,
+                "--step-timeout-sec",
+                str(args.step_timeout_sec),
+            ],
         )
         do_step("build_snapshot", [PY, "scripts/ops/build_daily_snapshot.py", "--run-id", run_id])
         do_step(

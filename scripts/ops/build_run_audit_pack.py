@@ -62,8 +62,6 @@ def main() -> None:
     daily_summary = _read_json(daily_dir / "summary.json", {})
     diff_summary = _read_json(ROOT / "results/ops/diff/summary.json", {})
     global_status = _read_json(ROOT / "results/validation/STATUS.json", {})
-    if not global_status:
-        global_status = _read_json(ROOT / "results/validation/VERDICT.json", {})
     adequacy = _read_json(ROOT / "results/validation/data_adequacy/summary.json", {})
     gates_cfg = _read_json(ROOT / "config/validation_gates.json", {})
     prod_cfg = _read_json(ROOT / "config/production_gate.v1.json", {})

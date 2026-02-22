@@ -33,6 +33,12 @@ def _json_dump(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+def _write_status(outdir: Path, payload: dict[str, Any]) -> None:
+    # Keep STATUS as canonical; VERDICT is written only for backward compatibility.
+    _json_dump(outdir / "STATUS.json", payload)
+    _json_dump(outdir / "VERDICT.json", payload)
+
+
 def _resolve_col(df: pd.DataFrame, col: str | None) -> str | None:
     if col is None:
         return None
@@ -242,13 +248,13 @@ def main() -> None:
         vix_df = _load_series(vix_ref).rename(columns={"value": "vix"})
         asset_df = _load_series(asset_ref).rename(columns={"value": "asset_price"})
     except Exception as exc:
-        _json_dump(outdir / "VERDICT.json", {"status": "fail", "reason": f"missing_data: {exc}"})
+        _write_status(outdir, {"status": "fail", "reason": f"missing_data: {exc}"})
         print(f"[fail] missing_data: {exc}")
         return
 
     merged = vix_df.merge(asset_df, on="date", how="inner").sort_values("date").reset_index(drop=True)
     if merged.shape[0] < MIN_POINTS:
-        _json_dump(outdir / "VERDICT.json", {"status": "fail", "reason": f"insufficient_intersection<{MIN_POINTS}"})
+        _write_status(outdir, {"status": "fail", "reason": f"insufficient_intersection<{MIN_POINTS}"})
         print("[fail] insufficient_intersection")
         return
 
@@ -368,8 +374,8 @@ def main() -> None:
     ]
     cond_pass = any(v for _, v in pass_conditions)
     verdict = "pass" if cond_pass else "neutral"
-    _json_dump(
-        outdir / "VERDICT.json",
+    _write_status(
+        outdir,
         {
             "status": verdict,
             "pass_conditions": {
@@ -421,4 +427,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

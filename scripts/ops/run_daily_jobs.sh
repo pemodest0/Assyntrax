@@ -5,16 +5,29 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SEED="${1:-23}"
 MAX_ASSETS="${2:-80}"
 HEAVY="${3:-}"
+THREADS="${4:-${ASSYNTRAX_THREADS:-1}}"
+STEP_TIMEOUT_SEC="${5:-${ASSYNTRAX_STEP_TIMEOUT_SEC:-900}}"
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
 
 cd "$ROOT"
 
-echo "[ops] repo=$ROOT run_id=$RUN_ID"
+export OMP_NUM_THREADS="$THREADS"
+export OPENBLAS_NUM_THREADS="$THREADS"
+export MKL_NUM_THREADS="$THREADS"
+export NUMEXPR_NUM_THREADS="$THREADS"
+export VECLIB_MAXIMUM_THREADS="$THREADS"
+export LOKY_MAX_CPU_COUNT="$THREADS"
+
+echo "[ops] repo=$ROOT run_id=$RUN_ID threads=$THREADS step_timeout_sec=$STEP_TIMEOUT_SEC"
 
 if [[ "$HEAVY" == "heavy" ]]; then
-  python3 scripts/ops/run_daily_master.py --seed "$SEED" --max-assets "$MAX_ASSETS" --run-id "$RUN_ID" --with-heavy
+  python3 scripts/ops/run_daily_master.py --seed "$SEED" --max-assets "$MAX_ASSETS" --run-id "$RUN_ID" --step-timeout-sec "$STEP_TIMEOUT_SEC" --with-heavy
 else
-  python3 scripts/ops/run_daily_master.py --seed "$SEED" --max-assets "$MAX_ASSETS" --run-id "$RUN_ID"
+  python3 scripts/ops/run_daily_master.py --seed "$SEED" --max-assets "$MAX_ASSETS" --run-id "$RUN_ID" --step-timeout-sec "$STEP_TIMEOUT_SEC"
 fi
+
+python3 scripts/ops/train_model_c_gnn.py
+python3 scripts/ops/build_copilot_shadow.py --run-id "$RUN_ID"
+python3 scripts/ops/build_platform_db.py --run-id "$RUN_ID"
 
 echo "[ops] done"

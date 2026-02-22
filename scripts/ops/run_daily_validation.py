@@ -14,10 +14,16 @@ ROOT = Path(__file__).resolve().parents[2]
 PY = sys.executable
 
 
-def _run(cmd: list[str]) -> tuple[int, str]:
-    proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
-    msg = (proc.stdout or "") + ("\n" + proc.stderr if proc.stderr else "")
-    return proc.returncode, msg.strip()
+def _run(cmd: list[str], timeout_sec: float) -> tuple[int, str]:
+    try:
+        proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=timeout_sec)
+        msg = (proc.stdout or "") + ("\n" + proc.stderr if proc.stderr else "")
+        return proc.returncode, msg.strip()
+    except subprocess.TimeoutExpired as exc:
+        out = (exc.stdout or "") if isinstance(exc.stdout, str) else ""
+        err = (exc.stderr or "") if isinstance(exc.stderr, str) else ""
+        msg = (out + ("\n" + err if err else "") + f"\n[timeout] {int(timeout_sec)}s").strip()
+        return 124, msg
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -32,6 +38,7 @@ def main() -> None:
     parser.add_argument("--max-assets", type=int, default=80)
     parser.add_argument("--run-id", type=str, default=datetime.now(timezone.utc).strftime("%Y%m%d"))
     parser.add_argument("--outdir", type=str, default="results/ops/daily")
+    parser.add_argument("--step-timeout-sec", type=float, default=900.0)
     args = parser.parse_args()
 
     run_dir = ROOT / args.outdir / args.run_id
@@ -70,7 +77,7 @@ def main() -> None:
     logs: list[dict[str, Any]] = []
     ok = True
     for i, cmd in enumerate(steps, start=1):
-        code, tail = _run(cmd)
+        code, tail = _run(cmd, float(args.step_timeout_sec))
         logs.append({"step": i, "cmd": " ".join(cmd), "code": code, "tail": tail[-2000:]})
         if code != 0:
             ok = False
@@ -79,8 +86,6 @@ def main() -> None:
     (run_dir / "execution_log.json").write_text(json.dumps(logs, indent=2, ensure_ascii=False), encoding="utf-8")
 
     global_status = _read_json(ROOT / "results/validation/STATUS.json")
-    if not global_status:
-        global_status = _read_json(ROOT / "results/validation/VERDICT.json")
     universe = _read_json(ROOT / "results/validation/universe_mini_full/universe_report.json")
     uncertainty = _read_json(ROOT / "results/validation/uncertainty_full/summary.json")
     validated = _read_json(ROOT / "results/validated/latest/summary.json")
@@ -90,8 +95,6 @@ def main() -> None:
     adequacy = _read_json(ROOT / "results/validation/data_adequacy/summary.json")
     hist_metrics = _read_json(ROOT / "results/validation/historical_shifts/metrics.json")
     historical_status = _read_json(ROOT / "results/validation/historical_shifts/STATUS.json")
-    if not historical_status:
-        historical_status = _read_json(ROOT / "results/validation/historical_shifts/VERDICT.json")
     realestate_offline = _read_json(ROOT / "results/validation/realestate_offline/summary.json")
 
     success_rate = 0.0

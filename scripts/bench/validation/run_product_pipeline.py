@@ -179,7 +179,7 @@ def main() -> None:
             "--out",
             "results/validation/risk_truth_panel.json",
         ],
-        [PY, "scripts/bench/validation/05_verdict.py", "--root", "results/validation"],
+        [PY, "scripts/bench/validation/05_status.py", "--root", "results/validation"],
         [
             PY,
             "scripts/bench/validation/00_build_validated_artifacts.py",
