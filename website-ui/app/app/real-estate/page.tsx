@@ -1,6 +1,5 @@
-import RealEstateDashboard from "@/components/RealEstateDashboard";
+import { redirect } from "next/navigation";
 
 export default function RealEstatePage() {
-  return <RealEstateDashboard />;
+  redirect("/app/dashboard");
 }
-

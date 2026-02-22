@@ -20,7 +20,7 @@ Este repositorio contem o motor de deteccao de regimes e risco, os pipelines de 
 - `legacy/`: arquivos antigos ou fora do fluxo atual.
 
 ## Fluxo oficial (alto nivel)
-1. Rodar jobs diarios (`scripts/ops/run_daily_jobs.ps1`).
+1. Rodar jobs diarios (`scripts/ops/run_daily_jobs.ps1` no Windows, `scripts/ops/run_daily_jobs.sh` no Linux/Mac).
 2. Validar contrato e gates.
 3. Gerar shadow do copiloto B+C com gate (`scripts/ops/build_copilot_shadow.py`).
 4. Indexar run no banco SQLite (`scripts/ops/build_platform_db.py`).
@@ -34,6 +34,9 @@ Este repositorio contem o motor de deteccao de regimes e risco, os pipelines de 
 - Global verdict em estado aceitavel para publicacao.
 
 ## Comandos uteis
+- Sincronizacao canonica (forca remoto sobre local):
+  - `./scripts/ops/git_sync_canonical.sh`
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\ops\\git_sync_canonical.ps1`
 - Pipeline diario:
   - `powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\ops\\run_daily_jobs.ps1 -Seed 17 -MaxAssets 80`
 - Copiloto shadow manual (B+C):
@@ -55,10 +58,18 @@ Este repositorio contem o motor de deteccao de regimes e risco, os pipelines de 
 - Artefato de shadow por run: `results/ops/copilot/<run_id>/shadow_summary.json`.
 - Snapshot do banco para o site: `results/platform/latest_db_snapshot.json`.
 
+## Telas operacionais principais
+- `website-ui/app/app/dashboard/page.tsx`: painel central do motor com filtros de ativo/setor/janela/periodo.
+- `website-ui/app/app/setores/page.tsx`: leitura setorial, ranking e historico de niveis.
+- `website-ui/app/app/operacao/page.tsx`: rotina diaria, gate de publicacao e relatorio.
+- `website-ui/app/app/venda/page.tsx`: proposta comercial, pacotes e material de reuniao.
+
 ## Documentacao recomendada
 - `docs/OPS_EXECUTION_FLOW.md`
 - `docs/ENGINE_GUIDE.md`
 - `docs/DAILY_PIPELINE.md`
 - `docs/COPILOT_CORE_INSTRUCTIONS.md`
 - `docs/REPO_REFACTOR_PLAN.md`
-- `MAC_HANDOFF.md`
+- `docs/notes/MAC_HANDOFF.md`
+- `docs/operacao/REPO_HEALTHCHECK.md`
+- `docs/operacao/GITHUB_CANONICO.md`

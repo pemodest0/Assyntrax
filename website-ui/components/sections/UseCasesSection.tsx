@@ -54,9 +54,23 @@ const tabs = [
 ];
 
 export default function UseCasesSection() {
-  const [active, setActive] = useState(tabs[0].id);
-  const current = tabs.find((t) => t.id === active) || tabs[0];
+  const [activeIndex, setActiveIndex] = useState(0);
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const current = tabs[activeIndex] || tabs[0];
   const Visual = current.Visual;
+
+  function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, currentIndex: number) {
+    const { key } = event;
+    if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(key)) return;
+    event.preventDefault();
+    let nextIndex = currentIndex;
+    if (key === "ArrowRight") nextIndex = (currentIndex + 1) % tabs.length;
+    if (key === "ArrowLeft") nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    if (key === "Home") nextIndex = 0;
+    if (key === "End") nextIndex = tabs.length - 1;
+    setActiveIndex(nextIndex);
+    tabRefs.current[nextIndex]?.focus();
+  }
 
   return (
     <section className="space-y-6 py-10 md:py-12 lg:py-14 xl:py-16">
@@ -83,11 +97,12 @@ export default function UseCasesSection() {
           ))}
         </div>
       </div>
-      <motion.div
+      <div
         key={current.id}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
+        id={`use-case-panel-${current.id}`}
+        role="tabpanel"
+        aria-labelledby={`use-case-tab-${current.id}`}
+        className="outline-none"
       >
         <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] gap-6">
           <Visual />
@@ -100,7 +115,7 @@ export default function UseCasesSection() {
             </ul>
           </div>
         </div>
-      </motion.div>
+      </div>
     </section>
   );
 }

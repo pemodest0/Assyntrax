@@ -105,6 +105,7 @@ export default async function DashboardHome() {
     latestNUsed != null && officialWindow > 0 ? Math.max(0, Math.trunc(officialWindow - latestNUsed)) : null;
   const warmupActive = warmupRemaining != null ? warmupRemaining > 0 : false;
 
+export default function DashboardPage() {
   return (
     <div className="p-5 md:p-6 lg:p-8 space-y-6">
       <section className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-5">

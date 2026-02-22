@@ -25,6 +25,8 @@ class EvalResult:
     n_events: int
     n_alert_days: int
     n_false_alert_days: int
+    n_alert_episodes: int
+    n_false_alert_episodes: int
 
 
 def _ts_id() -> str:
@@ -40,7 +42,7 @@ def _load_returns_csv(path: Path) -> pd.DataFrame | None:
         return None
     try:
         df = pd.read_csv(path)
-    except Exception:
+    except (FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError, OSError):
         return None
     if "date" not in df.columns:
         return None
@@ -88,7 +90,7 @@ def build_motor_daily_series(tickers: list[str], assets_dir: Path, prices_dir: P
             continue
         try:
             rg = pd.read_csv(rg_path)
-        except Exception:
+        except (FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError, OSError):
             continue
         if rg.empty or "regime" not in rg.columns or "confidence" not in rg.columns:
             continue
@@ -136,13 +138,14 @@ def build_motor_daily_series(tickers: list[str], assets_dir: Path, prices_dir: P
     return agg
 
 
-def _dedupe_events(event_dates: list[pd.Timestamp], cooldown_days: int = 20) -> list[pd.Timestamp]:
+def _dedupe_events(event_dates: list[pd.Timestamp], event_pos: list[int], cooldown_days: int = 20) -> list[pd.Timestamp]:
     out: list[pd.Timestamp] = []
-    last: pd.Timestamp | None = None
-    for d in sorted(event_dates):
-        if last is None or (d - last).days > cooldown_days:
-            out.append(d)
-            last = d
+    last_pos: int | None = None
+    pairs = sorted(zip(event_dates, event_pos), key=lambda x: int(x[1]))
+    for d, p in pairs:
+        if last_pos is None or (int(p) - int(last_pos)) > int(cooldown_days):
+            out.append(pd.Timestamp(d))
+            last_pos = int(p)
     return out
 
 
@@ -152,8 +155,10 @@ def build_event_dates(ref: pd.DataFrame, test_start: pd.Timestamp, ret_q01: floa
     x["event_dd20"] = x["dd20"] <= -0.08
     out: dict[str, list[pd.Timestamp]] = {}
     for name, col in [("ret_tail", "event_ret_tail"), ("drawdown20", "event_dd20")]:
-        dates = x.loc[(x["date"] >= test_start) & (x[col].fillna(False)), "date"].tolist()
-        out[name] = _dedupe_events(dates, cooldown_days=20)
+        mask = (x["date"] >= test_start) & (x[col].fillna(False))
+        dates = x.loc[mask, "date"].tolist()
+        pos = x.index[mask].tolist()
+        out[name] = _dedupe_events(dates, pos, cooldown_days=20)
     return out
 
 
@@ -187,25 +192,36 @@ def evaluate_alerts(
         if co_hi >= co_lo and bool(s_alert.iloc[co_lo : co_hi + 1].any()):
             coincident += 1
 
-    alert_idx = np.where(s_alert.to_numpy(dtype=bool))[0]
+    alert_days_idx = np.where(s_alert.to_numpy(dtype=bool))[0]
+    # Precision/false alarm are episode-based (entry alerts), avoiding distortion from long alert streaks.
+    starts_mask = s_alert.to_numpy(dtype=bool) & (~s_alert.shift(1, fill_value=False).to_numpy(dtype=bool))
+    alert_episode_idx = np.where(starts_mask)[0]
     good_alerts = 0
-    for a in alert_idx:
+    for a in alert_episode_idx:
         has_future_event = any((ev >= a + 1) and (ev <= a + int(assoc_horizon_days)) for ev in event_idx)
         if has_future_event:
             good_alerts += 1
-    n_alert = int(len(alert_idx))
-    n_false = int(max(0, n_alert - good_alerts))
+    n_alert_episodes = int(len(alert_episode_idx))
+    n_false_episodes = int(max(0, n_alert_episodes - good_alerts))
+    good_alert_days = 0
+    for a in alert_days_idx:
+        has_future_event = any((ev >= a + 1) and (ev <= a + int(assoc_horizon_days)) for ev in event_idx)
+        if has_future_event:
+            good_alert_days += 1
+    n_false_alert_days = int(max(0, len(alert_days_idx) - good_alert_days))
     years = max(1e-9, len(dts) / 252.0)
 
     return EvalResult(
         recall=float(detected / len(event_idx)) if event_idx else float("nan"),
-        precision=float(good_alerts / n_alert) if n_alert > 0 else float("nan"),
-        false_alarm_per_year=float(n_false / years),
+        precision=float(good_alerts / n_alert_episodes) if n_alert_episodes > 0 else float("nan"),
+        false_alarm_per_year=float(n_false_episodes / years),
         mean_lead_days=float(np.mean(lead_days)) if lead_days else float("nan"),
         coincident_rate=float(coincident / len(event_idx)) if event_idx else float("nan"),
         n_events=int(len(event_idx)),
-        n_alert_days=n_alert,
-        n_false_alert_days=n_false,
+        n_alert_days=int(len(alert_days_idx)),
+        n_false_alert_days=n_false_alert_days,
+        n_alert_episodes=n_alert_episodes,
+        n_false_alert_episodes=n_false_episodes,
     )
 
 
@@ -399,6 +415,7 @@ def main() -> None:
     events_rows: list[dict[str, object]] = []
 
     log("step: metrics_loop")
+    motor_alert_episodes = int(_entry_alert(test["alert_motor"]).sum())
     for ev_name, ev_dates in events.items():
         for L in lookbacks:
             motor_ev = evaluate_alerts(test["date"], test["alert_motor"], ev_dates, lookback_days=L)
@@ -406,7 +423,7 @@ def main() -> None:
             b2_ev = evaluate_alerts(test["date"], test["alert_ret1"], ev_dates, lookback_days=L)
             rnd = random_baseline_distribution(
                 dates=test["date"],
-                n_alert_days=int(test["alert_motor"].sum()),
+                n_alert_days=motor_alert_episodes,
                 event_dates=ev_dates,
                 lookback_days=L,
                 n_boot=int(args.n_random),
@@ -430,6 +447,8 @@ def main() -> None:
                         "n_events": motor_ev.n_events,
                         "n_alert_days": motor_ev.n_alert_days,
                         "n_false_alert_days": motor_ev.n_false_alert_days,
+                        "n_alert_episodes": motor_ev.n_alert_episodes,
+                        "n_false_alert_episodes": motor_ev.n_false_alert_episodes,
                         "p_vs_random_recall": p_vs_random,
                         "random_recall_mean": rnd_recall_mean,
                         "random_recall_p95": rnd_recall_p95,
@@ -446,6 +465,8 @@ def main() -> None:
                         "n_events": b1_ev.n_events,
                         "n_alert_days": b1_ev.n_alert_days,
                         "n_false_alert_days": b1_ev.n_false_alert_days,
+                        "n_alert_episodes": b1_ev.n_alert_episodes,
+                        "n_false_alert_episodes": b1_ev.n_false_alert_episodes,
                         "p_vs_random_recall": float("nan"),
                         "random_recall_mean": rnd_recall_mean,
                         "random_recall_p95": rnd_recall_p95,
@@ -462,6 +483,8 @@ def main() -> None:
                         "n_events": b2_ev.n_events,
                         "n_alert_days": b2_ev.n_alert_days,
                         "n_false_alert_days": b2_ev.n_false_alert_days,
+                        "n_alert_episodes": b2_ev.n_alert_episodes,
+                        "n_false_alert_episodes": b2_ev.n_false_alert_episodes,
                         "p_vs_random_recall": float("nan"),
                         "random_recall_mean": rnd_recall_mean,
                         "random_recall_p95": rnd_recall_p95,
@@ -623,7 +646,7 @@ def main() -> None:
             fig.tight_layout()
             fig.savefig(outdir / "tradeoff_detection_false_alarm.png", dpi=140)
             plt.close(fig)
-        except Exception as exc:
+        except (ImportError, OSError, ValueError, RuntimeError) as exc:
             (outdir / "plot_error.txt").write_text(str(exc), encoding="utf-8")
 
     log("step: write_config")

@@ -1,1 +1,5 @@
-export { default } from "@/app/(site)/pt/about/page";
+import { redirect } from "next/navigation";
+
+export default function SobrePage() {
+  redirect("/about");
+}

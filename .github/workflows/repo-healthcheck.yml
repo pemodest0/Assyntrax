@@ -1,0 +1,64 @@
+name: Repo Healthcheck
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  python-ops-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Python compileall
+        run: python3 -m compileall -q engine scripts tools tests
+
+      - name: Engine purity audit
+        run: python3 tools/engine_purity_audit.py
+
+      - name: Daily master dry run
+        run: python3 scripts/ops/run_daily_master.py --dry-run --run-id CI_DRY_${{ github.run_id }}
+
+      - name: Frontend payload audit (only when snapshots exist)
+        run: |
+          if [ -d "results/ops/snapshots" ]; then
+            python3 scripts/ops/audit_frontend_payloads.py
+          else
+            echo "No snapshots directory on runner. Skipping payload audit."
+          fi
+
+  frontend-checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website-ui
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: website-ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build -- --webpack

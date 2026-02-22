@@ -11,6 +11,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,7 +40,7 @@ def apply_profile_defaults(
         return profile_meta
     try:
         payload = json.loads(profile_path.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, json.JSONDecodeError):
         return profile_meta
 
     params = payload.get("params", payload) if isinstance(payload, dict) else {}
@@ -62,7 +63,7 @@ def apply_profile_defaults(
             else:
                 val = str(raw)
             setattr(args, k, val)
-        except Exception:
+        except (TypeError, ValueError):
             continue
 
     profile_meta = {
@@ -98,7 +99,7 @@ def run_retry(
     retry_delay_sec: float,
     step_log: list[dict[str, object]],
 ) -> str:
-    last_exc: Exception | None = None
+    last_exc: subprocess.CalledProcessError | OSError | None = None
     attempts = max(1, int(retries) + 1)
     for i in range(1, attempts + 1):
         t0 = time.time()
@@ -113,7 +114,7 @@ def run_retry(
                 }
             )
             return out
-        except Exception as exc:  # noqa: BLE001
+        except (subprocess.CalledProcessError, OSError) as exc:
             last_exc = exc
             step_log.append(
                 {
@@ -136,7 +137,7 @@ def read_levels_csv(path: Path) -> list[dict[str, object]]:
             return None
         try:
             n = float(x)
-        except Exception:
+        except (TypeError, ValueError):
             return None
         return n if math.isfinite(n) else None
 
@@ -256,7 +257,7 @@ def weekly_reference_run_id(conn: sqlite3.Connection, current_generated_at: str)
         current_dt = datetime.fromisoformat(current_generated_at.replace("Z", "+00:00"))
         ref_dt = current_dt.timestamp() - 7 * 24 * 3600
         ref_iso = datetime.fromtimestamp(ref_dt, tz=timezone.utc).isoformat()
-    except Exception:
+    except (ValueError, TypeError, OverflowError):
         ref_iso = current_generated_at
     q = """
     SELECT run_id
@@ -382,7 +383,7 @@ def notify_if_needed(
         try:
             with urllib.request.urlopen(req, timeout=10):
                 sent = True
-        except Exception:
+        except (urllib.error.URLError, TimeoutError, OSError):
             sent = False
     payload["webhook_sent"] = sent
     return payload
@@ -550,7 +551,7 @@ def main() -> None:
     pack_payload = None
     try:
         pack_payload = ast.literal_eval(out_pack.splitlines()[-1])
-    except Exception:
+    except (ValueError, SyntaxError, IndexError):
         pack_payload = {"raw": out_pack}
 
     db_path = ROOT / str(args.db_path)
@@ -604,6 +605,8 @@ def main() -> None:
         str(float(args.drift_block_zscore)),
         "--profile-file",
         str(args.profile_file),
+        "--out-root",
+        str(Path(args.out_root) / "drift"),
         "--out-json",
         str(drift_monitor_path),
     ]
@@ -618,7 +621,7 @@ def main() -> None:
             step_log=step_log,
         )
         drift_payload = json.loads(out_drift.splitlines()[-1])
-    except Exception as exc:  # noqa: BLE001
+    except (subprocess.CalledProcessError, OSError, json.JSONDecodeError, IndexError) as exc:
         step_log.append(
             {
                 "step": "monitor_sector_alerts_drift",

@@ -59,7 +59,7 @@ def _count_levels(path: Path) -> dict[str, int]:
 def _safe(v: float) -> float:
     try:
         x = float(v)
-    except Exception:
+    except (TypeError, ValueError):
         return 0.0
     return x if np.isfinite(x) else 0.0
 

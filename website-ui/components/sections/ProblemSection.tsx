@@ -1,26 +1,23 @@
-﻿"use client";
-
+import Link from "next/link";
 import TransitionDiagram from "@/components/visuals/TransitionDiagram";
-import { motion } from "framer-motion";
 
 export default function ProblemSection() {
   return (
     <section className="grid grid-cols-1 lg:grid-cols-[0.95fr_1.05fr] gap-8 lg:gap-10 items-center py-10 md:py-12 lg:py-14 xl:py-16">
-      <motion.div
-        className="rounded-[24px] border border-zinc-800 bg-zinc-950/60 p-8 ax-glow"
-        initial={{ opacity: 0, y: 10 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
+      <div className="rounded-[24px] border border-zinc-800 bg-zinc-950/60 p-8 ax-glow">
         <div className="text-xs uppercase tracking-[0.2em] text-zinc-400">O problema</div>
-        <h2 className="mt-3 text-3xl md:text-4xl font-semibold tracking-tight">Modelos falham quando o regime muda.</h2>
+        <h2 className="mt-3 text-3xl md:text-4xl font-semibold tracking-tight">
+          Equipes erram quando o regime muda sem aviso operacional.
+        </h2>
         <p className="mt-3 text-zinc-300 text-base lg:text-lg">
-          Modelos tradicionais tendem a extrapolar o último estado observado. O Eigen Engine detecta
-          transição estrutural, mede estabilidade e informa quando não há base para ação.
+          O erro mais caro costuma vir da extrapolação de um cenário que já mudou.
+          O Assyntrax identifica transição estrutural, mede confiança e sinaliza quando a leitura deve ficar em modo diagnóstico.
         </p>
-      </motion.div>
+        <Link className="mt-4 inline-flex text-sm text-cyan-300 hover:text-cyan-200" href="/methods">
+          Ver como medimos transições
+        </Link>
+      </div>
       <TransitionDiagram />
     </section>
   );
 }
-

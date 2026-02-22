@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Tuple
 def _load_json(path: Path) -> dict:
     try:
         return json.loads(path.read_text())
-    except Exception:
+    except (OSError, json.JSONDecodeError):
         return {}
 
 

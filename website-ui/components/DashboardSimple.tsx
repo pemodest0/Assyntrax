@@ -46,19 +46,22 @@ const categoryLabels: Record<string, string> = {
   crypto: "Cripto",
 };
 
-function useUniverse() {
+function useUniverseByTf(tf: "daily" | "weekly") {
   const [data, setData] = useState<GraphRecord[]>([]);
   useEffect(() => {
-    fetch("/api/graph/universe?tf=weekly")
+    fetch(`/api/graph/universe?tf=${tf}`)
       .then((r) => r.json())
       .then((j) => setData(Array.isArray(j) ? j : []))
       .catch(() => setData([]));
-  }, []);
+  }, [tf]);
   return data;
 }
 
 export default function DashboardSimple() {
-  const universe = useUniverse();
+  const [timeframe, setTimeframe] = useState<"daily" | "weekly">("weekly");
+  const [periodDays, setPeriodDays] = useState<number>(365);
+  const [assetSearch, setAssetSearch] = useState<string>("");
+  const universe = useUniverseByTf(timeframe);
   const [category, setCategory] = useState("all");
   const [selectedAssets, setSelectedAssets] = useState<string[]>([]);
   const [seriesMap, setSeriesMap] = useState<SeriesMap>({});
@@ -66,8 +69,10 @@ export default function DashboardSimple() {
   const tableAssets = useMemo(() => {
     const list = categories[category] || [];
     const base = category === "all" ? universe : universe.filter((u) => list.includes(u.asset));
-    return base;
-  }, [universe, category]);
+    const needle = assetSearch.trim().toLowerCase();
+    if (!needle) return base;
+    return base.filter((u) => `${u.asset} ${nameForAsset(u.asset)}`.toLowerCase().includes(needle));
+  }, [universe, category, assetSearch]);
   const effectiveSelectedAssets = useMemo(() => {
     if (selectedAssets.length) return selectedAssets;
     return tableAssets.slice(0, 3).map((r) => r.asset);
@@ -76,11 +81,13 @@ export default function DashboardSimple() {
   useEffect(() => {
     if (!effectiveSelectedAssets.length) return;
     const assets = effectiveSelectedAssets.slice(0, 3).join(",");
-    fetch(`/api/graph/series-batch?assets=${encodeURIComponent(assets)}&tf=weekly&limit=260&step=2`)
+    const limit = timeframe === "daily" ? Math.max(60, Math.min(1500, periodDays)) : Math.max(20, Math.min(400, Math.round(periodDays / 5)));
+    const step = timeframe === "daily" ? 1 : 2;
+    fetch(`/api/graph/series-batch?assets=${encodeURIComponent(assets)}&tf=${timeframe}&limit=${limit}&step=${step}`)
       .then((r) => r.json())
       .then((j) => setSeriesMap(j || {}))
       .catch(() => setSeriesMap({}));
-  }, [effectiveSelectedAssets]);
+  }, [effectiveSelectedAssets, timeframe, periodDays]);
 
   return (
     <div className="p-6 space-y-6">
@@ -99,6 +106,30 @@ export default function DashboardSimple() {
                 </option>
               ))}
             </select>
+            <select
+              className="rounded-lg border border-zinc-800 bg-black/40 px-3 py-2 text-xs text-zinc-200"
+              value={timeframe}
+              onChange={(e) => setTimeframe((e.target.value as "daily" | "weekly") || "weekly")}
+            >
+              <option value="weekly">Semanal</option>
+              <option value="daily">Diário</option>
+            </select>
+            <select
+              className="rounded-lg border border-zinc-800 bg-black/40 px-3 py-2 text-xs text-zinc-200"
+              value={periodDays}
+              onChange={(e) => setPeriodDays(Number(e.target.value) || 365)}
+            >
+              <option value={90}>90d</option>
+              <option value={180}>180d</option>
+              <option value={365}>365d</option>
+              <option value={730}>730d</option>
+            </select>
+            <input
+              value={assetSearch}
+              onChange={(e) => setAssetSearch(e.target.value)}
+              placeholder="filtrar ativo"
+              className="rounded-lg border border-zinc-800 bg-black/40 px-3 py-2 text-xs text-zinc-200"
+            />
           </div>
         </div>
       </section>

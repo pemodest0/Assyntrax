@@ -1,0 +1,85 @@
+Sector Event Study Validation - Motor de Regimes
+generated_at_utc: 2026-02-20T04:21:52.458092+00:00
+calibration_end: 2019-12-31
+test_start: 2020-01-01
+test_end: latest
+alert_policy: regime_entry_confirm
+n_random: 40
+random_baseline_method: both
+random_block_size: 8
+q_unstable: 0.7510
+q_transition: 0.8423
+q_confidence: 0.4909
+q_confidence_guarded: 0.6397
+q_score_balanced: 0.6947
+q_score_guarded: 0.8271
+confirm_n: 3
+confirm_m: 3
+min_alert_gap_days: 5
+two_layer_mode: on
+auto_candidates: regime_entry_confirm,regime_balanced,regime_guarded
+min_sector_assets: 10
+min_cal_days: 252
+min_test_days: 252
+
+Global event thresholds:
+- ret_q01: -0.052311
+- vol20_q95: 0.507057
+
+Sector eligibility:
+- eligible: 10
+- total: 14
+Eventos avaliados:
+- drawdown20: 22
+- ret_tail: 14
+- stress_combo: 4
+- vol_spike20: 5
+
+Top sectors (drawdown recall L=5, motor):
+- health_care: recall=0.1000, false_alarm/ano=7.3780, precision=0.1509, p_vs_random=0.3000, p_iid=0.7500, p_block=0.3000, assets_med=42.0000
+- industrials: recall=0.2000, false_alarm/ano=8.6897, precision=0.1846, p_vs_random=0.1500, p_iid=0.7250, p_block=0.1500, assets_med=94.0000
+- utilities: recall=0.2000, false_alarm/ano=8.6897, precision=0.1167, p_vs_random=0.1000, p_iid=0.7250, p_block=0.1000, assets_med=28.0000
+- technology: recall=0.1000, false_alarm/ano=6.8861, precision=0.1923, p_vs_random=0.3500, p_iid=0.7500, p_block=0.3500, assets_med=56.0000
+- financials: recall=0.1000, false_alarm/ano=8.1978, precision=0.1667, p_vs_random=0.5000, p_iid=0.9000, p_block=0.5000, assets_med=55.0000
+- consumer_discretionary: recall=0.1000, false_alarm/ano=7.2141, precision=0.1020, p_vs_random=0.4750, p_iid=0.8000, p_block=0.4750, assets_med=47.0000
+- energy: recall=0.1000, false_alarm/ano=8.1978, precision=0.1228, p_vs_random=0.4000, p_iid=0.8250, p_block=0.4000, assets_med=46.0000
+- consumer_staples: recall=0.0000, false_alarm/ano=5.9024, precision=0.1429, p_vs_random=1.0000, p_iid=1.0000, p_block=1.0000, assets_med=32.0000
+
+Niveis atuais por setor (ultimo dia):
+- vermelho: 0
+- amarelo: 0
+- verde: 10
+Politica usada por setor (ultimo dia):
+- regime_entry_confirm: 10
+
+Resumo por setor (L=1 e L=5, motor):
+Setor: consumer_discretionary
+- L=1: recall=0.0000, precision=0.1020, false_alarm/ano=7.2141, p_vs_random=1.0000, p_iid=1.0000, p_block=1.0000
+- L=5: recall=0.1000, precision=0.1020, false_alarm/ano=7.2141, p_vs_random=0.4750, p_iid=0.8000, p_block=0.4750
+Setor: consumer_staples
+- L=1: recall=0.0000, precision=0.1429, false_alarm/ano=5.9024, p_vs_random=1.0000, p_iid=1.0000, p_block=1.0000
+- L=5: recall=0.0000, precision=0.1429, false_alarm/ano=5.9024, p_vs_random=1.0000, p_iid=1.0000, p_block=1.0000
+Setor: energy
+- L=1: recall=0.0000, precision=0.1228, false_alarm/ano=8.1978, p_vs_random=1.0000, p_iid=1.0000, p_block=1.0000
+- L=5: recall=0.1000, precision=0.1228, false_alarm/ano=8.1978, p_vs_random=0.4000, p_iid=0.8250, p_block=0.4000
+Setor: financials
+- L=1: recall=0.1000, precision=0.1667, false_alarm/ano=8.1978, p_vs_random=0.3500, p_iid=0.3250, p_block=0.3500
+- L=5: recall=0.1000, precision=0.1667, false_alarm/ano=8.1978, p_vs_random=0.5000, p_iid=0.9000, p_block=0.5000
+Setor: health_care
+- L=1: recall=0.0000, precision=0.1509, false_alarm/ano=7.3780, p_vs_random=1.0000, p_iid=1.0000, p_block=1.0000
+- L=5: recall=0.1000, precision=0.1509, false_alarm/ano=7.3780, p_vs_random=0.3000, p_iid=0.7500, p_block=0.3000
+Setor: industrials
+- L=1: recall=0.1000, precision=0.1846, false_alarm/ano=8.6897, p_vs_random=0.4500, p_iid=0.4250, p_block=0.4500
+- L=5: recall=0.2000, precision=0.1846, false_alarm/ano=8.6897, p_vs_random=0.1500, p_iid=0.7250, p_block=0.1500
+Setor: materials
+- L=1: recall=0.0000, precision=0.1228, false_alarm/ano=8.1978, p_vs_random=1.0000, p_iid=1.0000, p_block=1.0000
+- L=5: recall=0.0000, precision=0.1228, false_alarm/ano=8.1978, p_vs_random=1.0000, p_iid=1.0000, p_block=1.0000
+Setor: real_estate
+- L=1: recall=0.0000, precision=0.0897, false_alarm/ano=11.6409, p_vs_random=1.0000, p_iid=1.0000, p_block=1.0000
+- L=5: recall=0.0000, precision=0.0897, false_alarm/ano=11.6409, p_vs_random=1.0000, p_iid=1.0000, p_block=1.0000
+Setor: technology
+- L=1: recall=0.0000, precision=0.1923, false_alarm/ano=6.8861, p_vs_random=1.0000, p_iid=1.0000, p_block=1.0000
+- L=5: recall=0.1000, precision=0.1923, false_alarm/ano=6.8861, p_vs_random=0.3500, p_iid=0.7500, p_block=0.3500
+Setor: utilities
+- L=1: recall=0.0000, precision=0.1167, false_alarm/ano=8.6897, p_vs_random=1.0000, p_iid=1.0000, p_block=1.0000
+- L=5: recall=0.2000, precision=0.1167, false_alarm/ano=8.6897, p_vs_random=0.1000, p_iid=0.7250, p_block=0.1000

@@ -405,11 +405,11 @@ def build_asset_output(
         thresholds=result.thresholds,
     )
 
-    recommendation = "USE"
+    recommendation = "STABILITY_OK"
     if asset.state.label in ("UNSTABLE", "NOISY"):
-        recommendation = "AVOID"
+        recommendation = "INSTABILITY_RISK"
     elif asset.state.label == "TRANSITION":
-        recommendation = "CAUTION"
+        recommendation = "TRANSITION_WATCH"
     asset.recommendation = recommendation
     # Stability penalizes excessive regime flipping.
     badges: List[str] = []
@@ -855,7 +855,7 @@ def main() -> None:
             asset.alerts.extend(extra_alerts)
             if "LOW_QUALITY_FORCE_NOISY" in extra_alerts:
                 asset.state.label = "NOISY"
-                asset.recommendation = "AVOID"
+                asset.recommendation = "INSTABILITY_RISK"
             sanity_summary.setdefault(ticker, {}).setdefault(tf, []).extend(extra_alerts)
         if tf == "daily":
             universe_daily.append(asset)
@@ -1078,4 +1078,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

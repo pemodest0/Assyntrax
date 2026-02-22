@@ -59,6 +59,21 @@ const palette: Record<string, string> = {
 
 const REGION_ORDER = ["Norte", "Nordeste", "Centro-Oeste", "Sudeste", "Sul", "Desconhecida"];
 
+function fallbackMetaFromAsset(asset: string): AssetMeta {
+  const city = asset
+    .replace(/^FipeZap_/i, "")
+    .replace(/_Total$/i, "")
+    .replace(/_/g, " ");
+  return {
+    asset,
+    city,
+    state: "NA",
+    region: "Desconhecida",
+    source_type: "fallback",
+    source_name: "asset_name",
+  };
+}
+
 function formatPct(v: number | null | undefined) {
   if (v == null || Number.isNaN(v)) return "--";
   return `${(v * 100).toFixed(2)}%`;
@@ -99,6 +114,8 @@ function computeForecast(
 
 export default function RealEstateDashboard() {
   const [payload, setPayload] = useState<RealEstatePayload | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [regionFilter, setRegionFilter] = useState("Sudeste");
   const [stateFilter, setStateFilter] = useState("SP");
   const [assetFilter, setAssetFilter] = useState<string>("");
@@ -109,23 +126,47 @@ export default function RealEstateDashboard() {
   useEffect(() => {
     const controller = new AbortController();
     const run = async () => {
+      setLoading(true);
       try {
         const query = assetFilter ? `?asset=${encodeURIComponent(assetFilter)}` : "";
         const res = await fetch(`/api/realestate/asset${query}`, {
           signal: controller.signal,
         });
-        if (!res.ok) throw new Error("Erro ao carregar diagnostico imobiliario");
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as { error?: string; reason?: string };
+          throw new Error(
+            `Falha ao carregar imobiliário (${res.status}). ${body.reason || body.error || "Sem base imobiliária disponível."}`
+          );
+        }
         const data = (await res.json()) as RealEstatePayload;
         setPayload(data);
-      } catch {
+        setError(null);
+      } catch (err) {
+        if (controller.signal.aborted) return;
         setPayload(null);
+        setError(err instanceof Error ? err.message : "Erro desconhecido.");
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
       }
     };
     void run();
     return () => controller.abort();
   }, [assetFilter]);
 
-  const assetsMeta = useMemo(() => payload?.assets_meta || [], [payload?.assets_meta]);
+  const assetsMeta = useMemo(() => {
+    const raw = payload?.assets_meta || [];
+    if (raw.length > 0) {
+      return raw.map((m) => ({
+        asset: m.asset,
+        city: m.city || fallbackMetaFromAsset(m.asset).city,
+        state: m.state || "NA",
+        region: m.region || "Desconhecida",
+        source_type: m.source_type || "fallback",
+        source_name: m.source_name || "asset_name",
+      }));
+    }
+    return (payload?.assets || []).map((asset) => fallbackMetaFromAsset(asset));
+  }, [payload?.assets_meta, payload?.assets]);
 
   const regionOptions = useMemo(() => {
     const unique = Array.from(new Set(assetsMeta.map((m) => m.region)));
@@ -214,12 +255,27 @@ export default function RealEstateDashboard() {
     }
   };
 
+  if (loading) {
+    return <div className="p-6 text-sm text-zinc-400">Carregando setor imobiliário...</div>;
+  }
+
+  if (error || !payload) {
+    return (
+      <div className="p-6 space-y-3">
+        <div className="text-sm text-rose-300">Falha ao carregar setor imobiliário: {error || "sem dados."}</div>
+        <div className="text-xs text-zinc-400">
+          Ação sugerida: verifique `data/realestate` e `public/data/realestate` com arquivos de cidade, estado e região.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-6">
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold">Setor Imobiliário</h1>
-        <p className="text-sm text-zinc-400">
-          Modelo em 3 camadas: dados (P/L/J/D), dinâmica (embedding e transições) e operação (gate auditável).
+        <p className="text-sm text-zinc-300 leading-relaxed">
+          Modelo em 3 camadas: dados (P/L/J/D), dinâmica de regime e operação com gate auditável.
         </p>
       </header>
 
@@ -251,7 +307,7 @@ export default function RealEstateDashboard() {
           </div>
           <div
             className="rounded-lg border border-zinc-700 bg-zinc-950/50 p-3"
-            title="Regra operacional recomendada para reduzir erro em regime instável."
+            title="Leitura operacional sugerida para reduzir erro em regime instável."
           >
             <div className="text-[11px] text-zinc-400">Regra do dia</div>
             <div className="mt-1 text-sm text-zinc-200">{getOperationalRule(payload?.operational.status, latest?.regime)}</div>
@@ -263,11 +319,15 @@ export default function RealEstateDashboard() {
         <div className="col-span-12 lg:col-span-4 space-y-4">
           <div className="rounded-xl border border-zinc-800 bg-black/40 p-4">
             <div className="text-xs text-zinc-500 mb-2">Filtro geográfico</div>
+            <div className="mb-3 text-[11px] text-zinc-400 leading-relaxed">
+              Passo 1: região. Passo 2: estado. Passo 3: cidade.
+            </div>
             <div className="space-y-3">
               <label className="text-xs text-zinc-400">Região</label>
               <select
                 className="w-full rounded-lg border border-zinc-700 bg-black/30 px-3 py-2 text-sm"
                 value={regionFilter}
+                aria-label="Selecionar região"
                 onChange={(e) => {
                   const region = e.target.value;
                   setRegionFilter(region);
@@ -286,6 +346,7 @@ export default function RealEstateDashboard() {
               <select
                 className="w-full rounded-lg border border-zinc-700 bg-black/30 px-3 py-2 text-sm"
                 value={stateFilter}
+                aria-label="Selecionar estado"
                 onChange={(e) => onSelectUF(e.target.value)}
               >
                 {statesByRegion.map((s) => (
@@ -299,6 +360,7 @@ export default function RealEstateDashboard() {
               <select
                 className="w-full rounded-lg border border-zinc-700 bg-black/30 px-3 py-2 text-sm"
                 value={payload?.asset || assetFilter}
+                aria-label="Selecionar cidade ou ativo"
                 onChange={(e) => setAssetFilter(e.target.value)}
               >
                 {assetsByState.map((m) => (
@@ -365,6 +427,8 @@ export default function RealEstateDashboard() {
                   width={chart.width}
                   height={chart.height}
                   className="w-full"
+                  role="img"
+                  aria-label="Série de preço médio com faixas de regime do ativo imobiliário selecionado"
                   onMouseLeave={() => setHoverIndex(null)}
                   onMouseMove={(e) => {
                     const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
@@ -439,7 +503,7 @@ export default function RealEstateDashboard() {
                 )}
               </div>
             ) : (
-              <div className="text-sm text-zinc-400">Sem dados para este ativo.</div>
+              <div className="text-sm text-zinc-400">Sem dados para este ativo. Escolha outra cidade ou estado.</div>
             )}
           </div>
 

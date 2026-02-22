@@ -5,12 +5,20 @@
     "end": "2026-02-12",
     "coverage_core": 0.95,
     "coverage_window": 0.98,
+    "overlap_step": 5,
     "min_assets": 25,
     "official_window": 120,
     "business_days_only": true
   },
   "regime": {
     "hysteresis_days": 3,
+    "threshold_mode": "walk_forward",
+    "walkforward_min_history_days": 252,
+    "transition_weights": {
+      "dp1": 0.45,
+      "ddeff": 0.45,
+      "overlap_instability": 0.10
+    },
     "exposure": {
       "stress": 0.1,
       "transition": 0.4,
@@ -25,6 +33,7 @@
   "gate": {
     "min_joint_majority_60d": 0.3,
     "require_latest_majority": false,
+    "require_policy_lock_match": false,
     "max_abs_delta_p1": 0.01,
     "max_abs_delta_deff": 1.0,
     "max_active_cluster_alerts": 1,
@@ -32,6 +41,14 @@
     "max_insufficient_ratio": 0.05,
     "min_n_used_ratio": 0.9,
     "q_min": 0.12
+  },
+  "alerts": {
+    "risk_q_yellow": 0.7,
+    "risk_q_red": 0.9,
+    "min_conf_yellow": 0.35,
+    "min_conf_red": 0.45,
+    "persist_window": 3,
+    "persist_count": 2
   },
   "calibration": {
     "enabled": true,

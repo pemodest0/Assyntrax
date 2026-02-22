@@ -23,12 +23,7 @@ const blocks = [
 export default function HowItWorksSection() {
   return (
     <section className="space-y-6 py-10 md:py-12 lg:py-14 xl:py-16">
-      <motion.div
-        className="space-y-2"
-        initial={{ opacity: 0, y: 8 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
+      <div className="space-y-2">
         <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Como funciona</div>
         <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">
           Tres etapas para transformar dados em decisao clara

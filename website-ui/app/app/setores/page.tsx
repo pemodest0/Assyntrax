@@ -1,5 +1,5 @@
-import SectorAlertsDashboard from "@/components/SectorAlertsDashboard";
+import { redirect } from "next/navigation";
 
 export default function SetoresPage() {
-  return <SectorAlertsDashboard />;
+  redirect("/app/dashboard");
 }

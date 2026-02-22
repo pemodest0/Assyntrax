@@ -1,25 +1,25 @@
-﻿"use client";
+"use client";
 
 import { motion } from "framer-motion";
 
-const sectors = [
+const layers = [
   {
-    id: "F",
-    label: "Finanças",
+    id: "R",
+    label: "Risco estrutural",
     color: "#22d3ee",
-    path: "M20 72 C 80 34, 146 108, 208 62 C 272 22, 338 96, 402 56",
+    path: "M20 82 C 80 40, 146 110, 208 64 C 272 26, 338 98, 402 60",
   },
   {
-    id: "E",
-    label: "Energia",
+    id: "C",
+    label: "Confiança do sinal",
     color: "#f97316",
-    path: "M20 138 C 76 96, 138 146, 210 106 C 282 66, 344 120, 402 88",
+    path: "M20 156 C 76 116, 138 166, 210 120 C 282 82, 344 136, 402 100",
   },
   {
-    id: "I",
-    label: "Imobiliário",
-    color: "#a855f7",
-    path: "M20 204 C 88 164, 154 212, 216 170 C 274 130, 340 176, 402 144",
+    id: "G",
+    label: "Gate de publicação",
+    color: "#a3e635",
+    path: "M20 214 C 88 176, 154 224, 216 182 C 274 142, 340 188, 402 154",
   },
 ];
 
@@ -36,7 +36,7 @@ export default function SignalWeave() {
 
       <svg viewBox="0 0 430 236" className="relative z-10 w-full h-52">
         <rect x="0" y="0" width="430" height="236" rx="24" fill="rgba(8,8,12,0.62)" />
-        {sectors.map((s, i) => (
+        {layers.map((s, i) => (
           <g key={s.id}>
             <text x="20" y={46 + i * 66} fill="rgba(255,255,255,0.65)" fontSize="12">
               {s.label}
@@ -44,7 +44,7 @@ export default function SignalWeave() {
             <path d={s.path} stroke={s.color} strokeWidth="2.5" fill="none" />
             <motion.circle
               cx="20"
-              cy={72 + i * 66}
+              cy={82 + i * 66}
               r="4"
               fill={s.color}
               animate={{ cx: [20, 402] }}
@@ -59,8 +59,9 @@ export default function SignalWeave() {
         ))}
       </svg>
       <div className="relative z-10 text-xs text-zinc-400 mt-2">
-        Estrutura dinâmica multicamada para finanças, energia e imobiliário.
+        Núcleo do produto: diagnóstico de regime em finanças com governança quantitativa.
       </div>
     </motion.div>
   );
 }
+

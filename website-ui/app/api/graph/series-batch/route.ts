@@ -16,6 +16,15 @@ function parseCsv(text: string) {
   });
 }
 
+function pickNumber(row: Record<string, string>, keys: string[]) {
+  for (const key of keys) {
+    const raw = row[key];
+    const n = Number(raw);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
 function toWeeklyIndices(dates: string[]) {
   const out: number[] = [];
   let lastKey = "";
@@ -49,38 +58,13 @@ export async function GET(request: Request) {
   const assets = assetsParam.split(",").map((s) => s.trim()).filter(Boolean);
   const out: Record<
     string,
-    { date: string; confidence: number; regime: string; price: number | null }[]
+    { date: string; confidence: number; regime: string; price: number | null; volume: number | null }[]
   > = {};
 
   await Promise.all(
     assets.map(async (asset) => {
       try {
-        const regimesFile = path.join(resultsRoot(), "latest_graph", "assets", `${asset}_${tf}_regimes.csv`);
-        const rawReg = await fs.readFile(regimesFile, "utf-8");
-        const regRows = parseCsv(rawReg);
-
-        const priceFile = path.join(resultsRoot(), "..", "data", "raw", "finance", "yfinance_daily", `${asset}.csv`);
-        const rawPrice = await fs.readFile(priceFile, "utf-8");
-        const priceRows = parseCsv(rawPrice);
-        const dates = priceRows.map((r) => r.date).filter(Boolean);
-        const indices = tf === "weekly" ? toWeeklyIndices(dates) : priceRows.map((_, idx) => idx);
-
-        const total = regRows.length;
-        const n = limit ? Math.min(limit, total) : total;
-        const sliceRegs = regRows.slice(-n);
-        const sliceIdx = indices.slice(-n);
-        const series = sliceRegs
-          .filter((_, idx) => idx % step === 0)
-          .map((r, i) => {
-            const priceRow = priceRows[sliceIdx[i] ?? 0];
-            return {
-              date: priceRow?.date || "",
-              confidence: Number(r.confidence),
-              regime: r.regime,
-              price: Number(priceRow?.price ?? NaN) || null,
-            };
-          });
-        out[asset] = series;
+        out[asset] = await loadFallbackSeries(asset, tf, limit, step);
       } catch {
         out[asset] = [];
       }

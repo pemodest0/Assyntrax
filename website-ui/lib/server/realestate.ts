@@ -1,5 +1,6 @@
 ﻿import { promises as fs } from "fs";
 import path from "path";
+import { existsSync } from "node:fs";
 
 type Point = { date: string; value: number };
 
@@ -89,7 +90,31 @@ const MIN_POINTS = 200;
 const MIN_COVERAGE_YEARS = 3;
 const MAX_GAP_RATIO = 0.12;
 const HYSTERESIS_DAYS = 3;
-const CITY_DICT_PATH = path.join(repoRoot(), "config", "realestate_city_uf_region.v1.json");
+
+function uniquePaths(items: string[]) {
+  return Array.from(new Set(items.map((x) => path.resolve(x))));
+}
+
+function roots() {
+  return uniquePaths([process.cwd(), path.resolve(process.cwd(), "..")]);
+}
+
+function candidateFiles(...rel: string[]) {
+  const files = roots().map((r) => path.join(r, ...rel));
+  return uniquePaths(files);
+}
+
+function candidateDirs(...rel: string[]) {
+  const dirs = roots().map((r) => path.join(r, ...rel));
+  return uniquePaths(dirs);
+}
+
+function pickExistingDir(candidates: string[], fallback: string) {
+  for (const c of candidates) {
+    if (existsSync(c)) return c;
+  }
+  return fallback;
+}
 
 const REGION_BY_STATE: Record<string, string> = {
   BR: "Brasil",
@@ -182,10 +207,6 @@ const CITY_TO_STATE: Record<string, string> = {
   "vila velha": "ES",
 };
 
-function repoRoot() {
-  return path.resolve(process.cwd(), "..");
-}
-
 function clamp01(v: number) {
   return Math.max(0, Math.min(1, v));
 }
@@ -238,6 +259,16 @@ function rollingMean(values: number[], window: number) {
   return out;
 }
 
+function zscoreArray(values: number[]) {
+  const clean = values.map((v) => (Number.isFinite(v) ? v : 0));
+  if (!clean.length) return [];
+  const mean = clean.reduce((a, b) => a + b, 0) / clean.length;
+  const variance = clean.reduce((acc, v) => acc + (v - mean) * (v - mean), 0) / clean.length;
+  const sd = Math.sqrt(Math.max(variance, 0));
+  if (!Number.isFinite(sd) || sd <= 1e-9) return clean.map(() => 0);
+  return clean.map((v) => (v - mean) / sd);
+}
+
 function inferMeta(asset: string): RealEstateAssetMeta {
   const clean = asset.replace(/^FipeZap_/i, "").replace(/_Total$/i, "").replace(/_core$/i, "");
   const city = clean.replace(/_/g, " ");
@@ -267,13 +298,21 @@ let cityDictCache: CityDictEntry[] | null = null;
 
 async function loadCityDictionary(): Promise<CityDictEntry[]> {
   if (cityDictCache) return cityDictCache;
-  try {
-    const raw = await fs.readFile(CITY_DICT_PATH, "utf-8");
-    const parsed = JSON.parse(raw) as { entries?: CityDictEntry[] };
-    cityDictCache = Array.isArray(parsed.entries) ? parsed.entries : [];
-  } catch {
-    cityDictCache = [];
+  const candidates = [
+    ...candidateFiles("config", "realestate_city_uf_region.v1.json"),
+    path.join(process.cwd(), "public", "data", "realestate", "city_uf_region.v1.json"),
+  ];
+  for (const c of uniquePaths(candidates)) {
+    try {
+      const raw = await fs.readFile(c, "utf-8");
+      const parsed = JSON.parse(raw) as { entries?: CityDictEntry[] };
+      cityDictCache = Array.isArray(parsed.entries) ? parsed.entries : [];
+      return cityDictCache;
+    } catch {
+      // try next
+    }
   }
+  cityDictCache = [];
   return cityDictCache;
 }
 
@@ -301,11 +340,19 @@ async function inferMetaFromDictionary(asset: string): Promise<RealEstateAssetMe
 }
 
 function getNormalizedBaseDir() {
-  return path.join(repoRoot(), "data", "realestate", "normalized");
+  const dirs = [
+    ...candidateDirs("data", "realestate", "normalized"),
+    path.join(process.cwd(), "public", "data", "realestate", "normalized"),
+  ];
+  return pickExistingDir(uniquePaths(dirs), dirs[0]);
 }
 
 function getCoreBaseDir() {
-  return path.join(repoRoot(), "data", "realestate", "core");
+  const dirs = [
+    ...candidateDirs("data", "realestate", "core"),
+    path.join(process.cwd(), "public", "data", "realestate", "core"),
+  ];
+  return pickExistingDir(uniquePaths(dirs), dirs[0]);
 }
 
 function getCoreFilePath(asset: string) {
@@ -403,7 +450,15 @@ function buildDataLayerFromNormalized(asset: string, price: Point[], rate: Point
     return { date: p.date, value: Number.isFinite(exact as number) ? (exact as number) : lastRate };
   });
 
-  const D: Point[] = [];
+  const retSimple = priceVals.map((v, i) => (i === 0 ? 0 : v / Math.max(priceVals[i - 1], 1e-9) - 1));
+  const negRet = retSimple.map((v) => Math.max(0, -v));
+  const negRetSmooth = rollingMean(negRet, 3);
+  const zNegRet = zscoreArray(negRetSmooth);
+  const zIlliq = zscoreArray(L.map((p) => -p.value));
+  const D: Point[] = priceAligned.map((p, i) => ({
+    date: p.date,
+    value: Math.max(0, Math.min(25, 5 + 2.5 * (0.65 * (zNegRet[i] || 0) + 0.35 * (zIlliq[i] || 0)))),
+  }));
 
   let missingGap = 0;
   for (let i = 1; i < priceAligned.length; i++) {
@@ -426,11 +481,11 @@ function buildDataLayerFromNormalized(asset: string, price: Point[], rate: Point
         P: priceAligned.length > 0,
         L: L.length > 0,
         J: J.length > 0,
-        D: false,
+        D: D.length > 0,
       },
       notes: [
         "L(t) usa proxy de liquidez via estabilidade local de retornos.",
-        "D(t) ainda nao existe no repositorio; TODO: integrar desconto pedido x fechamento.",
+        "D(t) usa desconto proxy derivado de queda de preco e iliquidez local.",
       ],
     },
     series: {
@@ -443,10 +498,14 @@ function buildDataLayerFromNormalized(asset: string, price: Point[], rate: Point
 }
 
 async function inferEmbeddingParams(asset: string) {
-  const candidates = [
-    path.join(repoRoot(), "results", "validation", "universe_mini", `RE_${normalizeKey(asset)}`, "summary.json"),
-    path.join(repoRoot(), "results", "validation", "universe_mini_full", `RE_${normalizeKey(asset)}`, "summary.json"),
-  ];
+  const rootsToCheck = uniquePaths([
+    ...candidateDirs("results"),
+    path.join(process.cwd(), "public", "data", "realestate", "results"),
+  ]);
+  const candidates = rootsToCheck.flatMap((root) => [
+    path.join(root, "validation", "universe_mini", `RE_${normalizeKey(asset)}`, "summary.json"),
+    path.join(root, "validation", "universe_mini_full", `RE_${normalizeKey(asset)}`, "summary.json"),
+  ]);
   for (const c of candidates) {
     try {
       const raw = await fs.readFile(c, "utf-8");
@@ -482,21 +541,26 @@ function parseCsvRows(text: string) {
 }
 
 async function loadPipelineRegimes(asset: string) {
-  const root = path.join(repoRoot(), "results", "realestate", "assets");
+  const rootsToCheck = uniquePaths([
+    ...candidateDirs("results", "realestate", "assets"),
+    path.join(process.cwd(), "public", "data", "realestate", "assets"),
+  ]);
   const candidates = [
     `${asset}_monthly_regimes.csv`,
     `${asset.toUpperCase()}_monthly_regimes.csv`,
     `${normalizeKey(asset)}_monthly_regimes.csv`,
     `${normalizeKey(asset).toUpperCase()}_monthly_regimes.csv`,
   ];
-  for (const file of candidates) {
-    const fp = path.join(root, file);
-    try {
-      const raw = await fs.readFile(fp, "utf-8");
-      const parsed = parseCsvRows(raw).filter((r) => r.date && r.regime);
-      if (parsed.length) return parsed;
-    } catch {
-      // try next
+  for (const root of rootsToCheck) {
+    for (const file of candidates) {
+      const fp = path.join(root, file);
+      try {
+        const raw = await fs.readFile(fp, "utf-8");
+        const parsed = parseCsvRows(raw).filter((r) => r.date && r.regime);
+        if (parsed.length) return parsed;
+      } catch {
+        // try next
+      }
     }
   }
   return [];
@@ -510,22 +574,27 @@ type HMMPayload = {
 };
 
 async function loadHMMPayload(asset: string): Promise<HMMPayload | null> {
-  const hmmDir = path.join(repoRoot(), "results", "realestate", "hmm");
+  const hmmDirs = uniquePaths([
+    ...candidateDirs("results", "realestate", "hmm"),
+    path.join(process.cwd(), "public", "data", "realestate", "hmm"),
+  ]);
   const candidates = [
     `${asset}_hmm.json`,
     `${asset.toUpperCase()}_hmm.json`,
     `${normalizeKey(asset)}_hmm.json`,
     `${normalizeKey(asset).toUpperCase()}_hmm.json`,
   ];
-  for (const c of candidates) {
-    try {
-      const raw = await fs.readFile(path.join(hmmDir, c), "utf-8");
-      const parsed = JSON.parse(raw) as HMMPayload;
-      if (Array.isArray(parsed.sequence) && parsed.sequence.length > 0) {
-        return parsed;
+  for (const dir of hmmDirs) {
+    for (const c of candidates) {
+      try {
+        const raw = await fs.readFile(path.join(dir, c), "utf-8");
+        const parsed = JSON.parse(raw) as HMMPayload;
+        if (Array.isArray(parsed.sequence) && parsed.sequence.length > 0) {
+          return parsed;
+        }
+      } catch {
+        // try next
       }
-    } catch {
-      // try next
     }
   }
   return null;

@@ -15,7 +15,7 @@ def _read_json(path: Path) -> dict[str, Any]:
         return {}
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, json.JSONDecodeError):
         return {}
 
 
@@ -64,7 +64,7 @@ def main() -> None:
                 n += 1
                 try:
                     row = json.loads(line)
-                except Exception:
+                except json.JSONDecodeError:
                     payload["status"] = "fail"
                     payload["reason"] = "invalid_jsonl_line"
                     continue

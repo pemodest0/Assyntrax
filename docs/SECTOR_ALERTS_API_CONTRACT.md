@@ -9,6 +9,8 @@ Versao:
 Autenticacao opcional:
 - Se `ASSYNTRAX_API_KEYS` estiver definida no servidor (lista separada por virgula),
   a requisicao deve enviar `x-assyntrax-key`.
+- Em producao, `ASSYNTRAX_API_KEYS` deve estar definida (sem isso, endpoint responde erro de configuracao).
+- Chave por query string (`?key=`) nao e aceita.
 
 Parametros:
 - `days` (opcional): janela de historico para timeline (min 10, max 180).

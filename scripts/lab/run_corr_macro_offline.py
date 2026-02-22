@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -89,6 +90,49 @@ def _spectral_metrics(corr: np.ndarray) -> tuple[np.ndarray, float, float, float
     return eig, p1, deff, top5
 
 
+def _spectral_metrics_with_v1(corr: np.ndarray) -> tuple[np.ndarray, float, float, float, np.ndarray]:
+    w, v = np.linalg.eigh(np.asarray(corr, dtype=float))
+    order = np.argsort(w)[::-1]
+    eig = np.real(w[order]).astype(float)
+    v1 = np.real(v[:, order[0]]).astype(float)
+    nrm = float(np.linalg.norm(v1))
+    if nrm > 1e-12:
+        v1 = v1 / nrm
+    s = float(np.sum(eig))
+    if s <= 0:
+        return eig, float("nan"), float("nan"), float("nan"), v1
+    p = eig / s
+    p1 = float(p[0])
+    deff = float(1.0 / np.sum(np.square(p)))
+    top5 = float(np.sum(p[: min(5, p.size)]))
+    return eig, p1, deff, top5, v1
+
+
+def _zscore_series(x: pd.Series) -> pd.Series:
+    s = pd.to_numeric(x, errors="coerce")
+    mu = float(s.mean(skipna=True))
+    sd = float(s.std(ddof=0, skipna=True))
+    if (not np.isfinite(sd)) or sd <= 1e-12:
+        return pd.Series(np.zeros(len(s), dtype=float), index=s.index)
+    z = (s - mu) / sd
+    return z.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+
+
+def _zscore_expanding(x: pd.Series, min_history: int) -> pd.Series:
+    s = pd.to_numeric(x, errors="coerce")
+    k = int(max(20, min_history))
+    mu = s.expanding(min_periods=k).mean().shift(1)
+    sd = s.expanding(min_periods=k).std(ddof=0).shift(1)
+    z = (s - mu) / sd
+    return z.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+
+
+def _expanding_quantile(x: pd.Series, q: float, min_history: int) -> pd.Series:
+    s = pd.to_numeric(x, errors="coerce")
+    k = int(max(20, min_history))
+    return s.expanding(min_periods=k).quantile(float(q)).shift(1)
+
+
 def _block_bootstrap_col(x: np.ndarray, block_size: int, rng: np.random.Generator) -> np.ndarray:
     n = int(x.shape[0])
     if n <= 1:
@@ -120,6 +164,7 @@ def _process_window(
     min_assets: int,
     noise_step: int,
     bootstrap_block: int,
+    overlap_step: int,
     seed: int,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     dates = returns_wide.index
@@ -128,6 +173,8 @@ def _process_window(
     sector_rows: list[dict[str, Any]] = []
     cluster_assign: dict[pd.Timestamp, dict[str, int]] = {}
     min_obs = max(30, int(np.ceil(window * cov_window)))
+    prev_v1: np.ndarray | None = None
+    prev_cols: list[str] | None = None
     if (len(dates) - window + 1) <= 0:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
@@ -152,6 +199,8 @@ def _process_window(
             "p1_bootstrap": np.nan,
             "deff_bootstrap": np.nan,
             "structure_score_bootstrap": np.nan,
+            "eigvec_overlap_1d": np.nan,
+            "eigvec_instability_1d": np.nan,
             "insufficient_universe": True,
         }
         for k in range(1, 11):
@@ -191,6 +240,27 @@ def _process_window(
         rec["insufficient_universe"] = False
         for k in range(1, 11):
             rec[f"lambda{k}"] = float(eig[k - 1]) if eig.size >= k else np.nan
+        calc_overlap = (int(max(1, overlap_step)) == 1) or (i % int(max(1, overlap_step)) == 0)
+        if calc_overlap:
+            try:
+                _, _, _, _, v1 = _spectral_metrics_with_v1(corr)
+                if (prev_v1 is not None) and (prev_cols is not None):
+                    common = sorted(set(prev_cols).intersection(aligned.columns.to_list()))
+                    if len(common) >= 3:
+                        prev_idx = [prev_cols.index(c) for c in common]
+                        cur_idx = [aligned.columns.get_loc(c) for c in common]
+                        a = prev_v1[prev_idx]
+                        b = v1[cur_idx]
+                        na = float(np.linalg.norm(a))
+                        nb = float(np.linalg.norm(b))
+                        if (na > 1e-12) and (nb > 1e-12):
+                            ov = float(abs(np.dot(a / na, b / nb)))
+                            rec["eigvec_overlap_1d"] = ov
+                            rec["eigvec_instability_1d"] = float(1.0 - ov)
+                prev_v1 = v1
+                prev_cols = aligned.columns.to_list()
+            except Exception:
+                pass
 
         if SCIPY_OK:
             cid, ccount, largest_share, entropy = _cluster_metrics(corr)
@@ -293,11 +363,12 @@ def _summary_block(ts: pd.DataFrame, sector_daily: pd.DataFrame, window: int, ou
             f"bootstrap_deff_gap={float((b2['deff_bootstrap'] - b2['deff']).mean()) if not b2.empty else np.nan:.4f}"
         )
 
+    ov_mean = float(tails["eigvec_overlap_1d"].mean()) if ("eigvec_overlap_1d" in tails.columns and (not tails.empty)) else np.nan
     return "\n".join(
         [
             f"[T={window}]",
             f"N_used stats: min={float(ts['N_used'].min()):.0f}, mean={float(ts['N_used'].mean()):.2f}, max={float(ts['N_used'].max()):.0f}, insufficient_days={int(ts['insufficient_universe'].sum())}",
-            f"ultimos_60_dias: p1_mean={float(tails['p1'].mean()) if not tails.empty else np.nan:.6f}, deff_mean={float(tails['deff'].mean()) if not tails.empty else np.nan:.6f}, turnover_mean={float(tails['turnover_pair_frac'].mean()) if not tails.empty else np.nan:.6f}",
+            f"ultimos_60_dias: p1_mean={float(tails['p1'].mean()) if not tails.empty else np.nan:.6f}, deff_mean={float(tails['deff'].mean()) if not tails.empty else np.nan:.6f}, turnover_mean={float(tails['turnover_pair_frac'].mean()) if not tails.empty else np.nan:.6f}, eigvec_overlap_mean={ov_mean:.6f}",
             f"stress: {stress}",
             noise_line,
             f"sanity: {sanity}",
@@ -314,15 +385,21 @@ def _majority_same_direction(signs: np.ndarray) -> int:
 
 def _build_robustness(ts_map: dict[int, pd.DataFrame], outdir: Path) -> tuple[pd.DataFrame, dict[str, float], str]:
     windows = sorted(ts_map.keys())
+    windows_present: list[int] = []
     parts = []
     for w in windows:
         d = ts_map[w].copy()
+        if d.empty or ("date" not in d.columns):
+            continue
         d["date"] = pd.to_datetime(d["date"], errors="coerce")
         d = d.dropna(subset=["date"])
+        if "insufficient_universe" not in d.columns:
+            d["insufficient_universe"] = False
         d = d[~d["insufficient_universe"]].set_index("date")
         if d.empty:
             continue
         parts.append(d[["p1", "deff"]].rename(columns={"p1": f"p1_T{w}", "deff": f"deff_T{w}"}))
+        windows_present.append(w)
     if not parts:
         return pd.DataFrame(), {}, "temporal_robustness=sem_dados"
     m = parts[0]
@@ -330,15 +407,17 @@ def _build_robustness(ts_map: dict[int, pd.DataFrame], outdir: Path) -> tuple[pd
         m = m.join(p, how="inner")
     if m.empty:
         return pd.DataFrame(), {}, "temporal_robustness=sem_intersecao_datas"
+    if not windows_present:
+        return pd.DataFrame(), {}, "temporal_robustness=sem_janelas_validas"
 
-    for w in windows:
+    for w in windows_present:
         m[f"dp1_5_T{w}"] = m[f"p1_T{w}"].diff(5)
         m[f"ddeff_5_T{w}"] = m[f"deff_T{w}"].diff(5)
 
-    dp1_sign = _safe_sign(m[[f"dp1_5_T{w}" for w in windows]].to_numpy())
-    ddeff_sign = _safe_sign(m[[f"ddeff_5_T{w}" for w in windows]].to_numpy())
-    m["p1_dir_consistent_5"] = ((np.all(dp1_sign != 0, axis=1)) & (np.abs(np.sum(dp1_sign, axis=1)) == len(windows))).astype(int)
-    m["deff_dir_consistent_5"] = ((np.all(ddeff_sign != 0, axis=1)) & (np.abs(np.sum(ddeff_sign, axis=1)) == len(windows))).astype(int)
+    dp1_sign = _safe_sign(m[[f"dp1_5_T{w}" for w in windows_present]].to_numpy())
+    ddeff_sign = _safe_sign(m[[f"ddeff_5_T{w}" for w in windows_present]].to_numpy())
+    m["p1_dir_consistent_5"] = ((np.all(dp1_sign != 0, axis=1)) & (np.abs(np.sum(dp1_sign, axis=1)) == len(windows_present))).astype(int)
+    m["deff_dir_consistent_5"] = ((np.all(ddeff_sign != 0, axis=1)) & (np.abs(np.sum(ddeff_sign, axis=1)) == len(windows_present))).astype(int)
     m["joint_dir_consistent_5"] = ((m["p1_dir_consistent_5"] == 1) & (m["deff_dir_consistent_5"] == 1)).astype(int)
 
     p1_majority = np.array([_majority_same_direction(dp1_sign[i, :]) for i in range(dp1_sign.shape[0])], dtype=int)
@@ -354,7 +433,7 @@ def _build_robustness(ts_map: dict[int, pd.DataFrame], outdir: Path) -> tuple[pd
     tail = out.tail(60)
     latest = out.iloc[-1]
     signs = []
-    for w in windows:
+    for w in windows_present:
         sp = int(_safe_sign(np.asarray([latest[f"dp1_5_T{w}"]]))[0])
         sd = int(_safe_sign(np.asarray([latest[f"ddeff_5_T{w}"]]))[0])
         signs.append(f"T{w}(dp1={sp:+d},ddeff={sd:+d})")
@@ -413,8 +492,15 @@ def _classify_regime(
     exp_transition: float,
     exp_stable: float,
     exp_dispersion: float,
-) -> tuple[pd.DataFrame, dict[str, float]]:
+    w_dp1: float,
+    w_ddeff: float,
+    w_overlap: float,
+    threshold_mode: str = "full_sample",
+    walkforward_min_history: int = 252,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
     d = ts.copy()
+    if d.empty or ("date" not in d.columns):
+        return pd.DataFrame(), {}
     d["date"] = pd.to_datetime(d["date"], errors="coerce")
     d = d.dropna(subset=["date"])
     d = d[~d["insufficient_universe"]].sort_values("date")
@@ -423,19 +509,87 @@ def _classify_regime(
 
     d["dp1_5"] = d["p1"].diff(5)
     d["ddeff_5"] = d["deff"].diff(5)
-    p1_lo, p1_hi = float(d["p1"].quantile(0.20)), float(d["p1"].quantile(0.80))
-    deff_lo, deff_hi = float(d["deff"].quantile(0.20)), float(d["deff"].quantile(0.80))
-    dp1_thr = float(d["dp1_5"].abs().quantile(0.80))
-    ddeff_thr = float(d["ddeff_5"].abs().quantile(0.80))
+    d["overlap_instability"] = 1.0 - pd.to_numeric(d.get("eigvec_overlap_1d"), errors="coerce")
+    mode = str(threshold_mode or "full_sample").strip().lower()
+    use_walkforward = mode in {"walk_forward", "walkforward", "expanding", "causal"}
+    min_hist = int(max(20, walkforward_min_history))
+
+    if use_walkforward:
+        z_dp1 = _zscore_expanding(d["dp1_5"].abs(), min_history=min_hist)
+        z_ddeff = _zscore_expanding(d["ddeff_5"].abs(), min_history=min_hist)
+        z_ov = _zscore_expanding(d["overlap_instability"], min_history=min_hist)
+    else:
+        z_dp1 = _zscore_series(d["dp1_5"].abs())
+        z_ddeff = _zscore_series(d["ddeff_5"].abs())
+        z_ov = _zscore_series(d["overlap_instability"])
+    d["transition_score"] = float(w_dp1) * z_dp1 + float(w_ddeff) * z_ddeff + float(w_overlap) * z_ov
+
+    if use_walkforward:
+        p1_lo_s = _expanding_quantile(d["p1"], q=0.20, min_history=min_hist)
+        p1_hi_s = _expanding_quantile(d["p1"], q=0.80, min_history=min_hist)
+        deff_lo_s = _expanding_quantile(d["deff"], q=0.20, min_history=min_hist)
+        deff_hi_s = _expanding_quantile(d["deff"], q=0.80, min_history=min_hist)
+        dp1_thr_s = _expanding_quantile(d["dp1_5"].abs(), q=0.80, min_history=min_hist)
+        ddeff_thr_s = _expanding_quantile(d["ddeff_5"].abs(), q=0.80, min_history=min_hist)
+        tr_thr_s = _expanding_quantile(pd.to_numeric(d["transition_score"], errors="coerce"), q=0.80, min_history=min_hist)
+    else:
+        p1_lo = float(d["p1"].quantile(0.20))
+        p1_hi = float(d["p1"].quantile(0.80))
+        deff_lo = float(d["deff"].quantile(0.20))
+        deff_hi = float(d["deff"].quantile(0.80))
+        dp1_thr = float(d["dp1_5"].abs().quantile(0.80))
+        ddeff_thr = float(d["ddeff_5"].abs().quantile(0.80))
+        tr_thr = float(pd.to_numeric(d["transition_score"], errors="coerce").quantile(0.80))
+        p1_lo_s = pd.Series(np.full(len(d), p1_lo), index=d.index, dtype=float)
+        p1_hi_s = pd.Series(np.full(len(d), p1_hi), index=d.index, dtype=float)
+        deff_lo_s = pd.Series(np.full(len(d), deff_lo), index=d.index, dtype=float)
+        deff_hi_s = pd.Series(np.full(len(d), deff_hi), index=d.index, dtype=float)
+        dp1_thr_s = pd.Series(np.full(len(d), dp1_thr), index=d.index, dtype=float)
+        ddeff_thr_s = pd.Series(np.full(len(d), ddeff_thr), index=d.index, dtype=float)
+        tr_thr_s = pd.Series(np.full(len(d), tr_thr), index=d.index, dtype=float)
+
+    d["thr_p1_q20"] = p1_lo_s
+    d["thr_p1_q80"] = p1_hi_s
+    d["thr_deff_q20"] = deff_lo_s
+    d["thr_deff_q80"] = deff_hi_s
+    d["thr_abs_dp1_5_q80"] = dp1_thr_s
+    d["thr_abs_ddeff_5_q80"] = ddeff_thr_s
+    d["thr_transition_score_q80"] = tr_thr_s
 
     raw_reg = []
     for _, r in d.iterrows():
-        if (float(r["p1"]) >= p1_hi) and (float(r["deff"]) <= deff_lo):
+        p1_lo_t = float(r.get("thr_p1_q20", np.nan))
+        p1_hi_t = float(r.get("thr_p1_q80", np.nan))
+        deff_lo_t = float(r.get("thr_deff_q20", np.nan))
+        deff_hi_t = float(r.get("thr_deff_q80", np.nan))
+        dp1_thr_t = float(r.get("thr_abs_dp1_5_q80", np.nan))
+        ddeff_thr_t = float(r.get("thr_abs_ddeff_5_q80", np.nan))
+        tr_thr_t = float(r.get("thr_transition_score_q80", np.nan))
+
+        if not (
+            np.isfinite(p1_lo_t)
+            and np.isfinite(p1_hi_t)
+            and np.isfinite(deff_lo_t)
+            and np.isfinite(deff_hi_t)
+            and np.isfinite(dp1_thr_t)
+            and np.isfinite(ddeff_thr_t)
+            and np.isfinite(tr_thr_t)
+        ):
+            raw_reg.append("stable")
+            continue
+
+        if (float(r["p1"]) >= p1_hi_t) and (float(r["deff"]) <= deff_lo_t):
             raw_reg.append("stress")
-        elif (float(r["p1"]) <= p1_lo) and (float(r["deff"]) >= deff_hi):
+        elif (float(r["p1"]) <= p1_lo_t) and (float(r["deff"]) >= deff_hi_t):
             raw_reg.append("dispersion")
-        elif (abs(float(r["dp1_5"]) if pd.notna(r["dp1_5"]) else 0.0) >= dp1_thr) or (
-            abs(float(r["ddeff_5"]) if pd.notna(r["ddeff_5"]) else 0.0) >= ddeff_thr
+        elif (
+            (abs(float(r["dp1_5"]) if pd.notna(r["dp1_5"]) else 0.0) >= dp1_thr_t)
+            or (abs(float(r["ddeff_5"]) if pd.notna(r["ddeff_5"]) else 0.0) >= ddeff_thr_t)
+            or (
+                float(r.get("transition_score", np.nan)) >= tr_thr_t
+                if pd.notna(r.get("transition_score", np.nan))
+                else False
+            )
         ):
             raw_reg.append("transition")
         else:
@@ -452,14 +606,29 @@ def _classify_regime(
     }
     d["exposure"] = d["regime"].map(exp_map).fillna(float(exp_stable)).astype(float).clip(0.0, 1.0)
     d["date"] = d["date"].dt.date.astype(str)
+    p1_lo = float(pd.to_numeric(d["thr_p1_q20"], errors="coerce").dropna().iloc[-1]) if d["thr_p1_q20"].notna().any() else float("nan")
+    p1_hi = float(pd.to_numeric(d["thr_p1_q80"], errors="coerce").dropna().iloc[-1]) if d["thr_p1_q80"].notna().any() else float("nan")
+    deff_lo = float(pd.to_numeric(d["thr_deff_q20"], errors="coerce").dropna().iloc[-1]) if d["thr_deff_q20"].notna().any() else float("nan")
+    deff_hi = float(pd.to_numeric(d["thr_deff_q80"], errors="coerce").dropna().iloc[-1]) if d["thr_deff_q80"].notna().any() else float("nan")
+    dp1_thr = float(pd.to_numeric(d["thr_abs_dp1_5_q80"], errors="coerce").dropna().iloc[-1]) if d["thr_abs_dp1_5_q80"].notna().any() else float("nan")
+    ddeff_thr = float(pd.to_numeric(d["thr_abs_ddeff_5_q80"], errors="coerce").dropna().iloc[-1]) if d["thr_abs_ddeff_5_q80"].notna().any() else float("nan")
+    tr_thr = float(pd.to_numeric(d["thr_transition_score_q80"], errors="coerce").dropna().iloc[-1]) if d["thr_transition_score_q80"].notna().any() else float("nan")
+    warmup_days = int(d["thr_transition_score_q80"].isna().sum())
     meta = {
+        "threshold_mode": "walk_forward" if use_walkforward else "full_sample",
+        "walkforward_min_history": float(min_hist),
+        "warmup_days_without_threshold": float(warmup_days),
         "p1_q20": p1_lo,
         "p1_q80": p1_hi,
         "deff_q20": deff_lo,
         "deff_q80": deff_hi,
         "abs_dp1_5_q80": dp1_thr,
         "abs_ddeff_5_q80": ddeff_thr,
+        "transition_score_q80": tr_thr,
         "hysteresis_days": float(max(1, hysteresis_days)),
+        "w_dp1": float(w_dp1),
+        "w_ddeff": float(w_ddeff),
+        "w_overlap": float(w_overlap),
         "exp_stress": float(exp_stress),
         "exp_transition": float(exp_transition),
         "exp_stable": float(exp_stable),
@@ -541,6 +710,8 @@ def _backtest(
 
 def _cluster_alerts(ts: pd.DataFrame, lookback: int) -> tuple[pd.DataFrame, dict[str, Any], str]:
     d = ts.copy()
+    if d.empty or ("date" not in d.columns):
+        return pd.DataFrame(), {"n_active": 0, "active_metrics": []}, "cluster_alerts=sem_dados"
     d["date"] = pd.to_datetime(d["date"], errors="coerce")
     d = d.dropna(subset=["date"])
     d = d[~d["insufficient_universe"]]
@@ -791,6 +962,305 @@ def _build_operational_alerts(
     return ev, payload, txt
 
 
+def _apply_level_persistence(levels: list[str], window: int, count_needed: int) -> list[str]:
+    if not levels:
+        return []
+    rank = {"green": 0, "yellow": 1, "red": 2}
+    inv = {v: k for k, v in rank.items()}
+    w = int(max(1, window))
+    k = int(max(1, count_needed))
+    out = [levels[0] if levels[0] in rank else "green"]
+    cur = rank[out[0]]
+    for i in range(1, len(levels)):
+        raw = [rank.get(x, 0) for x in levels[max(0, i - w + 1) : i + 1]]
+        if not raw:
+            out.append(inv[cur])
+            continue
+        want = rank.get(levels[i], 0)
+        if want > cur:
+            n = int(np.sum(np.asarray(raw, dtype=int) >= want))
+            if n >= k:
+                cur = want
+        elif want < cur:
+            n = int(np.sum(np.asarray(raw, dtype=int) <= want))
+            if n >= k:
+                cur = want
+        out.append(inv[cur])
+    return out
+
+
+def _build_alert_levels(
+    regime_df: pd.DataFrame,
+    ts_off: pd.DataFrame,
+    risk_q_yellow: float,
+    risk_q_red: float,
+    min_conf_yellow: float,
+    min_conf_red: float,
+    persist_window: int,
+    persist_count: int,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    if regime_df.empty or ts_off.empty:
+        return pd.DataFrame(), {}
+    rg = regime_df.copy()
+    rg["date"] = pd.to_datetime(rg["date"], errors="coerce")
+    rg = rg.dropna(subset=["date"])
+    ts = ts_off.copy()
+    ts["date"] = pd.to_datetime(ts["date"], errors="coerce")
+    ts = ts.dropna(subset=["date"])
+    x = rg.merge(
+        ts[["date", "p1", "deff", "insufficient_universe"]],
+        on="date",
+        how="left",
+        suffixes=("", "_ts"),
+    ).sort_values("date")
+    if x.empty:
+        return pd.DataFrame(), {}
+    p1_rank = pd.to_numeric(x["p1"], errors="coerce").rank(pct=True)
+    deff_rank = pd.to_numeric(x["deff"], errors="coerce").rank(pct=True)
+    dp = pd.to_numeric(x["dp1_5"], errors="coerce").abs()
+    dd = pd.to_numeric(x["ddeff_5"], errors="coerce").abs()
+    tr = pd.to_numeric(x.get("transition_score"), errors="coerce")
+    tr_rank = tr.rank(pct=True)
+    x["risk_score"] = (0.45 * p1_rank + 0.30 * (1.0 - deff_rank) + 0.25 * tr_rank).fillna(0.0).clip(0.0, 1.0)
+
+    dp_ref = float(dp.quantile(0.80))
+    dd_ref = float(dd.quantile(0.80))
+    turb = 0.5 * (dp / max(dp_ref, 1e-9)).clip(0.0, 2.0) + 0.5 * (dd / max(dd_ref, 1e-9)).clip(0.0, 2.0)
+    conf = 0.55 + 0.20 * (x["regime_raw"] == x["regime"]).astype(float) - 0.30 * turb.fillna(1.0)
+    conf -= 0.10 * pd.to_numeric(x.get("insufficient_universe", False)).astype(float)
+    x["signal_confidence"] = conf.clip(0.0, 1.0)
+
+    rq_y = float(np.clip(risk_q_yellow, 0.0, 1.0))
+    rq_r = float(np.clip(risk_q_red, 0.0, 1.0))
+    thr_y = float(x["risk_score"].quantile(rq_y))
+    thr_r = float(x["risk_score"].quantile(rq_r))
+    raw = []
+    for _, r in x.iterrows():
+        risk = float(r.get("risk_score", np.nan))
+        c = float(r.get("signal_confidence", np.nan))
+        if np.isfinite(risk) and np.isfinite(c) and (risk >= thr_r) and (c >= float(min_conf_red)):
+            raw.append("red")
+        elif np.isfinite(risk) and np.isfinite(c) and (risk >= thr_y) and (c >= float(min_conf_yellow)):
+            raw.append("yellow")
+        else:
+            raw.append("green")
+    x["alert_level_raw"] = raw
+    x["alert_level"] = _apply_level_persistence(
+        levels=raw,
+        window=int(max(1, persist_window)),
+        count_needed=int(max(1, persist_count)),
+    )
+    x["date"] = x["date"].dt.date.astype(str)
+    out = x[
+        [
+            "date",
+            "regime",
+            "regime_raw",
+            "risk_score",
+            "signal_confidence",
+            "alert_level_raw",
+            "alert_level",
+            "transition_score",
+            "dp1_5",
+            "ddeff_5",
+        ]
+    ].copy()
+    payload = {
+        "risk_threshold_yellow": thr_y,
+        "risk_threshold_red": thr_r,
+        "risk_q_yellow": rq_y,
+        "risk_q_red": rq_r,
+        "min_conf_yellow": float(min_conf_yellow),
+        "min_conf_red": float(min_conf_red),
+        "persist_window": int(max(1, persist_window)),
+        "persist_count": int(max(1, persist_count)),
+        "latest_level": str(out.iloc[-1]["alert_level"]) if not out.empty else "",
+        "latest_level_raw": str(out.iloc[-1]["alert_level_raw"]) if not out.empty else "",
+        "counts": out["alert_level"].value_counts().to_dict(),
+    }
+    return out, payload
+
+
+def _normal_two_sided_p(z: float) -> float:
+    if not np.isfinite(z):
+        return float("nan")
+    return float(math.erfc(abs(float(z)) / math.sqrt(2.0)))
+
+
+def _build_significance_tables(ts_map: dict[int, pd.DataFrame], outdir: Path) -> pd.DataFrame:
+    summary_rows: list[dict[str, Any]] = []
+    for w, ts in sorted(ts_map.items()):
+        if ts.empty:
+            continue
+        d = ts[~ts["insufficient_universe"]].copy()
+        if d.empty:
+            continue
+        d["delta_p1_vs_bootstrap"] = pd.to_numeric(d["p1"], errors="coerce") - pd.to_numeric(d["p1_bootstrap"], errors="coerce")
+        d["delta_deff_vs_bootstrap"] = pd.to_numeric(d["deff_bootstrap"], errors="coerce") - pd.to_numeric(d["deff"], errors="coerce")
+        out_cols = ["date"]
+        for col in ["delta_p1_vs_bootstrap", "delta_deff_vs_bootstrap"]:
+            s = pd.to_numeric(d[col], errors="coerce")
+            mu = float(s.mean(skipna=True))
+            sd = float(s.std(ddof=0, skipna=True))
+            n = int(s.notna().sum())
+            z = s / sd if (np.isfinite(sd) and sd > 1e-12) else pd.Series(np.nan, index=s.index)
+            p = z.apply(_normal_two_sided_p)
+            mean_z = float(mu / (sd / math.sqrt(n))) if (n > 0 and np.isfinite(sd) and sd > 1e-12) else float("nan")
+            mean_p = _normal_two_sided_p(mean_z)
+            latest_valid = s.dropna()
+            latest_delta = float(latest_valid.iloc[-1]) if not latest_valid.empty else float("nan")
+            latest_z = float(latest_delta / sd) if (np.isfinite(latest_delta) and np.isfinite(sd) and sd > 1e-12) else float("nan")
+            latest_p = _normal_two_sided_p(latest_z)
+            sig_share = float((p[s.notna()] < 0.05).mean()) if n > 0 else float("nan")
+            summary_rows.append(
+                {
+                    "window": int(w),
+                    "metric": str(col),
+                    "n": n,
+                    "mean_delta": mu,
+                    "std_delta": sd,
+                    "significant_share_p_lt_0_05": sig_share,
+                    "mean_z_vs_zero": mean_z,
+                    "mean_pvalue_vs_zero": mean_p,
+                    "latest_delta": latest_delta,
+                    "latest_z": latest_z,
+                    "latest_pvalue": latest_p,
+                }
+            )
+            d[f"z_{col}"] = z
+            d[f"p_{col}"] = p
+            out_cols += [col, f"z_{col}", f"p_{col}"]
+        d[out_cols].to_csv(outdir / f"significance_timeseries_T{int(w)}.csv", index=False)
+    out = pd.DataFrame(summary_rows)
+    if not out.empty:
+        out.to_csv(outdir / "significance_summary_by_window.csv", index=False)
+    return out
+
+
+def _switch_count(x: pd.Series) -> int:
+    s = x.dropna().astype(str)
+    if s.empty:
+        return 0
+    return int(max(0, (s != s.shift(1)).sum() - 1))
+
+
+def _state_from_risk(risk: float, conf: float, sw30: float) -> str:
+    if (risk >= 0.80 and conf < 0.55) or (sw30 >= 4):
+        return "instavel"
+    if (risk >= 0.60) or (conf < 0.70) or (sw30 >= 2):
+        return "transicao"
+    return "estavel"
+
+
+def _build_asset_sector_diagnostics(
+    returns_wide: pd.DataFrame,
+    universe_core: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
+    if returns_wide.empty or universe_core.empty:
+        return pd.DataFrame(), pd.DataFrame(), {}
+    r = returns_wide.copy().sort_index()
+    r = r.apply(pd.to_numeric, errors="coerce")
+    mkt = r.mean(axis=1, skipna=True)
+    rows: list[dict[str, Any]] = []
+    for t in r.columns.astype(str).tolist():
+        s = r[t]
+        cov = float(s.notna().mean())
+        vol60 = s.rolling(60, min_periods=40).std(ddof=0) * np.sqrt(252.0)
+        vol252 = s.rolling(252, min_periods=120).std(ddof=0) * np.sqrt(252.0)
+        corr120 = s.rolling(120, min_periods=60).corr(mkt)
+        q30 = float(corr120.quantile(0.30))
+        q70 = float(corr120.quantile(0.70))
+        st = pd.Series(np.where(corr120 >= q70, "high", np.where(corr120 <= q30, "low", "mid")), index=corr120.index)
+        sw30 = _switch_count(st.tail(30))
+        sw90 = _switch_count(st.tail(90))
+        sw180 = _switch_count(st.tail(180))
+        latest_corr = float(pd.to_numeric(corr120, errors="coerce").dropna().iloc[-1]) if corr120.notna().any() else float("nan")
+        prev5_corr = float(pd.to_numeric(corr120.shift(5), errors="coerce").dropna().iloc[-1]) if corr120.shift(5).notna().any() else float("nan")
+        latest_v60 = float(pd.to_numeric(vol60, errors="coerce").dropna().iloc[-1]) if vol60.notna().any() else float("nan")
+        prev5_v60 = float(pd.to_numeric(vol60.shift(5), errors="coerce").dropna().iloc[-1]) if vol60.shift(5).notna().any() else float("nan")
+        rows.append(
+            {
+                "ticker": t,
+                "coverage": cov,
+                "vol60_latest": latest_v60,
+                "vol252_latest": float(pd.to_numeric(vol252, errors="coerce").dropna().iloc[-1]) if vol252.notna().any() else float("nan"),
+                "corr120_latest": latest_corr,
+                "corr120_abs_latest": abs(latest_corr) if np.isfinite(latest_corr) else float("nan"),
+                "delta_corr120_5d": (latest_corr - prev5_corr) if (np.isfinite(latest_corr) and np.isfinite(prev5_corr)) else float("nan"),
+                "delta_vol60_5d": (latest_v60 - prev5_v60) if (np.isfinite(latest_v60) and np.isfinite(prev5_v60)) else float("nan"),
+                "switches_30d": int(sw30),
+                "switches_90d": int(sw90),
+                "switches_180d": int(sw180),
+            }
+        )
+    a = pd.DataFrame(rows)
+    if a.empty:
+        return a, pd.DataFrame(), {}
+    a["rank_vol"] = pd.to_numeric(a["vol60_latest"], errors="coerce").rank(pct=True)
+    a["rank_corr_abs"] = pd.to_numeric(a["corr120_abs_latest"], errors="coerce").rank(pct=True)
+    a["rank_sw90"] = pd.to_numeric(a["switches_90d"], errors="coerce").rank(pct=True)
+    a["risk_score"] = (0.45 * a["rank_vol"] + 0.35 * a["rank_corr_abs"] + 0.20 * a["rank_sw90"]).fillna(0.0).clip(0.0, 1.0)
+    d_corr_rank = pd.to_numeric(a["delta_corr120_5d"], errors="coerce").abs().rank(pct=True).fillna(0.5)
+    a["confidence_score"] = (1.0 - (0.60 * a["rank_sw90"].fillna(0.5) + 0.40 * d_corr_rank)).clip(0.0, 1.0)
+    a["regime_asset"] = [
+        _state_from_risk(float(rw["risk_score"]), float(rw["confidence_score"]), float(rw["switches_30d"])) for _, rw in a.iterrows()
+    ]
+    a["sensitivity_score"] = a["risk_score"].clip(0.0, 1.0)
+    a["stability_score"] = (a["confidence_score"] * (1.0 - 0.50 * a["risk_score"])).clip(0.0, 1.0)
+
+    core = universe_core[["ticker", "sector"]].copy()
+    core["ticker"] = core["ticker"].astype(str)
+    a = core.merge(a, on="ticker", how="left")
+    a = a.sort_values(["sector", "ticker"]).reset_index(drop=True)
+
+    s = (
+        a.groupby("sector", as_index=False)
+        .agg(
+            n_assets=("ticker", "count"),
+            risk_mean=("risk_score", "mean"),
+            confidence_mean=("confidence_score", "mean"),
+            pct_instavel=("regime_asset", lambda x: float((x == "instavel").mean())),
+            pct_transicao=("regime_asset", lambda x: float((x == "transicao").mean())),
+            switches_30d_mean=("switches_30d", "mean"),
+            switches_90d_mean=("switches_90d", "mean"),
+            switches_180d_mean=("switches_180d", "mean"),
+            delta_corr120_5d_mean=("delta_corr120_5d", "mean"),
+            delta_vol60_5d_mean=("delta_vol60_5d", "mean"),
+        )
+        .sort_values(["risk_mean", "pct_instavel"], ascending=[False, False])
+        .reset_index(drop=True)
+    )
+    levels = []
+    plans = []
+    for _, rw in s.iterrows():
+        lvl = "verde"
+        if (float(rw["pct_instavel"]) >= 0.20) or (float(rw["risk_mean"]) >= 0.75):
+            lvl = "vermelho"
+        elif (float(rw["pct_instavel"]) >= 0.10) or (float(rw["risk_mean"]) >= 0.60):
+            lvl = "amarelo"
+        levels.append(lvl)
+        plans.append(
+            "leitura estrutural sugerida: fragilidade alta no setor"
+            if lvl == "vermelho"
+            else (
+                "leitura estrutural sugerida: transicao em monitoramento"
+                if lvl == "amarelo"
+                else "leitura estrutural sugerida: estabilidade relativa"
+            )
+        )
+    s["alerta_setor"] = levels
+    s["plano_acao"] = plans
+
+    payload = {
+        "n_assets": int(a["ticker"].nunique()),
+        "n_sectors": int(s.shape[0]),
+        "regime_mix_assets": a["regime_asset"].value_counts(normalize=True).to_dict(),
+        "top_risk_asset": str(a.sort_values(["risk_score", "switches_90d"], ascending=[False, False]).iloc[0]["ticker"]) if not a.empty else "",
+        "top_risk_sector": str(s.iloc[0]["sector"]) if not s.empty else "",
+    }
+    return a, s, payload
+
+
 def _build_era_evaluation(ts_off: pd.DataFrame, regime_df: pd.DataFrame, bt_df: pd.DataFrame) -> pd.DataFrame:
     if ts_off.empty or regime_df.empty or bt_df.empty:
         return pd.DataFrame()
@@ -855,12 +1325,12 @@ def _build_era_evaluation(ts_off: pd.DataFrame, regime_df: pd.DataFrame, bt_df: 
 def _action_map(regime: str) -> tuple[str, str]:
     r = str(regime).lower().strip()
     if r == "stress":
-        return "REDUCE_RISK", "defensive"
+        return "STRESS_PROFILE", "defensive"
     if r == "transition":
-        return "DEFENSIVE_REBALANCE", "cautious"
+        return "TRANSITION_PROFILE", "cautious"
     if r == "dispersion":
-        return "ROTATE_RISK", "offensive_selective"
-    return "BASELINE_RISK", "balanced"
+        return "DISPERSION_PROFILE", "offensive_selective"
+    return "BASELINE_PROFILE", "balanced"
 
 
 def _reliability_tier(score: float) -> str:
@@ -956,6 +1426,8 @@ def _build_ui_view_model(
     robust_metrics: dict[str, float],
     gate: dict[str, Any],
     op_payload: dict[str, Any],
+    alert_level_payload: dict[str, Any],
+    asset_sector_payload: dict[str, Any],
     case_df: pd.DataFrame,
     era_df: pd.DataFrame,
     playbook_df: pd.DataFrame,
@@ -1006,6 +1478,17 @@ def _build_ui_view_model(
             "latest_date": str(op_payload.get("latest_date", "")),
             "latest_events": [str(x) for x in op_payload.get("latest_events", [])],
             "n_events_last_60d": int(op_payload.get("n_events_last_60d", 0)),
+        },
+        "alert_levels": {
+            "latest_level": str(alert_level_payload.get("latest_level", "")),
+            "latest_level_raw": str(alert_level_payload.get("latest_level_raw", "")),
+            "counts": alert_level_payload.get("counts", {}),
+        },
+        "asset_sector": {
+            "n_assets": int(asset_sector_payload.get("n_assets", 0)),
+            "n_sectors": int(asset_sector_payload.get("n_sectors", 0)),
+            "top_risk_asset": str(asset_sector_payload.get("top_risk_asset", "")),
+            "top_risk_sector": str(asset_sector_payload.get("top_risk_sector", "")),
         },
         "playbook_latest": playbook_latest,
         "case_preview": case_df.head(3).to_dict(orient="records") if not case_df.empty else [],
@@ -1173,6 +1656,8 @@ def _build_deployment_gate(
     max_abs_delta_p1: float,
     max_abs_delta_deff: float,
     max_active_cluster_alerts: int,
+    policy_lock: dict[str, Any],
+    require_policy_lock_match: bool,
 ) -> dict[str, Any]:
     blocked = False
     reasons: list[str] = []
@@ -1220,6 +1705,12 @@ def _build_deployment_gate(
         blocked = True
         reasons.append("too_many_cluster_alerts")
 
+    policy_match = bool(policy_lock.get("matches_previous_release", True))
+    checks["policy_lock_matches_previous_release"] = policy_match
+    if bool(require_policy_lock_match) and (not policy_match):
+        blocked = True
+        reasons.append("policy_lock_mismatch")
+
     return {
         "blocked": blocked,
         "reasons": reasons,
@@ -1230,6 +1721,7 @@ def _build_deployment_gate(
             "max_abs_delta_p1": float(max_abs_delta_p1),
             "max_abs_delta_deff": float(max_abs_delta_deff),
             "max_active_cluster_alerts": int(max_active_cluster_alerts),
+            "require_policy_lock_match": bool(require_policy_lock_match),
         },
     }
 
@@ -1253,7 +1745,10 @@ def _write_compact_report(
     lines.append(f"period={period_start}->{period_end}")
     lines.append(f"N_core={int(n_core)}")
     lines.append(f"official_window=T{int(official_window)}")
-    suff = ts_official[~ts_official["insufficient_universe"]].copy()
+    if (not ts_official.empty) and ("insufficient_universe" in ts_official.columns):
+        suff = ts_official[~ts_official["insufficient_universe"]].copy()
+    else:
+        suff = pd.DataFrame()
     if not suff.empty:
         x = suff.iloc[-1]
         lines.append(f"latest={x['date']} N_used={int(x['N_used'])} p1={float(x['p1']):.6f} deff={float(x['deff']):.6f}")
@@ -1287,6 +1782,55 @@ def _write_compact_report(
     lines.append(f"deployment_gate_blocked={bool(gate.get('blocked', True))}")
     lines.append(f"deployment_gate_reasons={','.join(gate.get('reasons', [])) if gate.get('reasons') else 'none'}")
     (outdir / "summary_compact.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _dict_hash(payload: dict[str, Any]) -> str:
+    blob = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _build_policy_lock(
+    out_base: Path,
+    outdir: Path,
+    effective_policy: dict[str, Any],
+) -> dict[str, Any]:
+    cur_hash = _dict_hash(effective_policy)
+    prev_hash = ""
+    prev_run = ""
+    pointer = out_base / "latest_release.json"
+    if pointer.exists():
+        try:
+            p = json.loads(pointer.read_text(encoding="utf-8"))
+            prev_run = str(p.get("run_dir", "")).strip()
+        except Exception:
+            prev_run = ""
+    if prev_run and Path(prev_run).exists() and (Path(prev_run).resolve() != outdir.resolve()):
+        lock_path = Path(prev_run) / "production_policy_lock.json"
+        if lock_path.exists():
+            try:
+                lk = json.loads(lock_path.read_text(encoding="utf-8"))
+                prev_hash = str(lk.get("policy_hash", "")).strip()
+            except Exception:
+                prev_hash = ""
+        else:
+            pu = Path(prev_run) / "policy_used.json"
+            if pu.exists():
+                try:
+                    pj = json.loads(pu.read_text(encoding="utf-8"))
+                    prev_eff = (pj.get("effective", {}) or {}) if isinstance(pj, dict) else {}
+                    if isinstance(prev_eff, dict) and prev_eff:
+                        prev_hash = _dict_hash(prev_eff)
+                except Exception:
+                    prev_hash = ""
+    out = {
+        "policy_hash": cur_hash,
+        "previous_policy_hash": prev_hash,
+        "matches_previous_release": bool((not prev_hash) or (cur_hash == prev_hash)),
+        "previous_release_run_dir": prev_run,
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+    }
+    (outdir / "production_policy_lock.json").write_text(json.dumps(out, indent=2, ensure_ascii=False), encoding="utf-8")
+    return out
 
 
 def _update_release_pointer(out_base: Path, run_meta: dict[str, Any], gate: dict[str, Any]) -> dict[str, Any]:
@@ -1364,6 +1908,7 @@ def _apply_policy_to_args(args: argparse.Namespace, policy: dict[str, Any]) -> N
     backtest = policy.get("backtest", {}) or {}
     calib = policy.get("calibration", {}) or {}
     cases = policy.get("case_studies", {}) or {}
+    alerts = policy.get("alerts", {}) or {}
 
     for key, attr in [
         ("start", "start"),
@@ -1371,6 +1916,7 @@ def _apply_policy_to_args(args: argparse.Namespace, policy: dict[str, Any]) -> N
         ("coverage_core", "coverage_core"),
         ("coverage_window", "coverage_window"),
         ("min_assets", "min_assets"),
+        ("overlap_step", "overlap_step"),
         ("official_window", "official_window"),
         ("business_days_only", "business_days_only"),
     ]:
@@ -1379,6 +1925,10 @@ def _apply_policy_to_args(args: argparse.Namespace, policy: dict[str, Any]) -> N
 
     if "hysteresis_days" in regime:
         args.hysteresis_days = regime["hysteresis_days"]
+    if "threshold_mode" in regime:
+        args.regime_threshold_mode = str(regime["threshold_mode"])
+    if "walkforward_min_history_days" in regime:
+        args.walkforward_min_history = int(regime["walkforward_min_history_days"])
     exp = regime.get("exposure", {}) or {}
     if "stress" in exp:
         args.exp_stress = exp["stress"]
@@ -1388,6 +1938,13 @@ def _apply_policy_to_args(args: argparse.Namespace, policy: dict[str, Any]) -> N
         args.exp_stable = exp["stable"]
     if "dispersion" in exp:
         args.exp_dispersion = exp["dispersion"]
+    tw = regime.get("transition_weights", {}) or {}
+    if "dp1" in tw:
+        args.transition_weight_dp1 = tw["dp1"]
+    if "ddeff" in tw:
+        args.transition_weight_ddeff = tw["ddeff"]
+    if "overlap_instability" in tw:
+        args.transition_weight_overlap = tw["overlap_instability"]
 
     for key, attr in [
         ("min_joint_majority_60d", "min_joint_majority_60d"),
@@ -1395,6 +1952,7 @@ def _apply_policy_to_args(args: argparse.Namespace, policy: dict[str, Any]) -> N
         ("max_abs_delta_p1", "max_abs_delta_p1"),
         ("max_abs_delta_deff", "max_abs_delta_deff"),
         ("max_active_cluster_alerts", "max_active_cluster_alerts"),
+        ("require_policy_lock_match", "require_policy_lock_match"),
         ("alert_lookback", "alert_lookback"),
         ("max_insufficient_ratio", "max_insufficient_ratio"),
         ("min_n_used_ratio", "min_n_used_ratio"),
@@ -1417,6 +1975,16 @@ def _apply_policy_to_args(args: argparse.Namespace, policy: dict[str, Any]) -> N
         args.case_horizon_days = int(cases["horizon_days"])
     if "regimes" in cases and isinstance(cases["regimes"], list):
         args.case_regimes = ",".join([str(x) for x in cases["regimes"] if str(x).strip()])
+    for key, attr in [
+        ("risk_q_yellow", "risk_q_yellow"),
+        ("risk_q_red", "risk_q_red"),
+        ("min_conf_yellow", "min_conf_yellow"),
+        ("min_conf_red", "min_conf_red"),
+        ("persist_window", "alert_persist_window"),
+        ("persist_count", "alert_persist_count"),
+    ]:
+        if key in alerts:
+            setattr(args, attr, alerts[key])
 
 
 def _default_exposure_candidates(
@@ -1544,7 +2112,10 @@ def _write_daily_brief(
     lines: list[str] = []
     lines.append("Daily Regime Brief")
     lines.append(f"run_id={outdir.name}")
-    suff = ts_off[~ts_off["insufficient_universe"]].copy()
+    if (not ts_off.empty) and ("insufficient_universe" in ts_off.columns):
+        suff = ts_off[~ts_off["insufficient_universe"]].copy()
+    else:
+        suff = pd.DataFrame()
     if not suff.empty:
         x = suff.iloc[-1]
         lines.append(f"date={x['date']} N_used={int(x['N_used'])} p1={float(x['p1']):.6f} deff={float(x['deff']):.6f}")
@@ -1586,7 +2157,10 @@ def _write_commercial_narrative(
     calibration_best: dict[str, Any],
     gate: dict[str, Any],
 ) -> None:
-    suff = ts_off[~ts_off["insufficient_universe"]].copy()
+    if (not ts_off.empty) and ("insufficient_universe" in ts_off.columns):
+        suff = ts_off[~ts_off["insufficient_universe"]].copy()
+    else:
+        suff = pd.DataFrame()
     if suff.empty:
         return
     last = suff.iloc[-1]
@@ -1610,10 +2184,10 @@ def _write_commercial_narrative(
         f"O sinal estrutural segue monitorado por robustez entre janelas e o gate esta "
         f"{'liberado' if not bool(gate.get('blocked', True)) else 'bloqueado'} para publicacao."
     )
-    lines.append("Bloco 3 - Acao Recomendada e Risco")
+    lines.append("Bloco 3 - Interpretacao Estatistica e Risco")
     if rec:
         lines.append(
-            f"Exposicao recomendada pela calibracao curta: stress={float(rec.get('stress', np.nan)):.2f}, "
+            f"Leitura estrutural sugerida pela calibracao curta: stress={float(rec.get('stress', np.nan)):.2f}, "
             f"transition={float(rec.get('transition', np.nan)):.2f}, stable={float(rec.get('stable', np.nan)):.2f}, "
             f"dispersion={float(rec.get('dispersion', np.nan)):.2f}."
         )
@@ -1819,7 +2393,7 @@ def _write_case_studies_demo(outdir: Path, cases_df: pd.DataFrame) -> None:
             f"lambda1={float(r['lambda1']):.2f}, lambda2={float(r['lambda2']):.2f}, top5={float(r['top5']):.3f}"
         )
         lines.append(
-            f"action: exposure={float(r['exposure']):.2f} for next {int(r['horizon_days'])} days "
+            f"leitura_estrutural: exposure={float(r['exposure']):.2f} for next {int(r['horizon_days'])} days "
             f"(used={int(r['future_days_used'])})"
         )
         lines.append(
@@ -1851,6 +2425,7 @@ def main() -> None:
     )
     ap.add_argument("--noise-step", type=int, default=5, help="Compute shuffle/bootstrap baseline every N days.")
     ap.add_argument("--bootstrap-block", type=int, default=10)
+    ap.add_argument("--overlap-step", type=int, default=5, help="Compute eigvec overlap every N days.")
     ap.add_argument("--seed", type=int, default=123)
     ap.add_argument("--official-window", type=int, default=120)
     ap.add_argument("--freeze-baseline", type=int, default=1)
@@ -1858,6 +2433,17 @@ def main() -> None:
     ap.add_argument("--cost-bps", type=float, default=5.0)
     ap.add_argument("--max-daily-turnover", type=float, default=0.10)
     ap.add_argument("--hysteresis-days", type=int, default=3)
+    ap.add_argument(
+        "--regime-threshold-mode",
+        type=str,
+        default="walk_forward",
+        choices=["walk_forward", "full_sample"],
+        help="walk_forward calibrates thresholds with data up to t-1.",
+    )
+    ap.add_argument("--walkforward-min-history", type=int, default=252)
+    ap.add_argument("--transition-weight-dp1", type=float, default=0.50)
+    ap.add_argument("--transition-weight-ddeff", type=float, default=0.50)
+    ap.add_argument("--transition-weight-overlap", type=float, default=0.00)
     ap.add_argument("--exp-stress", type=float, default=0.10)
     ap.add_argument("--exp-transition", type=float, default=0.40)
     ap.add_argument("--exp-stable", type=float, default=0.70)
@@ -1867,7 +2453,14 @@ def main() -> None:
     ap.add_argument("--max-abs-delta-p1", type=float, default=0.01)
     ap.add_argument("--max-abs-delta-deff", type=float, default=1.00)
     ap.add_argument("--max-active-cluster-alerts", type=int, default=1)
+    ap.add_argument("--require-policy-lock-match", type=int, default=0)
     ap.add_argument("--alert-lookback", type=int, default=252)
+    ap.add_argument("--risk-q-yellow", type=float, default=0.70)
+    ap.add_argument("--risk-q-red", type=float, default=0.90)
+    ap.add_argument("--min-conf-yellow", type=float, default=0.35)
+    ap.add_argument("--min-conf-red", type=float, default=0.45)
+    ap.add_argument("--alert-persist-window", type=int, default=3)
+    ap.add_argument("--alert-persist-count", type=int, default=2)
     ap.add_argument("--max-insufficient-ratio", type=float, default=0.05)
     ap.add_argument("--min-n-used-ratio", type=float, default=0.90)
     ap.add_argument("--q-min", type=float, default=0.12)
@@ -1906,47 +2499,66 @@ def main() -> None:
     args.baseline_dir = str(baseline_dir_resolved)
     outdir = out_base / _run_id()
     outdir.mkdir(parents=True, exist_ok=True)
+    effective_cfg = {
+        "start": args.start,
+        "end": args.end,
+        "coverage_core": float(args.coverage_core),
+        "coverage_window": float(args.coverage_window),
+        "overlap_step": int(args.overlap_step),
+        "business_days_only": bool(int(args.business_days_only)),
+        "official_window": int(args.official_window),
+        "hysteresis_days": int(args.hysteresis_days),
+        "regime_threshold_mode": str(args.regime_threshold_mode),
+        "walkforward_min_history": int(args.walkforward_min_history),
+        "transition_weight_dp1": float(args.transition_weight_dp1),
+        "transition_weight_ddeff": float(args.transition_weight_ddeff),
+        "transition_weight_overlap": float(args.transition_weight_overlap),
+        "exp_stress": float(args.exp_stress),
+        "exp_transition": float(args.exp_transition),
+        "exp_stable": float(args.exp_stable),
+        "exp_dispersion": float(args.exp_dispersion),
+        "min_joint_majority_60d": float(args.min_joint_majority_60d),
+        "require_latest_majority": bool(int(args.require_latest_majority)),
+        "require_policy_lock_match": bool(int(args.require_policy_lock_match)),
+        "max_abs_delta_p1": float(args.max_abs_delta_p1),
+        "max_abs_delta_deff": float(args.max_abs_delta_deff),
+        "max_active_cluster_alerts": int(args.max_active_cluster_alerts),
+        "risk_q_yellow": float(args.risk_q_yellow),
+        "risk_q_red": float(args.risk_q_red),
+        "min_conf_yellow": float(args.min_conf_yellow),
+        "min_conf_red": float(args.min_conf_red),
+        "alert_persist_window": int(args.alert_persist_window),
+        "alert_persist_count": int(args.alert_persist_count),
+        "max_insufficient_ratio": float(args.max_insufficient_ratio),
+        "min_n_used_ratio": float(args.min_n_used_ratio),
+        "q_min": float(args.q_min),
+        "cost_bps": float(args.cost_bps),
+        "max_daily_turnover": float(args.max_daily_turnover),
+        "calibrate_exposure_grid": bool(int(args.calibrate_exposure_grid)),
+        "apply_grid_best": bool(int(args.apply_grid_best)),
+        "calibration_objective": str(args.calibration_objective),
+        "case_horizon_days": int(args.case_horizon_days),
+        "case_regimes": str(args.case_regimes),
+        "baseline_dir": str(args.baseline_dir),
+        "baseline_namespace": str(baseline_namespace),
+    }
     (outdir / "policy_used.json").write_text(
         json.dumps(
             {
                 "policy_path": str(policy_path),
                 "policy_loaded": bool(policy),
                 "policy": policy,
-                "effective": {
-                    "start": args.start,
-                    "end": args.end,
-                    "coverage_core": float(args.coverage_core),
-                    "coverage_window": float(args.coverage_window),
-                    "business_days_only": bool(int(args.business_days_only)),
-                    "official_window": int(args.official_window),
-                    "hysteresis_days": int(args.hysteresis_days),
-                    "exp_stress": float(args.exp_stress),
-                    "exp_transition": float(args.exp_transition),
-                    "exp_stable": float(args.exp_stable),
-                    "exp_dispersion": float(args.exp_dispersion),
-                    "min_joint_majority_60d": float(args.min_joint_majority_60d),
-                    "require_latest_majority": bool(int(args.require_latest_majority)),
-                    "max_abs_delta_p1": float(args.max_abs_delta_p1),
-                    "max_abs_delta_deff": float(args.max_abs_delta_deff),
-                    "max_active_cluster_alerts": int(args.max_active_cluster_alerts),
-                    "max_insufficient_ratio": float(args.max_insufficient_ratio),
-                    "min_n_used_ratio": float(args.min_n_used_ratio),
-                    "q_min": float(args.q_min),
-                    "cost_bps": float(args.cost_bps),
-                    "max_daily_turnover": float(args.max_daily_turnover),
-                    "calibrate_exposure_grid": bool(int(args.calibrate_exposure_grid)),
-                    "apply_grid_best": bool(int(args.apply_grid_best)),
-                    "calibration_objective": str(args.calibration_objective),
-                    "case_horizon_days": int(args.case_horizon_days),
-                    "case_regimes": str(args.case_regimes),
-                    "baseline_dir": str(args.baseline_dir),
-                    "baseline_namespace": str(baseline_namespace),
-                },
+                "effective": effective_cfg,
             },
             indent=2,
             ensure_ascii=False,
         ),
         encoding="utf-8",
+    )
+    policy_lock = _build_policy_lock(
+        out_base=out_base,
+        outdir=outdir,
+        effective_policy=effective_cfg,
     )
 
     panel = pd.read_csv(panel_path)
@@ -2007,6 +2619,7 @@ def main() -> None:
             min_assets=int(args.min_assets),
             noise_step=int(args.noise_step),
             bootstrap_block=int(args.bootstrap_block),
+            overlap_step=int(args.overlap_step),
             seed=int(args.seed),
         )
         ts_map[w] = ts.copy()
@@ -2036,6 +2649,8 @@ def main() -> None:
             "p1_bootstrap",
             "deff_bootstrap",
             "structure_score_bootstrap",
+            "eigvec_overlap_1d",
+            "eigvec_instability_1d",
             "insufficient_universe",
         ]
         for c in cols:
@@ -2050,6 +2665,23 @@ def main() -> None:
 
     robust_df, robust_metrics, robust_txt = _build_robustness(ts_map=ts_map, outdir=outdir)
     summary += ["", "[ROBUSTNESS]", robust_txt]
+    signif_df = _build_significance_tables(ts_map=ts_map, outdir=outdir)
+    if not signif_df.empty:
+        summary += ["", "[SIGNIFICANCE_BOOTSTRAP]"]
+        for w in sorted(signif_df["window"].dropna().astype(int).unique().tolist()):
+            x = signif_df[signif_df["window"] == int(w)]
+            if x.empty:
+                continue
+            p1r = x[x["metric"] == "delta_p1_vs_bootstrap"]
+            dr = x[x["metric"] == "delta_deff_vs_bootstrap"]
+            if (not p1r.empty) and (not dr.empty):
+                a = p1r.iloc[0]
+                b = dr.iloc[0]
+                summary += [
+                    f"T{w}: p1_sig_share={float(a['significant_share_p_lt_0_05']):.3f}, deff_sig_share={float(b['significant_share_p_lt_0_05']):.3f}, p1_latest_p={float(a['latest_pvalue']):.4f}, deff_latest_p={float(b['latest_pvalue']):.4f}"
+                ]
+    else:
+        summary += ["", "[SIGNIFICANCE_BOOTSTRAP]", "unavailable"]
 
     if int(args.official_window) not in ts_map:
         raise SystemExit(f"official window {int(args.official_window)} missing")
@@ -2061,6 +2693,11 @@ def main() -> None:
         exp_transition=float(args.exp_transition),
         exp_stable=float(args.exp_stable),
         exp_dispersion=float(args.exp_dispersion),
+        w_dp1=float(args.transition_weight_dp1),
+        w_ddeff=float(args.transition_weight_ddeff),
+        w_overlap=float(args.transition_weight_overlap),
+        threshold_mode=str(args.regime_threshold_mode),
+        walkforward_min_history=int(args.walkforward_min_history),
     )
     regime_df.to_csv(outdir / f"regime_series_T{int(args.official_window)}.csv", index=False)
     (outdir / f"regime_thresholds_T{int(args.official_window)}.json").write_text(json.dumps(reg_thr, indent=2), encoding="utf-8")
@@ -2154,6 +2791,25 @@ def main() -> None:
         json.dumps(playbook_df.to_dict(orient="records"), indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
+    asset_diag_df, sector_diag_df, asset_sector_payload = _build_asset_sector_diagnostics(
+        returns_wide=R,
+        universe_core=universe_core,
+    )
+    asset_diag_df.to_csv(outdir / "asset_regime_diagnostics.csv", index=False)
+    sector_diag_df.to_csv(outdir / "sector_regime_diagnostics.csv", index=False)
+    if not asset_diag_df.empty:
+        asset_diag_df.sort_values(["sensitivity_score", "risk_score"], ascending=[False, False]).head(50).to_csv(
+            outdir / "asset_top_sensitive.csv",
+            index=False,
+        )
+        asset_diag_df.sort_values(["stability_score", "confidence_score"], ascending=[False, False]).head(50).to_csv(
+            outdir / "asset_top_stable.csv",
+            index=False,
+        )
+    (outdir / "asset_sector_summary.json").write_text(
+        json.dumps(asset_sector_payload, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
 
     alerts, alerts_payload, alerts_txt = _cluster_alerts(ts=ts_off, lookback=int(args.alert_lookback))
     alerts.to_csv(outdir / f"cluster_alerts_T{int(args.official_window)}.csv", index=False)
@@ -2165,6 +2821,21 @@ def main() -> None:
     op_alerts.to_csv(outdir / f"operational_alerts_T{int(args.official_window)}.csv", index=False)
     (outdir / f"operational_alerts_T{int(args.official_window)}.json").write_text(
         json.dumps(op_payload, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    level_df, level_payload = _build_alert_levels(
+        regime_df=regime_df,
+        ts_off=ts_off,
+        risk_q_yellow=float(args.risk_q_yellow),
+        risk_q_red=float(args.risk_q_red),
+        min_conf_yellow=float(args.min_conf_yellow),
+        min_conf_red=float(args.min_conf_red),
+        persist_window=int(args.alert_persist_window),
+        persist_count=int(args.alert_persist_count),
+    )
+    level_df.to_csv(outdir / f"alert_levels_T{int(args.official_window)}.csv", index=False)
+    (outdir / f"alert_levels_T{int(args.official_window)}.json").write_text(
+        json.dumps(level_payload, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
     summary += ["", f"[OFFICIAL_T{int(args.official_window)}]"]
@@ -2184,6 +2855,12 @@ def main() -> None:
         summary += ["regime_mix: unavailable"]
     summary += [f"alerts: {alerts_txt}"]
     summary += [f"operational_alerts: {op_txt}"]
+    if level_payload:
+        summary += [
+            "alert_levels: "
+            f"latest={level_payload.get('latest_level','')}; "
+            f"counts={json.dumps(level_payload.get('counts', {}), ensure_ascii=False)}"
+        ]
     if calibration_best:
         exp = calibration_best.get("exposure", {})
         m = calibration_best.get("metrics", {})
@@ -2224,6 +2901,17 @@ def main() -> None:
         ]
     else:
         summary += ["", "[ACTION_PLAYBOOK]", "none"]
+    if not asset_diag_df.empty and not sector_diag_df.empty:
+        top_a = asset_diag_df.sort_values(["risk_score", "switches_90d"], ascending=[False, False]).iloc[0]
+        top_s = sector_diag_df.iloc[0]
+        summary += [
+            "",
+            "[ASSET_SECTOR_DIAGNOSTICS]",
+            f"assets={int(asset_diag_df['ticker'].nunique())}; sectors={int(sector_diag_df.shape[0])}; top_risk_asset={top_a['ticker']}; top_risk_sector={top_s['sector']}",
+            f"top_sector_metrics: risk_mean={float(top_s['risk_mean']):.4f}, confidence_mean={float(top_s['confidence_mean']):.4f}, pct_instavel={float(top_s['pct_instavel']):.4f}",
+        ]
+    else:
+        summary += ["", "[ASSET_SECTOR_DIAGNOSTICS]", "unavailable"]
 
     qa = _qa(
         ts_map=ts_map,
@@ -2268,6 +2956,11 @@ def main() -> None:
         ]
     else:
         baseline = {"same_universe_vs_previous": True, "delta_p1_vs_previous": np.nan, "delta_deff_vs_previous": np.nan}
+    summary += [
+        "",
+        "[POLICY_LOCK]",
+        f"matches_previous_release={bool(policy_lock.get('matches_previous_release', True))}; previous_hash_present={bool(str(policy_lock.get('previous_policy_hash', '')).strip())}",
+    ]
 
     gate = _build_deployment_gate(
         qa=qa,
@@ -2279,6 +2972,8 @@ def main() -> None:
         max_abs_delta_p1=float(args.max_abs_delta_p1),
         max_abs_delta_deff=float(args.max_abs_delta_deff),
         max_active_cluster_alerts=int(args.max_active_cluster_alerts),
+        policy_lock=policy_lock,
+        require_policy_lock_match=bool(int(args.require_policy_lock_match)),
     )
     (outdir / "deployment_gate.json").write_text(json.dumps(gate, indent=2), encoding="utf-8")
     summary += ["", "[DEPLOYMENT_GATE]", f"blocked={gate['blocked']}; reasons={','.join(gate['reasons']) if gate['reasons'] else 'none'}"]
@@ -2290,6 +2985,8 @@ def main() -> None:
         robust_metrics=robust_metrics,
         gate=gate,
         op_payload=op_payload,
+        alert_level_payload=level_payload,
+        asset_sector_payload=asset_sector_payload,
         case_df=case_df,
         era_df=era_df,
         playbook_df=playbook_df,
@@ -2312,6 +3009,7 @@ def main() -> None:
         "policy_path": str(policy_path),
         "policy_loaded": bool(policy),
         "deployment_gate": gate,
+        "policy_lock": policy_lock,
         "checks": {"qa_ok": bool(qa["ok"]), "scipy_clustering": bool(SCIPY_OK)},
         "scores": {
             "joint_majority_60d": float(robust_metrics.get("joint_majority_60d", np.nan)),
@@ -2320,6 +3018,11 @@ def main() -> None:
         },
         "calibration": calibration_best if calibration_best else {},
         "operational_alerts": op_payload,
+        "alert_levels": level_payload if level_payload else {},
+        "significance": {
+            "count": int(signif_df.shape[0]) if not signif_df.empty else 0,
+            "file_csv": str(outdir / "significance_summary_by_window.csv"),
+        },
         "era_evaluation": {
             "count": int(era_df.shape[0]) if not era_df.empty else 0,
             "file_csv": str(outdir / f"era_evaluation_T{int(args.official_window)}.csv"),
@@ -2330,6 +3033,17 @@ def main() -> None:
             "horizon_days": int(max(1, args.case_horizon_days)),
             "file_csv": str(outdir / f"action_playbook_T{int(args.official_window)}.csv"),
             "file_json": str(outdir / f"action_playbook_T{int(args.official_window)}.json"),
+        },
+        "asset_sector_diagnostics": {
+            "assets_count": int(asset_diag_df["ticker"].nunique()) if not asset_diag_df.empty else 0,
+            "sectors_count": int(sector_diag_df.shape[0]) if not sector_diag_df.empty else 0,
+            "files": {
+                "assets_csv": str(outdir / "asset_regime_diagnostics.csv"),
+                "sectors_csv": str(outdir / "sector_regime_diagnostics.csv"),
+                "top_sensitive_csv": str(outdir / "asset_top_sensitive.csv"),
+                "top_stable_csv": str(outdir / "asset_top_stable.csv"),
+                "summary_json": str(outdir / "asset_sector_summary.json"),
+            },
         },
         "case_studies": {
             "count": int(case_df.shape[0]) if not case_df.empty else 0,
@@ -2396,10 +3110,14 @@ def main() -> None:
         "strict_checks": int(args.strict_checks),
         "qa_ok": bool(qa["ok"]),
         "deployment_blocked": bool(gate["blocked"]),
+        "policy_lock_match": bool(policy_lock.get("matches_previous_release", True)),
         "robustness_rows": int(robust_df.shape[0]) if not robust_df.empty else 0,
+        "significance_rows": int(signif_df.shape[0]) if not signif_df.empty else 0,
         "case_studies_count": int(case_df.shape[0]) if not case_df.empty else 0,
         "era_rows": int(era_df.shape[0]) if not era_df.empty else 0,
         "playbook_rows": int(playbook_df.shape[0]) if not playbook_df.empty else 0,
+        "asset_diagnostics_rows": int(asset_diag_df.shape[0]) if not asset_diag_df.empty else 0,
+        "sector_diagnostics_rows": int(sector_diag_df.shape[0]) if not sector_diag_df.empty else 0,
         "operational_alerts_latest": int(len(op_payload.get("latest_events", []))) if isinstance(op_payload, dict) else 0,
     }
 

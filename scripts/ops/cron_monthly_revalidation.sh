@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="/Users/PedroHenrique/Desktop/A-firma"
-source "$REPO/.venv/bin/activate"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if [ -f "$REPO/.venv/bin/activate" ]; then
+  source "$REPO/.venv/bin/activate"
+fi
 cd "$REPO"
 
 python3 scripts/ops/run_monthly_revalidation.py \

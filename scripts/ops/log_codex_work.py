@@ -33,7 +33,7 @@ def main() -> None:
             raw = json.loads(str(args.metrics_json))
             if isinstance(raw, dict):
                 metrics = raw
-        except Exception:
+        except json.JSONDecodeError:
             metrics = {"raw_metrics_text": str(args.metrics_json)}
 
     payload = {

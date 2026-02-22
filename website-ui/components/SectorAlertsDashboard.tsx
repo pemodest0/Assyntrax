@@ -50,6 +50,7 @@ type EligibilityRow = {
 type Payload = {
   status: string;
   run_id: string;
+  source?: string;
   generated_at: string;
   lookback_days?: number;
   counts: { verde: number; amarelo: number; vermelho: number };
@@ -81,6 +82,23 @@ type Payload = {
     level: string;
     score: number | null;
     reasons: string[];
+  };
+  summary_simple?: {
+    short_state: string;
+    top_warning_sectors: string[];
+  };
+  data_quality?: {
+    sectors_total: number;
+    sectors_eligible: number;
+    sectors_ineligible: number;
+    assets_in_eligible_sectors: number;
+    assets_in_ineligible_sectors: number;
+    most_common_ineligible_reason: string;
+  };
+  limits?: {
+    what_it_does: string;
+    what_it_does_not: string;
+    methodological_limits: string[];
   };
 };
 
@@ -122,20 +140,48 @@ export default function SectorAlertsDashboard() {
   const [data, setData] = useState<Payload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [emptyNotice, setEmptyNotice] = useState<string | null>(null);
   const [selectedSector, setSelectedSector] = useState<string>("");
   const [lookbackDays, setLookbackDays] = useState<number>(90);
+  const [levelFilter, setLevelFilter] = useState<string>("all");
+  const [sectorSearch, setSectorSearch] = useState<string>("");
+  const [minAssets, setMinAssets] = useState<number>(0);
 
   useEffect(() => {
     const controller = new AbortController();
     const run = async () => {
       try {
         setLoading(true);
-        const res = await fetch(`/api/sectors/alerts?days=${lookbackDays}`, {
+        setEmptyNotice(null);
+        const params = new URLSearchParams({
+          days: String(lookbackDays),
+          level: String(levelFilter),
+          sector: String(sectorSearch),
+          min_assets: String(minAssets),
+        });
+        const res = await fetch(`/api/sectors/alerts?${params.toString()}`, {
           signal: controller.signal,
           cache: "no-store",
         });
-        if (!res.ok) throw new Error("falha ao carregar setores");
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+          if (res.status === 404 && body.error === "no_sector_run") {
+            setData(null);
+            setError(null);
+            setEmptyNotice("Painel setorial aguardando a primeira publicação de snapshot.");
+            return;
+          }
+          throw new Error(
+            `Erro ao consultar setores (${res.status}). ${body.message || body.error || "Snapshot setorial indisponível."}`
+          );
+        }
         const payload = (await res.json()) as Payload;
+        if (!payload.levels?.length && !payload.ranking?.length) {
+          setData(payload);
+          setError(null);
+          setEmptyNotice("Snapshot setorial recebido, mas ainda sem linhas elegíveis para exibição.");
+          return;
+        }
         setData(payload);
         setError(null);
       } catch (err) {
@@ -147,7 +193,7 @@ export default function SectorAlertsDashboard() {
     };
     void run();
     return () => controller.abort();
-  }, [lookbackDays]);
+  }, [lookbackDays, levelFilter, sectorSearch, minAssets]);
 
   const levelsSorted = useMemo(() => {
     if (!data?.levels) return [];
@@ -216,8 +262,36 @@ export default function SectorAlertsDashboard() {
     return <div className="p-6 text-sm text-zinc-400">Carregando painel setorial...</div>;
   }
 
+  if (emptyNotice) {
+    return (
+      <div className="p-6 space-y-2">
+        <div className="text-sm text-zinc-200">{emptyNotice}</div>
+        <div className="text-xs text-zinc-400">
+          Próximo passo: execute a rotina diária para publicar o snapshot em `public/data/sectors/latest`.
+        </div>
+      </div>
+    );
+  }
+
   if (error || !data) {
-    return <div className="p-6 text-sm text-rose-300">Erro ao carregar painel setorial: {error || "sem dados"}</div>;
+    const lower = String(error || "").toLowerCase();
+    const authIssue = lower.includes("unauthorized") || lower.includes("401");
+    const noDataIssue = lower.includes("404") || lower.includes("no_sector_run");
+    return (
+      <div className="p-6 space-y-3">
+        <div className="text-sm text-rose-300">
+          Erro no painel setorial:{" "}
+          {authIssue
+            ? "acesso negado. libere leitura pública ou configure chave no frontend."
+            : noDataIssue
+            ? "snapshot setorial ainda não publicado."
+            : error || "não foi possível consultar os dados agora."}
+        </div>
+        <div className="text-xs text-zinc-400">
+          Ação sugerida: confira `results/event_study_sectors` ou o snapshot em `public/data/sectors/latest`.
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -225,31 +299,36 @@ export default function SectorAlertsDashboard() {
       <section className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 md:p-5">
         <div className="text-xs uppercase tracking-[0.16em] text-zinc-500">Setores</div>
         <h1 className="mt-2 text-2xl font-semibold text-zinc-100">Radar setorial de risco</h1>
-        <div className="mt-2 text-sm text-zinc-300">
-          Niveis por setor (verde, amarelo, vermelho) + ranking de antecipacao de estresse.
+        <div className="mt-2 text-sm text-zinc-300 leading-relaxed">
+          {data.summary_simple?.short_state || "Níveis por setor (verde, amarelo, vermelho) + ranking de antecipação de estresse."}
         </div>
         <div className="mt-2 text-xs text-zinc-500">
-          run: {data.run_id} | setores elegiveis: {eligibleCount}/{data.eligibility.length}
+          execução: {data.run_id} | fonte: {data.source || "results"} | setores elegíveis: {eligibleCount}/{data.eligibility.length}
         </div>
+        {!!data.summary_simple?.top_warning_sectors?.length && (
+          <div className="mt-2 text-xs text-zinc-400">
+            setores em atenção: {data.summary_simple.top_warning_sectors.join(", ")}
+          </div>
+        )}
       </section>
 
       <section className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 md:p-5">
         <div className="text-sm uppercase tracking-widest text-zinc-400">Piloto comercial (30 dias)</div>
         <div className="mt-2 text-sm text-zinc-300">
-          Entrega diaria por setor, resumo semanal e criterio objetivo de sucesso para decidir se continua no monitor mensal.
+          Entrega diária por setor, resumo semanal e critério objetivo para avaliar continuidade do monitor mensal.
         </div>
         <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="rounded-xl border border-zinc-800 bg-black/30 p-3">
             <div className="text-xs uppercase tracking-[0.16em] text-zinc-500">Passo 1</div>
-            <div className="mt-1 text-sm text-zinc-200">Alinhar regra de acao por nivel: verde, amarelo, vermelho.</div>
+            <div className="mt-1 text-sm text-zinc-200">Alinhar leitura estrutural por nível: verde, amarelo, vermelho.</div>
           </div>
           <div className="rounded-xl border border-zinc-800 bg-black/30 p-3">
             <div className="text-xs uppercase tracking-[0.16em] text-zinc-500">Passo 2</div>
-            <div className="mt-1 text-sm text-zinc-200">Rodar o motor todo dia com alerta de mudanca de nivel.</div>
+            <div className="mt-1 text-sm text-zinc-200">Rodar o motor todo dia com alerta de mudança de nível.</div>
           </div>
           <div className="rounded-xl border border-zinc-800 bg-black/30 p-3">
             <div className="text-xs uppercase tracking-[0.16em] text-zinc-500">Passo 3</div>
-            <div className="mt-1 text-sm text-zinc-200">Fechar com recomendacao: manter, ajustar ou encerrar.</div>
+            <div className="mt-1 text-sm text-zinc-200">Fechar com interpretação estatística: estável, transição ou instável.</div>
           </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
@@ -299,7 +378,7 @@ export default function SectorAlertsDashboard() {
         <section className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 md:p-5">
           <div className="text-sm uppercase tracking-widest text-zinc-400">Drift do motor</div>
           <div className="mt-2 text-sm text-zinc-200">
-            nivel: <span className={data.drift.level === "block" ? "text-rose-300" : data.drift.level === "watch" ? "text-amber-300" : "text-emerald-300"}>{data.drift.level}</span> | score: {num(data.drift.score, 2)}
+            nível: <span className={data.drift.level === "block" ? "text-rose-300" : data.drift.level === "watch" ? "text-amber-300" : "text-emerald-300"}>{data.drift.level}</span> | score: {num(data.drift.score, 2)}
           </div>
           {data.drift.reasons?.length ? (
             <div className="mt-2 text-xs text-zinc-300">{data.drift.reasons.join(" | ")}</div>
@@ -311,11 +390,12 @@ export default function SectorAlertsDashboard() {
 
       <section className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 md:p-5">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <div className="text-xs text-zinc-400">Janela de historico:</div>
+          <div className="text-xs text-zinc-400">Janela de histórico:</div>
           {[30, 60, 90, 120].map((d) => (
             <button
               key={d}
               onClick={() => setLookbackDays(d)}
+              aria-label={`Selecionar janela de ${d} dias`}
               className={`rounded-md border px-2 py-1 text-xs ${
                 lookbackDays === d ? "border-cyan-400 text-cyan-300" : "border-zinc-700 text-zinc-300"
               }`}
@@ -323,21 +403,49 @@ export default function SectorAlertsDashboard() {
               {d}d
             </button>
           ))}
+          <select
+            value={levelFilter}
+            onChange={(e) => setLevelFilter(e.target.value)}
+            aria-label="Filtrar nível de alerta"
+            className="ml-2 rounded-md border border-zinc-700 bg-black/30 px-2 py-1 text-xs text-zinc-200"
+          >
+            <option value="all">todos níveis</option>
+            <option value="vermelho">vermelho</option>
+            <option value="amarelo">amarelo</option>
+            <option value="verde">verde</option>
+          </select>
+          <input
+            value={sectorSearch}
+            onChange={(e) => setSectorSearch(e.target.value)}
+            placeholder="filtrar setor"
+            aria-label="Filtrar por setor"
+            className="rounded-md border border-zinc-700 bg-black/30 px-2 py-1 text-xs text-zinc-200"
+          />
+          <input
+            value={minAssets}
+            onChange={(e) => setMinAssets(Number(e.target.value) || 0)}
+            type="number"
+            min={0}
+            step={1}
+            placeholder="min ativos"
+            aria-label="Mínimo de ativos por setor"
+            className="w-24 rounded-md border border-zinc-700 bg-black/30 px-2 py-1 text-xs text-zinc-200"
+          />
         </div>
-        <div className="text-sm uppercase tracking-widest text-zinc-400">Niveis atuais por setor</div>
+        <div className="text-sm uppercase tracking-widest text-zinc-400">Níveis atuais por setor</div>
         <div className="mt-3 overflow-auto">
           <table className="w-full text-xs">
             <thead className="text-zinc-500 uppercase">
               <tr>
                 <th className="text-left py-2">Setor</th>
-                <th className="text-left py-2">Nivel</th>
+                <th className="text-left py-2">Nível</th>
                 <th className="text-left py-2">Score</th>
-                <th className="text-left py-2">Instavel</th>
-                <th className="text-left py-2">Transicao</th>
-                <th className="text-left py-2">Confianca</th>
+                <th className="text-left py-2">Instável</th>
+                <th className="text-left py-2">Transição</th>
+                <th className="text-left py-2">Confiança</th>
                 <th className="text-left py-2">Faixa</th>
                 <th className="text-left py-2">Delta 5d</th>
-                <th className="text-left py-2">Mudancas 30d</th>
+                <th className="text-left py-2">Mudanças 30d</th>
                 <th className="text-left py-2">Ativos</th>
               </tr>
             </thead>
@@ -360,11 +468,16 @@ export default function SectorAlertsDashboard() {
               ))}
             </tbody>
           </table>
+          {!levelsSorted.length ? (
+            <div className="mt-3 rounded-lg border border-zinc-800 bg-black/30 p-3 text-xs text-zinc-400">
+              Nenhum setor encontrado com esse filtro. Ajuste nível, nome do setor ou mínimo de ativos.
+            </div>
+          ) : null}
         </div>
       </section>
 
       <section className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 md:p-5">
-        <div className="text-sm uppercase tracking-widest text-zinc-400">Ranking de antecipacao (5 dias)</div>
+        <div className="text-sm uppercase tracking-widest text-zinc-400">Ranking de antecipação (5 dias)</div>
         <div className="mt-3 overflow-auto">
           <table className="w-full text-xs">
             <thead className="text-zinc-500 uppercase">
@@ -416,30 +529,31 @@ export default function SectorAlertsDashboard() {
               </div>
               <div className="text-xs text-zinc-400">Score: {num(selectedLevel.sector_score, 3)}</div>
               <div className="text-xs text-zinc-400">Delta 5d: {num(selectedLevel.score_delta_5d, 3)}</div>
-              <div className="text-xs text-zinc-400">Mudancas 30d: {selectedLevel.level_changes_30d ?? 0}</div>
+              <div className="text-xs text-zinc-400">Mudanças 30d: {selectedLevel.level_changes_30d ?? 0}</div>
               <div className={`text-xs ${confidenceTone(selectedLevel.confidence_band)}`}>
-                Confianca: {selectedLevel.confidence_band || "--"}
+                Confiança: {selectedLevel.confidence_band || "--"}
               </div>
               <div className="text-xs text-zinc-300">{selectedLevel.confidence_reason || "--"}</div>
+              <div className="text-xs text-zinc-500">Por que alerta hoje:</div>
               <div className="text-xs text-zinc-200">{selectedLevel.action_recommended || selectedLevel.action_reason || "--"}</div>
-              <div className="text-xs text-zinc-300">Faixa sugerida: {selectedLevel.exposure_range || pctRange(selectedLevel.risk_budget_min, selectedLevel.risk_budget_max)}</div>
-              <div className="text-xs text-zinc-300">Hedge sugerido: {pctRange(selectedLevel.hedge_min, selectedLevel.hedge_max)}</div>
+              <div className="text-xs text-zinc-300">Faixa de referência: {selectedLevel.exposure_range || pctRange(selectedLevel.risk_budget_min, selectedLevel.risk_budget_max)}</div>
+              <div className="text-xs text-zinc-300">Faixa de proteção de referência: {pctRange(selectedLevel.hedge_min, selectedLevel.hedge_max)}</div>
               <div className="text-xs text-zinc-400">Prioridade: {num(selectedLevel.action_priority, 2)}</div>
             </div>
           ) : null}
 
           <div className="rounded-xl border border-zinc-800 bg-black/30 p-3 space-y-2">
-            <div className="text-xs uppercase tracking-[0.16em] text-zinc-400">Mudancas de nivel (90d)</div>
+            <div className="text-xs uppercase tracking-[0.16em] text-zinc-400">Mudanças de nível (90d)</div>
             {selectedChanges.length ? (
               <div className="space-y-1 text-xs">
                 {selectedChanges.map((x, idx) => (
                   <div key={`${x.date}-${idx}`} className="text-zinc-300">
-                    {x.date}: {x.from} {"->"} {x.to}
+                    {x.date}: {x.from} para {x.to}
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="text-xs text-zinc-500">Sem mudancas recentes.</div>
+              <div className="text-xs text-zinc-500">Sem mudanças recentes.</div>
             )}
           </div>
         </div>
@@ -466,7 +580,7 @@ export default function SectorAlertsDashboard() {
               <thead className="text-zinc-500 uppercase">
                 <tr>
                   <th className="text-left py-2">Data</th>
-                  <th className="text-left py-2">Nivel</th>
+                  <th className="text-left py-2">Nível</th>
                   <th className="text-left py-2">Score</th>
                 </tr>
               </thead>
@@ -487,13 +601,13 @@ export default function SectorAlertsDashboard() {
       </section>
 
       <section className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 md:p-5">
-        <div className="text-sm uppercase tracking-widest text-zinc-400">Comparacao semanal (site)</div>
+        <div className="text-sm uppercase tracking-widest text-zinc-400">Comparação semanal (site)</div>
         <div className="mt-1 text-xs text-zinc-500">
-          referencia: {data.weekly_compare?.reference_run_id || "--"}
+          referência: {data.weekly_compare?.reference_run_id || "--"}
         </div>
         <div className="mt-1 text-xs text-zinc-400">
           pioraram: {String(data.weekly_compare?.summary?.changed_up ?? 0)} | melhoraram:{" "}
-          {String(data.weekly_compare?.summary?.changed_down ?? 0)} | sem mudanca:{" "}
+          {String(data.weekly_compare?.summary?.changed_down ?? 0)} | sem mudança:{" "}
           {String(data.weekly_compare?.summary?.unchanged ?? 0)}
         </div>
         <div className="mt-3 overflow-auto">
@@ -501,10 +615,10 @@ export default function SectorAlertsDashboard() {
             <thead className="text-zinc-500 uppercase">
               <tr>
                 <th className="text-left py-2">Setor</th>
-                <th className="text-left py-2">Nivel hoje</th>
-                <th className="text-left py-2">Nivel semana passada</th>
+                <th className="text-left py-2">Nível hoje</th>
+                <th className="text-left py-2">Nível semana passada</th>
                 <th className="text-left py-2">Delta score</th>
-                <th className="text-left py-2">Tendencia</th>
+                <th className="text-left py-2">Tendência</th>
               </tr>
             </thead>
             <tbody>
@@ -521,6 +635,35 @@ export default function SectorAlertsDashboard() {
               ))}
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 md:p-5">
+          <div className="text-sm uppercase tracking-widest text-zinc-400">Qualidade dos dados</div>
+          <div className="mt-2 text-xs text-zinc-300">
+            setores elegíveis: {data.data_quality?.sectors_eligible ?? "--"}/{data.data_quality?.sectors_total ?? "--"}
+          </div>
+          <div className="mt-1 text-xs text-zinc-300">
+            ativos em setores elegíveis: {data.data_quality?.assets_in_eligible_sectors ?? "--"}
+          </div>
+          <div className="mt-1 text-xs text-zinc-300">
+            ativos fora de elegibilidade: {data.data_quality?.assets_in_ineligible_sectors ?? "--"}
+          </div>
+          <div className="mt-1 text-xs text-zinc-500">
+            motivo mais comum de inelegibilidade: {data.data_quality?.most_common_ineligible_reason || "none"}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 md:p-5">
+          <div className="text-sm uppercase tracking-widest text-zinc-400">Limites do motor</div>
+          <div className="mt-2 text-xs text-zinc-300">faz: {data.limits?.what_it_does || "--"}</div>
+          <div className="mt-1 text-xs text-zinc-300">não faz: {data.limits?.what_it_does_not || "--"}</div>
+          <div className="mt-2 space-y-1 text-xs text-zinc-500">
+            {(data.limits?.methodological_limits || []).map((x) => (
+              <div key={x}>- {x}</div>
+            ))}
+          </div>
         </div>
       </section>
     </div>

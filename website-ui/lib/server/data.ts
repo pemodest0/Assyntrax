@@ -553,7 +553,15 @@ async function readLatestLabCorrJsonArtifact(window: number, fileStem: string, f
   const filePath = path.join(run.runDir, `${fileStem}_T${Math.trunc(win)}.json`);
   try {
     const raw = await fs.readFile(filePath, "utf-8");
-    return JSON.parse(raw);
+    try {
+      return JSON.parse(raw);
+    } catch {
+      const repaired = raw
+        .replace(/\bNaN\b/g, "null")
+        .replace(/\bInfinity\b/g, "null")
+        .replace(/\b-Infinity\b/g, "null");
+      return JSON.parse(repaired);
+    }
   } catch {
     return fallback;
   }

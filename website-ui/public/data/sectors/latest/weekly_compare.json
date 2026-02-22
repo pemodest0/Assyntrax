@@ -1,0 +1,121 @@
+{
+  "reference_run_id": "20260220T041118Z",
+  "summary": {
+    "sectors_total": 10,
+    "changed_up": 0,
+    "changed_down": 0,
+    "unchanged": 10
+  },
+  "rows": [
+    {
+      "sector": "consumer_discretionary",
+      "n_assets": 47,
+      "level_now": "verde",
+      "level_prev_week": "verde",
+      "score_now": 0.4116150790604365,
+      "score_prev_week": 0.4116150790604365,
+      "delta_score_week": 0.0,
+      "trend": "same",
+      "changed": false
+    },
+    {
+      "sector": "consumer_staples",
+      "n_assets": 32,
+      "level_now": "verde",
+      "level_prev_week": "verde",
+      "score_now": 0.33788458166321433,
+      "score_prev_week": 0.33788458166321433,
+      "delta_score_week": 0.0,
+      "trend": "same",
+      "changed": false
+    },
+    {
+      "sector": "energy",
+      "n_assets": 44,
+      "level_now": "verde",
+      "level_prev_week": "verde",
+      "score_now": 0.5658666957244123,
+      "score_prev_week": 0.5658666957244123,
+      "delta_score_week": 0.0,
+      "trend": "same",
+      "changed": false
+    },
+    {
+      "sector": "financials",
+      "n_assets": 55,
+      "level_now": "verde",
+      "level_prev_week": "verde",
+      "score_now": 0.315067835172269,
+      "score_prev_week": 0.315067835172269,
+      "delta_score_week": 0.0,
+      "trend": "same",
+      "changed": false
+    },
+    {
+      "sector": "health_care",
+      "n_assets": 42,
+      "level_now": "verde",
+      "level_prev_week": "verde",
+      "score_now": 0.23090772644855473,
+      "score_prev_week": 0.23090772644855473,
+      "delta_score_week": 0.0,
+      "trend": "same",
+      "changed": false
+    },
+    {
+      "sector": "industrials",
+      "n_assets": 94,
+      "level_now": "verde",
+      "level_prev_week": "verde",
+      "score_now": 0.34264013931463233,
+      "score_prev_week": 0.34264013931463233,
+      "delta_score_week": 0.0,
+      "trend": "same",
+      "changed": false
+    },
+    {
+      "sector": "materials",
+      "n_assets": 26,
+      "level_now": "verde",
+      "level_prev_week": "verde",
+      "score_now": 0.32025863608927235,
+      "score_prev_week": 0.32025863608927235,
+      "delta_score_week": 0.0,
+      "trend": "same",
+      "changed": false
+    },
+    {
+      "sector": "real_estate",
+      "n_assets": 36,
+      "level_now": "verde",
+      "level_prev_week": "verde",
+      "score_now": 0.406837393635584,
+      "score_prev_week": 0.406837393635584,
+      "delta_score_week": 0.0,
+      "trend": "same",
+      "changed": false
+    },
+    {
+      "sector": "technology",
+      "n_assets": 56,
+      "level_now": "verde",
+      "level_prev_week": "verde",
+      "score_now": 0.24325273719778007,
+      "score_prev_week": 0.24325273719778007,
+      "delta_score_week": 0.0,
+      "trend": "same",
+      "changed": false
+    },
+    {
+      "sector": "utilities",
+      "n_assets": 28,
+      "level_now": "verde",
+      "level_prev_week": "verde",
+      "score_now": 0.38898102649973465,
+      "score_prev_week": 0.38898102649973465,
+      "delta_score_week": 0.0,
+      "trend": "same",
+      "changed": false
+    }
+  ]
+}

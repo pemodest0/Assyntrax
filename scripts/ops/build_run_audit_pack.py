@@ -28,7 +28,7 @@ def _git_hash() -> str:
             check=True,
         )
         return proc.stdout.strip()
-    except Exception:
+    except (subprocess.CalledProcessError, OSError):
         return "unknown"
 
 
@@ -123,4 +123,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

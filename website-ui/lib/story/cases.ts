@@ -25,19 +25,19 @@ export const STORY_CASES: StoryCase[] = [
   {
     id: "yen-carry-2024",
     domain: "finance",
-    title: "Yen carry unwind e explosao de volatilidade",
+    title: "Yen carry unwind e explosão de volatilidade",
     period: "2024-08",
     why_matters:
-      "Liquidez some rapido em estruturas alavancadas. O risco principal nao e direcao de preco, e regime de fragilidade.",
+      "Liquidez some rápido em estruturas alavancadas. O risco principal não é direção de preço, é regime de fragilidade.",
     what_happened:
-      "A compressao de diferencial de juros entre EUA e Japao forca desalavancagem. O VIX salta e a estrutura de opcao perde estabilidade.",
+      "A compressão de diferencial de juros entre EUA e Japão força desalavancagem. O VIX salta e a estrutura de opção perde estabilidade.",
     motor_reading:
-      "O motor trata como transicao de regime com queda de confianca local, aumento de instabilidade e elevacao de alertas.",
+      "O motor trata como transição de regime com queda de confiança local, aumento de instabilidade e elevação de alertas.",
     operational_use:
-      "Uso pratico: reduzir exposicao bruta, bloquear novos riscos e acionar hedge condicional por regime.",
+      "Uso prático: reduzir exposição bruta, bloquear novos riscos e acionar hedge condicional por regime.",
     risk_limit:
-      "Nao e previsao de candle. E radar de contexto para controle de risco e de alavancagem.",
-    image_hint: "Mesa de risco, tela de volatilidade e fluxo de opcao em stress.",
+      "Não é previsão de candle. É radar de contexto para controle de risco e de alavancagem.",
+    image_hint: "Mesa de risco, tela de volatilidade e fluxo de opção em stress.",
     sources: [
       {
         title: "BIS - Anatomy of the VIX spike in August 2024",
@@ -62,19 +62,19 @@ export const STORY_CASES: StoryCase[] = [
   {
     id: "tariff-shock-2025",
     domain: "macro",
-    title: "Choque tarifario e quebra de regime de comercio",
+    title: "Choque tarifário e quebra de regime de comércio",
     period: "2025-04",
     why_matters:
-      "Mudanca regulatoria abrupta desloca o equilibrio macro e contamina equities, FX e cadeia global.",
+      "Mudança regulatória abrupta desloca o equilíbrio macro e contamina equities, FX e cadeia global.",
     what_happened:
-      "Tarifas amplas elevam incerteza de custo, comprimem margem e aumentam dispersao setorial em poucos dias.",
+      "Tarifas amplas elevam incerteza de custo, comprimem margem e aumentam dispersão setorial em poucos dias.",
     motor_reading:
-      "Regime sai de estabilidade para transicao/instavel com persistencia maior de alertas e menor qualidade de sinal.",
+      "Regime sai de estabilidade para transição/instável com persistência maior de alertas e menor qualidade de sinal.",
     operational_use:
-      "Uso pratico: mover para postura defensiva por dominio, limitar risco direcional e priorizar setores resilientes.",
+      "Uso prático: mover para postura defensiva por domínio, limitar risco direcional e priorizar setores resilientes.",
     risk_limit:
-      "Motor nao explica geopolitica; ele mede efeito no estado do sistema.",
-    image_hint: "Portos, containers e curva de volatilidade em tela unica.",
+      "Motor não explica geopolítica; ele mede efeito no estado do sistema.",
+    image_hint: "Portos, containers e curva de volatilidade em tela única.",
     sources: [
       {
         title: "IMF - Red Sea attacks and global trade disruption",
@@ -102,16 +102,16 @@ export const STORY_CASES: StoryCase[] = [
     title: "Maturity wall no real estate comercial",
     period: "2025-2026",
     why_matters:
-      "Crise lenta de refinanciamento causa erosao de capital sem crash unico visivel.",
+      "Crise lenta de refinanciamento causa erosão de capital sem crash único visível.",
     what_happened:
-      "Vencimento de divida em ambiente de juros altos gera bifurcacao de credito e queda de liquidez de ativos.",
+      "Vencimento de dívida em ambiente de juros altos gera bifurcação de crédito e queda de liquidez de ativos.",
     motor_reading:
-      "Sinais de transicao longa com qualidade heterogenea entre regioes e maior tempo em estado de cautela.",
+      "Sinais de transição longa com qualidade heterogênea entre regiões e maior tempo em estado de cautela.",
     operational_use:
-      "Uso pratico: congelar alocacao agressiva, revisar duration e exigir evidencia adicional antes de expandir risco.",
+      "Uso prático: congelar alocação agressiva, revisar duration e exigir evidência adicional antes de expandir risco.",
     risk_limit:
-      "Motor identifica fragilidade de regime; nao substitui due diligence de ativo individual.",
-    image_hint: "Skyline corporativo com vacancia e curva de credito em stress.",
+      "Motor identifica fragilidade de regime; não substitui due diligence de ativo individual.",
+    image_hint: "Skyline corporativo com vacância e curva de crédito em stress.",
     sources: [
       {
         title: "Congress - Commercial Real Estate and the Banking Sector",
@@ -137,6 +137,6 @@ export const STORY_CASES: StoryCase[] = [
 
 export const DOMAIN_LABELS: Record<StoryCase["domain"], string> = {
   finance: "Finance / Trading",
-  macro: "Macro / Operacoes",
-  realestate: "Imobiliario",
+  macro: "Macro / Operações",
+  realestate: "Imobiliário",
 };

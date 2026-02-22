@@ -2,15 +2,19 @@
 
 Mapa unico dos guias ativos do projeto.
 
-## Raiz do projeto
+## Acesso rapido
+- `docs/INDEX_UNICO.md`: indice por tema (motor, operacao, venda, historico).
+
+## Documentos base
 - `README.md`: visao geral e comandos basicos.
-- `METHODOLOGY.md`: metodologia oficial do motor.
-- `MAC_HANDOFF.md`: continuidade entre ambientes (Windows/Mac).
-- `SCOPE.md`: limites de escopo.
-- `BUSINESS_OUTCOME.md`: posicionamento de produto.
-- `AGENT_MEMORY.md`: memoria operacional consolidada.
-- `DEV_LOG.md`: log curto de desenvolvimento.
-- `JOURNAL.md`: registro resumido de marcos.
+- `docs/notes/README.md`: mapa das notas de continuidade.
+- `docs/notes/METHODOLOGY.md`: metodologia oficial do motor.
+- `docs/notes/MAC_HANDOFF.md`: continuidade entre ambientes (Windows/Mac).
+- `docs/notes/SCOPE.md`: limites de escopo.
+- `docs/notes/BUSINESS_OUTCOME.md`: posicionamento de produto.
+- `docs/notes/AGENT_MEMORY.md`: memoria operacional consolidada.
+- `docs/notes/DEV_LOG.md`: log curto de desenvolvimento.
+- `docs/notes/JOURNAL.md`: registro resumido de marcos.
 
 ## Operacao e pipelines
 - `docs/OPS_EXECUTION_FLOW.md`: fluxo oficial motor -> validacao -> publicacao.
@@ -21,6 +25,8 @@ Mapa unico dos guias ativos do projeto.
 
 ## Engine, contratos e frontend
 - `docs/ENGINE_GUIDE.md`: API estavel do motor e contrato de consumo.
+- `docs/motor/MANUAL_MESTRE_ASSYNTRAX.md`: manual mestre do motor (regras, conclusoes, gate, operacao).
+- `docs/motor/manual_300p/PLANO_EDITORIAL_300_PAGINAS.md`: plano fechado para expansao em ~300 paginas.
 - `docs/DASHBOARD_SPEC.md`: regras de exibicao no frontend.
 - `docs/REAL_ESTATE_ARCH.md`: arquitetura do dominio imobiliario.
 - `docs/graph_engine_frontend_contract.md`: contrato legado de frontend (referencia).

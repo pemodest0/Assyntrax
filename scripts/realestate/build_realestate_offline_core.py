@@ -67,6 +67,31 @@ def _compute_liquidity_proxy(price: pd.Series, window: int = 3) -> pd.Series:
     return liq
 
 
+def _zscore_or_zero(x: pd.Series) -> pd.Series:
+    s = pd.to_numeric(x, errors="coerce")
+    mu = float(s.mean(skipna=True))
+    sd = float(s.std(ddof=0, skipna=True))
+    if not np.isfinite(sd) or sd <= 1e-9:
+        return pd.Series(np.zeros(len(s)), index=s.index, dtype=float)
+    z = (s - mu) / sd
+    return z.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+
+
+def _compute_discount_proxy(price: pd.Series, liquidity: pd.Series | None = None) -> pd.Series:
+    price_num = pd.to_numeric(price, errors="coerce")
+    neg_ret = (-price_num.pct_change()).clip(lower=0.0).fillna(0.0)
+    neg_ret_smooth = neg_ret.rolling(window=3, min_periods=1).mean()
+    z_neg_ret = _zscore_or_zero(neg_ret_smooth)
+    if liquidity is None:
+        z_illiquidity = pd.Series(np.zeros(len(price_num)), index=price_num.index, dtype=float)
+    else:
+        liq_num = pd.to_numeric(liquidity, errors="coerce")
+        z_illiquidity = _zscore_or_zero(-liq_num)
+    score = 0.65 * z_neg_ret + 0.35 * z_illiquidity
+    # Proxy in percentage points, bounded to avoid unrealistic tails.
+    return (5.0 + 2.5 * score).clip(lower=0.0, upper=25.0)
+
+
 def _find_discount_series(raw_dir: Path) -> pd.DataFrame | None:
     # Try ABRAINC/FipeZap CSVs if they exist and contain desconto-like columns.
     candidates = list(raw_dir.glob("**/*.csv"))
@@ -74,7 +99,7 @@ def _find_discount_series(raw_dir: Path) -> pd.DataFrame | None:
     for p in candidates:
         try:
             df = pd.read_csv(p)
-        except Exception:
+        except (FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError, OSError):
             continue
         cols = list(df.columns)
         date_cols = [c for c in cols if c.lower() in {"date", "data", "mes", "month"}]
@@ -103,7 +128,7 @@ def _find_liquidity_series(raw_dir: Path) -> pd.DataFrame | None:
     for p in candidates:
         try:
             df = pd.read_csv(p)
-        except Exception:
+        except (FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError, OSError):
             continue
         cols = list(df.columns)
         date_cols = [c for c in cols if c.lower() in {"date", "data", "mes", "month"}]
@@ -245,10 +270,16 @@ def main() -> None:
 
         if global_disc is not None:
             frame = frame.merge(global_disc, on="date", how="left")
-            disc_source = "official_discount"
+            frame["D"] = pd.to_numeric(frame.get("D"), errors="coerce")
+            proxy_d = _compute_discount_proxy(frame["P"], frame.get("L"))
+            if float(frame["D"].notna().mean()) < 0.60:
+                frame["D"] = frame["D"].combine_first(proxy_d)
+                disc_source = "official_discount_plus_proxy"
+            else:
+                disc_source = "official_discount"
         else:
-            frame["D"] = np.nan
-            disc_source = "missing"
+            frame["D"] = _compute_discount_proxy(frame["P"], frame.get("L"))
+            disc_source = "price_liquidity_proxy"
 
         frame = frame.sort_values("date").reset_index(drop=True)
         frame.to_csv(outdir / f"{asset_id}_core.csv", index=False)
@@ -290,7 +321,7 @@ def main() -> None:
             "P(t)=FipeZap price index (monthly).",
             "L(t)=official liquidity proxy if found; else BCB credit balance; else price volatility proxy.",
             "J(t)=BCB financing market rate if available; else financing total; else Selic.",
-            "D(t)=official discount when available, otherwise missing (TODO).",
+            "D(t)=official discount when available; otherwise fallback discount proxy from price and liquidity.",
         ],
         "source_availability": {
             "bcb_j_financing_market_25447": bool(not j_pf_mercado.empty),
@@ -308,4 +339,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
