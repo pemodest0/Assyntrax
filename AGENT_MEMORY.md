@@ -46,3 +46,13 @@
 ## Legado
 - mover itens nao operacionais para `legacy/`
 - remover duplicidade gradual mantendo wrappers
+
+## Checkpoint canonico (2026-02-22)
+- commit local pronto para migracao: `e36b02fd745b283f9ebacbc9d012e12009b5f8cf`
+- branch atual: `main`
+- divergencia observada no momento do checkpoint: `+1 -11` vs `origin/main`
+- remoto no momento da coleta: `origin/main -> e2b6842`
+- model C shadow substituido por checkpoint real GNN quando `models/model_c_gnn_checkpoint.json` existe
+- fallback preservado: `shadow_proxy` somente quando checkpoint indisponivel/invalido
+- contrato/gate preservado em `scripts/ops/build_copilot_shadow.py` (sem quebrar consumo do site/API)
+- proxima acao para sincronizar no remoto e liberar Mac: `git rebase origin/main` seguido de `git push origin main`

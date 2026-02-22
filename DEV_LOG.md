@@ -36,3 +36,10 @@
 - Limpeza final de legado nao operacional.
 - Atualizacao de docs para rename do repositorio.
 - Checklist final de regressao pre-commit.
+
+## 2026-02-22 - checkpoint de migracao para Mac
+- Commit consolidado com copiloto + plataforma + Model C GNN: `e36b02fd745b283f9ebacbc9d012e12009b5f8cf`.
+- Estado local limpo apos commit e pronto para sync remoto.
+- Divergencia detectada antes do push: branch local `main` em `+1 -11` contra `origin/main`.
+- Acao planejada para publicar sem perder historico remoto: rebase local em `origin/main` e push de `main`.
+- Regra operacional adicionada para execucoes longas: informar ETA antes de rodar pipeline completo.
