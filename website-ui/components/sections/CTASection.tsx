@@ -13,24 +13,24 @@ export default function CTASection() {
       <div>
         <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Pronto para explorar</div>
         <h3 className="mt-3 text-3xl md:text-4xl font-semibold tracking-tight">
-          Abra a Dashboard
+          Solicite uma demonstracao guiada
         </h3>
         <p className="mt-2 text-zinc-300 max-w-2xl text-base lg:text-lg">
-          Diagnóstico de regimes com alertas explícitos e forecast condicional.
+          Veja o diagnostico estrutural no seu fluxo de decisao, com governanca e rastreabilidade.
         </p>
       </div>
       <div className="flex gap-3">
         <a
           className="rounded-xl bg-zinc-100 text-black px-6 py-3 font-medium hover:bg-white transition"
-          href="/app/dashboard"
+          href="/contact"
         >
-          Abrir App
+          Solicitar demonstracao
         </a>
         <a
           className="rounded-xl border border-zinc-800 px-6 py-3 text-zinc-200 hover:border-zinc-600 transition"
-          href="/contact"
+          href="/app/dashboard"
         >
-          Falar com a equipe
+          Abrir painel
         </a>
       </div>
     </motion.section>

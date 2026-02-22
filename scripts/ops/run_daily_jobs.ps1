@@ -33,4 +33,13 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 python scripts/ops/run_daily_sector_alerts.py --profile-file config/sector_alerts_profile.json
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+python scripts/ops/train_model_c_gnn.py
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+python scripts/ops/build_copilot_shadow.py --run-id $runId
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+python scripts/ops/build_platform_db.py --run-id $runId
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 Write-Host "[ops] done"

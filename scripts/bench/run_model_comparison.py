@@ -8,9 +8,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
+from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.model_selection import TimeSeriesSplit
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 
@@ -20,7 +22,7 @@ def load_dataset(path: Path, feature_cols=None):
     if feature_cols is None:
         ignore = {'date', 'symbol', 'mode', 'mode_label', 'phase', 'return_mode'}
         feature_cols = [col for col in df.columns if col not in ignore]
-    features = df[feature_cols].replace([np.inf, -np.inf], np.nan).fillna(method='ffill').fillna(method='bfill').fillna(0.0)
+    features = df[feature_cols].replace([np.inf, -np.inf], np.nan)
     numeric_cols = [col for col in features.columns if pd.api.types.is_numeric_dtype(features[col])]
     features = features[numeric_cols]
     baseline_price = df['price_pred'].astype(float) if 'price_pred' in df.columns else df['price_today'].astype(float)
@@ -57,19 +59,22 @@ def evaluate_models(
         results['naive']['pred'].extend(baseline_test.to_list())
         results['naive']['true'].extend((baseline_test + y_test).to_list())
 
-        scaler = StandardScaler()
-        X_train_scaled = scaler.fit_transform(X_train)
-        X_test_scaled = scaler.transform(X_test)
-
         models = {
             'linear': LinearRegression(),
             'random_forest': RandomForestRegressor(n_estimators=150, max_depth=8, random_state=42, n_jobs=-1),
             'gboost': GradientBoostingRegressor(random_state=42, n_estimators=150, max_depth=3, learning_rate=0.05),
         }
 
-        for key, model in models.items():
-            model.fit(X_train_scaled, y_train)
-            preds_residual = model.predict(X_test_scaled)
+        for key, estimator in models.items():
+            model = Pipeline(
+                steps=[
+                    ("imputer", SimpleImputer(strategy="median")),
+                    ("scaler", StandardScaler()),
+                    ("model", estimator),
+                ]
+            )
+            model.fit(X_train, y_train)
+            preds_residual = model.predict(X_test)
             preds = baseline_test + preds_residual
             results[key]['pred'].extend(preds)
             results[key]['true'].extend((baseline_test + y_test).to_list())

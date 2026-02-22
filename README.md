@@ -7,6 +7,7 @@ Este repositorio contem o motor de deteccao de regimes e risco, os pipelines de 
 - Pipelines operacionais em `scripts/ops/`.
 - Validacoes cientificas e operacionais em `scripts/bench/validation/`.
 - Site/API em `website-ui/` consumindo snapshots validados.
+- Banco operacional SQLite em `results/platform/assyntrax_platform.db`.
 - Artefatos canonicos em `results/ops/snapshots/<run_id>/` e `results/validation/`.
 
 ## Estrutura principal
@@ -15,13 +16,16 @@ Este repositorio contem o motor de deteccao de regimes e risco, os pipelines de 
 - `scripts/bench/validation/`: testes de robustez, placebo, adequacao e utilidade.
 - `config/`: contrato de saida e gates versionados.
 - `website-ui/`: frontend e rotas API para consumo dos artefatos.
+- `results/platform/`: banco SQLite + snapshot consolidado da plataforma.
 - `legacy/`: arquivos antigos ou fora do fluxo atual.
 
 ## Fluxo oficial (alto nivel)
 1. Rodar jobs diarios (`scripts/ops/run_daily_jobs.ps1`).
 2. Validar contrato e gates.
-3. Publicar snapshot com `api_snapshot.jsonl` + `summary.json` + `audit_pack.json`.
-4. Frontend consome apenas ultimo run valido.
+3. Gerar shadow do copiloto B+C com gate (`scripts/ops/build_copilot_shadow.py`).
+4. Indexar run no banco SQLite (`scripts/ops/build_platform_db.py`).
+5. Publicar snapshot com `api_snapshot.jsonl` + `summary.json` + `audit_pack.json`.
+6. Frontend consome ultimo run valido + status do banco.
 
 ## Criterio de pronto para producao
 - Contrato de saida valido.
@@ -32,13 +36,29 @@ Este repositorio contem o motor de deteccao de regimes e risco, os pipelines de 
 ## Comandos uteis
 - Pipeline diario:
   - `powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\ops\\run_daily_jobs.ps1 -Seed 17 -MaxAssets 80`
+- Copiloto shadow manual (B+C):
+  - `python scripts/ops/build_copilot_shadow.py --run-id 20260210_contractfix`
+- Banco SQLite manual:
+  - `python scripts/ops/build_platform_db.py --run-id 20260210_contractfix`
+- Launcher unico (executavel local):
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\ops\\start_platform_local.ps1 -RunPipeline`
 - Frontend local:
   - `cd website-ui`
   - `npm run dev`
+  - abrir `http://localhost:3000/app/copiloto`
+  - abrir `http://localhost:3000/app/plataforma`
+
+## Nucleo de instrucoes (motor + copiloto)
+- Arquivo canonico: `config/copilot_instruction_core.v1.json`.
+- Regra fixa: sem promessa de retorno, sem recomendacao de compra/venda, risco separado de confianca.
+- Publicacao do copiloto depende de gate + integridade (`publishable=true` no shadow).
+- Artefato de shadow por run: `results/ops/copilot/<run_id>/shadow_summary.json`.
+- Snapshot do banco para o site: `results/platform/latest_db_snapshot.json`.
 
 ## Documentacao recomendada
 - `docs/OPS_EXECUTION_FLOW.md`
 - `docs/ENGINE_GUIDE.md`
 - `docs/DAILY_PIPELINE.md`
+- `docs/COPILOT_CORE_INSTRUCTIONS.md`
 - `docs/REPO_REFACTOR_PLAN.md`
 - `MAC_HANDOFF.md`

@@ -1,7 +1,22 @@
-﻿"use client";
+"use client";
 
 import ProofMatrix from "@/components/visuals/ProofMatrix";
 import { motion } from "framer-motion";
+
+const limits = [
+  {
+    title: "Sem look-ahead",
+    text: "Os regimes sao calculados de forma causal: em cada instante t usamos apenas informacoes observadas ate t-1.",
+  },
+  {
+    title: "Historico e indicativo",
+    text: "Metricas historicas (F1, MCC e correlatas) servem para avaliar algoritmo e robustez, nao para prometer retorno.",
+  },
+  {
+    title: "Nao e recomendacao",
+    text: "Nao dizemos compre ou venda. O objetivo e reduzir erro operacional e melhorar governanca de risco.",
+  },
+];
 
 export default function ProofSection() {
   return (
@@ -12,17 +27,21 @@ export default function ProofSection() {
         whileInView={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Prova e rigor</div>
-        <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">Métricas transparentes, sem promessas</h2>
-        <p className="text-zinc-300 max-w-3xl text-base lg:text-lg">
-          Validação com walk-forward, baselines e métricas por regime. Quando não há estrutura,
-          o sistema sinaliza diagnóstico inconclusivo.
-        </p>
+        <div className="text-xs uppercase tracking-[0.3em] text-zinc-400">Confiabilidade e limites</div>
+        <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">Transparencia metodologica para uso institucional</h2>
       </motion.div>
-      <ProofMatrix />
-      <div className="text-xs text-zinc-500">
-        Resultados ilustrativos para gestão de risco. Sem promessa de retorno financeiro.
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {limits.map((item) => (
+          <article key={item.title} className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-5">
+            <h3 className="text-lg font-semibold text-zinc-100">{item.title}</h3>
+            <p className="mt-2 text-sm text-zinc-300">{item.text}</p>
+          </article>
+        ))}
       </div>
+
+      <ProofMatrix />
+      <div className="text-xs text-zinc-500">Uso para diagnostico estrutural de risco, sem promessa de retorno financeiro.</div>
     </section>
   );
 }

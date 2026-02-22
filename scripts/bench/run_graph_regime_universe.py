@@ -105,29 +105,42 @@ def _smooth_labels(
     cooldown: int = 2,
     conf_floor: float = 0.45,
 ) -> list[str]:
+    """Causal hysteresis: only switches after persistent evidence in the recent past."""
     if not labels:
         return []
     conf = np.asarray(confidence, dtype=float)
     current = labels[0]
     smoothed = [current]
     cooldown_left = 0
+    pending_label: str | None = None
+    pending_count = 0
     for i in range(1, len(labels)):
         lbl = labels[i]
         if lbl == current:
+            pending_label = None
+            pending_count = 0
             smoothed.append(current)
+            if cooldown_left > 0:
+                cooldown_left -= 1
             continue
         if cooldown_left > 0:
             cooldown_left -= 1
             smoothed.append(current)
             continue
-        end = min(len(labels), i + max(1, min_run))
-        if all(labels[j] == lbl for j in range(i, end)):
-            conf_avg = float(np.mean(conf[i:end])) if end > i else float(conf[i])
-            if conf_avg >= conf_floor:
-                current = lbl
-                cooldown_left = max(0, cooldown)
-                smoothed.append(current)
-                continue
+        if pending_label != lbl:
+            pending_label = lbl
+            pending_count = 1
+        else:
+            pending_count += 1
+        start = i - pending_count + 1
+        conf_avg = float(np.mean(conf[start : i + 1]))
+        if pending_count >= max(1, min_run) and conf_avg >= conf_floor:
+            current = lbl
+            pending_label = None
+            pending_count = 0
+            cooldown_left = max(0, cooldown)
+            smoothed.append(current)
+            continue
         smoothed.append(current)
     return smoothed
 
@@ -298,19 +311,6 @@ def build_asset_output(
         state_smooth_noise=state_smooth_noise,
     )
 
-    # Recompute thresholds with timeframe-specific calibration
-    from engine.graph.labels import compute_thresholds  # local import to avoid cycles
-    conf_smoothed = result.confidence
-    escape_series = 1.0 - conf_smoothed
-    thresholds = compute_thresholds(
-        escape_series,
-        result.stretch_mu,
-        result.stretch_frac_pos,
-        conf_smoothed,
-        timeframe=timeframe,
-    )
-    result.thresholds = thresholds
-
     raw_labels = [str(lbl) for lbl in result.state_labels]
     smooth_labels = _smooth_labels(
         raw_labels,
@@ -319,8 +319,9 @@ def build_asset_output(
         cooldown=2,
         conf_floor=float(result.thresholds.get("conf_lo", 0.3)),
     )
-    ref_labels = _rolling_mode(smooth_labels, window=3)
-    aligned_labels, lag_opt, lag_score = _align_lag(smooth_labels, ref_labels, max_lag=6)
+    aligned_labels = smooth_labels
+    lag_opt = 0
+    lag_score = 1.0
 
     conf_now = float(result.confidence[-1])
     escape_now = 1.0 - conf_now

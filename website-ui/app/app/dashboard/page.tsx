@@ -1,275 +1,206 @@
-﻿import Link from "next/link";
 import {
   findLatestLabCorrRun,
   readLatestLabCorrActionPlaybook,
-  readLatestLabCorrBacktestSummary,
-  readLatestLabCorrCaseStudies,
-  readLatestLabCorrEraEvaluation,
   readLatestLabCorrOperationalAlerts,
   readLatestLabCorrTimeseries,
+  readLatestLabCorrUiViewModel,
 } from "@/lib/server/data";
 
-function toNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value !== "string") return null;
+function toNum(value: unknown): number | null {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 }
 
-function fmtPct(value: number | null, digits = 2) {
-  if (value == null || !Number.isFinite(value)) return "--";
-  const sign = value > 0 ? "+" : "";
-  return `${sign}${(value * 100).toFixed(digits)}%`;
+function clamp01(value: number | null) {
+  if (value == null) return null;
+  return Math.max(0, Math.min(1, value));
 }
 
-function fmtNum(value: number | null, digits = 3) {
-  if (value == null || !Number.isFinite(value)) return "--";
+function fmtScore(value: number | null, digits = 2) {
+  if (value == null) return "--";
   return value.toFixed(digits);
 }
 
+function regimeRiskBase(regime: string) {
+  const r = regime.toLowerCase();
+  if (r === "stable") return 0.2;
+  if (r === "transition") return 0.55;
+  if (r === "stress") return 0.85;
+  if (r === "dispersion") return 0.7;
+  return 0.5;
+}
+
+function riskBand(value: number | null) {
+  if (value == null) return "indefinido";
+  if (value < 0.35) return "baixo";
+  if (value < 0.7) return "medio";
+  return "alto";
+}
+
+function confidenceBand(value: number | null) {
+  if (value == null) return "indefinida";
+  if (value >= 0.75) return "alta";
+  if (value >= 0.5) return "media";
+  return "baixa";
+}
+
 export default async function DashboardHome() {
-  const [labRun, ts, cases, opAlerts, eraEval, playbook, bt] = await Promise.all([
+  const [labRun, ts, opAlerts, playbook, uiView] = await Promise.all([
     findLatestLabCorrRun(),
     readLatestLabCorrTimeseries(120),
-    readLatestLabCorrCaseStudies(120),
     readLatestLabCorrOperationalAlerts(120),
-    readLatestLabCorrEraEvaluation(120),
     readLatestLabCorrActionPlaybook(120),
-    readLatestLabCorrBacktestSummary(120),
+    readLatestLabCorrUiViewModel(120),
   ]);
 
-  const gate = ((labRun?.summary?.deployment_gate || {}) as Record<string, unknown>) || {};
-  const gateBlocked = gate?.blocked === true;
-  const latest = ts?.latest || null;
-  const delta20 = ts?.delta_20d || null;
-  const latestEvents = Array.isArray((opAlerts as Record<string, unknown>)?.latest_events)
-    ? ((opAlerts as Record<string, unknown>).latest_events as unknown[]).map((x) => String(x))
-    : [];
-  const opLast60 = toNumber((opAlerts as Record<string, unknown>)?.n_events_last_60d) ?? 0;
+  const summary = ((labRun?.summary || {}) as Record<string, unknown>) || {};
+  const gate = ((summary.deployment_gate || {}) as Record<string, unknown>) || {};
+  const gateBlocked = gate.blocked === true;
+  const gateReasons = Array.isArray(gate.reasons) ? gate.reasons.map((v) => String(v)) : [];
 
-  const btObj = (bt || {}) as Record<string, unknown>;
-  const s = ((btObj.strategy || {}) as Record<string, unknown>) || {};
-  const b = ((btObj.benchmark || {}) as Record<string, unknown>) || {};
-  const sAnn = toNumber(s.ann_return);
-  const bAnn = toNumber(b.ann_return);
-  const sMdd = toNumber(s.max_drawdown);
-  const bMdd = toNumber(b.max_drawdown);
-  const alphaAnn = sAnn != null && bAnn != null ? sAnn - bAnn : null;
-  const ddImprovement = sMdd != null && bMdd != null ? Math.abs(bMdd) - Math.abs(sMdd) : null;
-  const modeLabel = alphaAnn != null && alphaAnn > 0.02 ? "Alpha" : "Protection";
+  const officialWindow = toNum(summary.official_window) ?? 120;
+  const policyPath = String(summary.policy_path || "production_policy_lock.json");
+  const nCore = toNum(summary.n_core);
 
-  const playRows = Array.isArray(playbook) ? (playbook as Record<string, unknown>[]) : [];
-  const latestPlay = playRows.length ? playRows[playRows.length - 1] : null;
-  const eraRows = Array.isArray(eraEval) ? (eraEval as Record<string, unknown>[]) : [];
-  const caseRows = cases?.cases || [];
+  const latestState = (ts?.latest || ((uiView as Record<string, unknown>)?.latest_state as Record<string, unknown>)) as
+    | Record<string, unknown>
+    | null;
+  const latestNUsed = toNum(latestState?.N_used);
+  const structureScore = toNum(latestState?.structure_score);
+
+  const playRows = Array.isArray(playbook) ? playbook : [];
+  const latestPlay = (playRows.length
+    ? playRows[playRows.length - 1]
+    : ((uiView as Record<string, unknown>)?.playbook_latest as Record<string, unknown>)) as Record<
+    string,
+    unknown
+  >;
+
+  const regime = String(
+    latestPlay?.regime || ((uiView as Record<string, unknown>)?.latest_regime as Record<string, unknown>)?.regime || "--"
+  );
+  const signalTier = String(latestPlay?.signal_tier || "--");
+  const signalReliability = toNum(latestPlay?.signal_reliability);
+
+  const opObj = (opAlerts || {}) as Record<string, unknown>;
+  const latestEvents = Array.isArray(opObj.latest_events) ? opObj.latest_events.map((v) => String(v)) : [];
+  const events60d = toNum(opObj.n_events_last_60d) ?? 0;
+
+  const riskRaw = regimeRiskBase(regime) + (gateBlocked ? 0.1 : 0) + (events60d > 30 ? 0.05 : 0);
+  const riskScore = clamp01(riskRaw);
+
+  const qMin = toNum((gate.thresholds as Record<string, unknown> | undefined)?.min_joint_majority_60d);
+  const qObserved = toNum((summary.scores as Record<string, unknown> | undefined)?.joint_majority_60d);
+  const qComponent = qMin != null && qMin > 0 && qObserved != null ? clamp01(qObserved / qMin) : null;
+  const coverageComponent = officialWindow > 0 && latestNUsed != null ? clamp01(latestNUsed / officialWindow) : null;
+  const qualityComponent = clamp01(structureScore != null ? structureScore : signalReliability);
+  const confidenceParts = [coverageComponent, qComponent, qualityComponent].filter(
+    (v): v is number => v != null
+  );
+  const confidenceScore = confidenceParts.length
+    ? confidenceParts.reduce((acc, value) => acc + value, 0) / confidenceParts.length
+    : null;
+
+  const warmupRemaining =
+    latestNUsed != null && officialWindow > 0 ? Math.max(0, Math.trunc(officialWindow - latestNUsed)) : null;
+  const warmupActive = warmupRemaining != null ? warmupRemaining > 0 : false;
 
   return (
-    <div className="p-5 md:p-6 lg:p-8 space-y-6 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.10),transparent_40%),radial-gradient(circle_at_top_left,rgba(56,189,248,0.12),transparent_42%)]">
-      <section className="rounded-2xl border border-cyan-800/40 bg-gradient-to-br from-zinc-950 via-zinc-950 to-cyan-950/30 p-5 md:p-6">
-        <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Control Center</p>
-        <h1 className="mt-2 text-2xl md:text-3xl font-semibold text-zinc-100">Operational Dashboard</h1>
-        <p className="mt-3 text-sm md:text-base text-zinc-300 max-w-3xl">
-          Regime engine with explicit trade-off: when alpha is weak but drawdown improves, the system is in protection mode.
+    <div className="p-5 md:p-6 lg:p-8 space-y-6">
+      <section className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-5">
+        <p className="text-xs tracking-[0.14em] uppercase text-zinc-500">Painel</p>
+        <h1 className="mt-2 text-2xl md:text-3xl font-semibold text-zinc-100">Painel operacional do motor</h1>
+        <p className="mt-3 text-sm text-zinc-300">
+          Leitura focada em estado atual, risco, confianca e governanca de publicacao.
         </p>
-
-        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-          <HeroKpi label="Run" value={labRun?.runId || "unavailable"} tone="neutral" />
-          <HeroKpi label="Gate" value={gateBlocked ? "blocked" : "ok"} tone={gateBlocked ? "danger" : "good"} />
-          <HeroKpi label="Mode" value={modeLabel} tone={modeLabel === "Alpha" ? "good" : "warn"} />
-          <HeroKpi
-            label="Regime / Action"
-            value={`${String(latestPlay?.regime || "--")} / ${String(latestPlay?.action_code || "--")}`}
-            tone="neutral"
-          />
-        </div>
-
-        <div className="mt-3 text-xs text-zinc-400">
-          signal_tier: <span className="text-zinc-200">{String(latestPlay?.signal_tier || "--")}</span> | latest events:{" "}
-          <span className="text-zinc-200">{latestEvents.length ? latestEvents.join(", ") : "none"}</span>
-        </div>
       </section>
 
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <DomainCard
-          title="Finance"
-          text="Regime reading for liquid assets with structural-risk focus and actionable playbook."
-          href="/app/finance"
-          cta="Open Finance"
+      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <MetricCard
+          title="Risco estrutural"
+          value={`${fmtScore(riskScore)} (${riskBand(riskScore)})`}
+          helper="Escala 0 a 1, separada da confianca."
         />
-        <DomainCard
-          title="Real Estate"
-          text="City/UF cycle diagnostics with price, liquidity, rates and transition handling."
-          href="/app/real-estate"
-          cta="Open Real Estate"
+        <MetricCard
+          title="Confianca"
+          value={`${fmtScore(confidenceScore)} (${confidenceBand(confidenceScore)})`}
+          helper="Baseada em cobertura, robustez e qualidade da janela."
+        />
+        <MetricCard
+          title="Janela e politica"
+          value={`T${Math.trunc(officialWindow)} | ${policyPath}`}
+          helper="Modo de calculo: causal (walk-forward)."
+        />
+        <MetricCard
+          title="Gate e warmup"
+          value={gateBlocked ? "Gate nao verde" : "Gate verde"}
+          helper={
+            warmupActive
+              ? `Warmup estrutural em andamento (${warmupRemaining} dias restantes).`
+              : "Motor totalmente operacional."
+          }
         />
       </section>
 
-      <section className="grid grid-cols-1 md:grid-cols-1 gap-4">
-        <DomainCard
-          title="Setores"
-          text="Niveis verde, amarelo e vermelho por setor, com ranking de antecipacao de estresse em 5 dias."
-          href="/app/setores"
-          cta="Open Sectors"
-        />
-      </section>
-
-      <section className="rounded-2xl border border-zinc-800 bg-zinc-950/55 p-5 space-y-3">
-        <p className="text-xs uppercase tracking-[0.14em] text-zinc-500">Macro Lab T120</p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-          <MetricCard
-            title="Current state"
-            line1={latest ? `${latest.date} | N=${latest.N_used}` : "--"}
-            line2={`p1=${fmtNum(toNumber(latest?.p1), 4)} | deff=${fmtNum(toNumber(latest?.deff), 2)}`}
-          />
-          <MetricCard
-            title="Delta 20d"
-            line1={`dp1=${fmtNum(toNumber(delta20?.p1), 4)}`}
-            line2={`ddeff=${fmtNum(toNumber(delta20?.deff), 3)}`}
-          />
-          <MetricCard
-            title="Operational alerts"
-            line1={latestEvents.length ? latestEvents.join(", ") : "none"}
-            line2={`events in 60d: ${fmtNum(opLast60, 0)}`}
-          />
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-amber-800/40 bg-gradient-to-br from-zinc-950 to-amber-950/20 p-5 space-y-3">
-        <p className="text-xs uppercase tracking-[0.14em] text-zinc-500">Motor mode</p>
-        <div className="text-sm">
-          <span className="text-zinc-400">Reading:</span>{" "}
-          <span className={modeLabel === "Alpha" ? "text-emerald-300" : "text-amber-300"}>{modeLabel}</span>
-        </div>
-        <div className="text-sm text-zinc-300">annual alpha vs benchmark: {fmtPct(alphaAnn, 2)}</div>
-        <div className="text-sm text-zinc-300">drawdown improvement: {fmtPct(ddImprovement, 2)}</div>
-        <div className="text-xs text-zinc-500">
-          If annual alpha is low/negative and drawdown improves, the engine is operating as risk protection.
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-zinc-800 bg-zinc-950/55 p-5 space-y-3">
-        <p className="text-xs uppercase tracking-[0.14em] text-zinc-500">Playbook now</p>
-        {latestPlay ? (
-          <>
-            <div className="text-sm text-zinc-300">
-              {String(latestPlay.date || "--")} | regime={String(latestPlay.regime || "--")} | action={" "}
-              <span className="text-zinc-100">{String(latestPlay.action_code || "--")}</span>
-            </div>
-            <div className="text-sm text-zinc-300">
-              signal={String(latestPlay.signal_tier || "--")} ({fmtNum(toNumber(latestPlay.signal_reliability), 3)}) | tradeoff={" "}
-              {String(latestPlay.tradeoff_label || "--")}
-            </div>
-          </>
-        ) : (
-          <div className="text-sm text-zinc-400">No playbook available.</div>
-        )}
-      </section>
-
-      <section className="rounded-2xl border border-zinc-800 bg-zinc-950/55 p-5 space-y-3">
-        <p className="text-xs uppercase tracking-[0.14em] text-zinc-500">Case studies</p>
-        {caseRows.length ? (
-          <div className="space-y-2 text-sm text-zinc-300">
-            {caseRows.slice(0, 3).map((row) => (
-              <div key={`${row.case_regime}-${row.date}`} className="rounded-lg border border-zinc-800 bg-black/30 p-3">
-                <div className="text-zinc-100">
-                  {String(row.case_regime).toUpperCase()} | {String(row.date)}
-                </div>
-                <div>alpha={fmtPct(toNumber(row.alpha_cum), 2)} | dd_improvement={fmtPct(toNumber(row.dd_improvement), 2)}</div>
-                <div className="text-zinc-400">{String(row.honest_verdict || "--")}</div>
-              </div>
-            ))}
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <Card>
+          <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Estado atual do motor</div>
+          <div className="mt-2 text-zinc-100 font-semibold">Regime: {regime}</div>
+          <div className="mt-1 text-sm text-zinc-300">Risco: {riskBand(riskScore)}</div>
+          <div className="mt-1 text-sm text-zinc-300">Confianca: {confidenceBand(confidenceScore)}</div>
+        </Card>
+        <Card>
+          <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Resumo do universo</div>
+          <div className="mt-2 text-sm text-zinc-300">Ativos no universo de correlacao: {nCore ?? "--"}</div>
+          <div className="mt-1 text-sm text-zinc-300">
+            N usado (janela atual): {latestNUsed != null ? Math.trunc(latestNUsed) : "--"}
           </div>
-        ) : (
-          <div className="text-sm text-zinc-400">No case studies available.</div>
-        )}
+          <div className="mt-1 text-sm text-zinc-300">Eventos nos ultimos 60d: {Math.trunc(events60d)}</div>
+        </Card>
+        <Card>
+          <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Sinal do dia</div>
+          <div className="mt-2 text-zinc-100 font-semibold">Nivel: {signalTier}</div>
+          <div className="mt-1 text-sm text-zinc-300">Confianca do sinal: {fmtScore(signalReliability, 3)}</div>
+          <div className="mt-1 text-sm text-zinc-300">Run: {labRun?.runId || "unavailable"}</div>
+        </Card>
       </section>
 
-      <section className="rounded-2xl border border-zinc-800 bg-zinc-950/55 p-5 space-y-3">
-        <p className="text-xs uppercase tracking-[0.14em] text-zinc-500">Era comparison</p>
-        {eraRows.length ? (
-          <div className="space-y-2 text-sm text-zinc-300">
-            {eraRows.map((row) => (
-              <div key={String(row.era)} className="rounded-lg border border-zinc-800 bg-black/30 p-3">
-                <div className="text-zinc-100">{String(row.era)}</div>
-                <div>
-                  p1_mean={fmtNum(toNumber(row.p1_mean), 3)} | deff_mean={fmtNum(toNumber(row.deff_mean), 2)} | alpha_ann={" "}
-                  {fmtPct(toNumber(row.alpha_ann_return), 2)} | dd_improvement={fmtPct(toNumber(row.dd_improvement), 2)}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-sm text-zinc-400">No era evaluation available.</div>
-        )}
+      <section className="rounded-2xl border border-zinc-800 bg-zinc-950/45 p-5">
+        <h2 className="text-lg font-semibold text-zinc-100">Dicas rapidas</h2>
+        <ul className="mt-3 space-y-2 text-sm text-zinc-300">
+          <li>- Use o regime para ajustar tamanho de posicao, nao para prever preco.</li>
+          <li>- Combine leitura de preco com volatilidade para identificar ruido.</li>
+          <li>- Para horizontes curtos (h5), variacao e mais sensivel; use com prudencia.</li>
+        </ul>
       </section>
+
+      <details className="rounded-2xl border border-zinc-800 bg-zinc-950/35 p-5">
+        <summary className="cursor-pointer text-sm font-semibold text-zinc-200">Detalhes tecnicos</summary>
+        <div className="mt-4 space-y-2 text-sm text-zinc-300">
+          <div>Janela oficial: {Math.trunc(officialWindow)} dias</div>
+          <div>Politica ativa: {policyPath}</div>
+          <div>Modo de calculo: causal (walk-forward)</div>
+          <div>Gate blocked: {String(gateBlocked)}</div>
+          <div>Motivos do gate: {gateReasons.length ? gateReasons.join(", ") : "nenhum"}</div>
+          <div>Eventos recentes: {latestEvents.length ? latestEvents.join(", ") : "nenhum"}</div>
+          <div>Joint majority 60d: {fmtScore(qObserved, 4)}</div>
+          <div>Threshold minimo joint majority 60d: {fmtScore(qMin, 4)}</div>
+        </div>
+      </details>
     </div>
   );
 }
 
-function DomainCard({
-  title,
-  text,
-  href,
-  cta,
-}: {
-  title: string;
-  text: string;
-  href: string;
-  cta: string;
-}) {
+function MetricCard({ title, value, helper }: { title: string; value: string; helper: string }) {
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/55 p-5">
-      <h2 className="text-xl font-semibold text-zinc-100">{title}</h2>
-      <p className="mt-2 text-sm text-zinc-300">{text}</p>
-      <Link
-        href={href}
-        className="inline-flex mt-4 rounded-xl border border-zinc-700 px-3 py-2 text-sm text-zinc-100 hover:border-zinc-500 transition"
-      >
-        {cta}
-      </Link>
+    <div className="rounded-xl border border-zinc-800 bg-zinc-950/55 p-3">
+      <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">{title}</div>
+      <div className="mt-2 text-lg font-semibold text-zinc-100 break-words">{value}</div>
+      <div className="mt-1 text-xs text-zinc-400">{helper}</div>
     </div>
   );
 }
 
-function HeroKpi({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone: "good" | "warn" | "danger" | "neutral";
-}) {
-  const toneCls =
-    tone === "good"
-      ? "border-emerald-700/50 bg-emerald-950/20 text-emerald-200"
-      : tone === "warn"
-      ? "border-amber-700/50 bg-amber-950/20 text-amber-200"
-      : tone === "danger"
-      ? "border-rose-700/50 bg-rose-950/20 text-rose-200"
-      : "border-zinc-700/60 bg-zinc-900/40 text-zinc-200";
-  return (
-    <div className={`rounded-xl border p-3 ${toneCls}`}>
-      <div className="text-[11px] uppercase tracking-[0.14em] opacity-80">{label}</div>
-      <div className="mt-1 text-sm font-semibold break-all">{value}</div>
-    </div>
-  );
-}
-
-function MetricCard({
-  title,
-  line1,
-  line2,
-}: {
-  title: string;
-  line1: string;
-  line2: string;
-}) {
-  return (
-    <div className="rounded-xl border border-zinc-800 bg-black/30 p-3">
-      <div className="text-zinc-400">{title}</div>
-      <div className="text-zinc-100 mt-1 break-words">{line1}</div>
-      <div className="text-zinc-300 mt-1">{line2}</div>
-    </div>
-  );
+function Card({ children }: { children: React.ReactNode }) {
+  return <div className="rounded-xl border border-zinc-800 bg-zinc-950/55 p-4">{children}</div>;
 }

@@ -376,6 +376,22 @@ def _verdict(m: dict[str, Any], used_k: int) -> dict[str, Any]:
     }
 
 
+def _working_with_delta(base_working: pd.DataFrame, w: int) -> pd.DataFrame:
+    working = base_working.copy()
+    inst = working["instability_score"].astype(float)
+    rolling_med = inst.rolling(window=w, min_periods=max(10, w // 4)).median()
+    rolling_med = rolling_med.fillna(inst.expanding(min_periods=1).median())
+    working["delta_instability"] = (inst - rolling_med).abs().to_numpy(dtype=float)
+    return working
+
+
+def _micro_switch_idx(working: pd.DataFrame) -> np.ndarray:
+    labels = working["regime_label"].astype(str).to_numpy()
+    if labels.size <= 1:
+        return np.array([], dtype=int)
+    return np.where(labels[1:] != labels[:-1])[0] + 1
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Historical regime shift validation with calibrated macro-events.")
     parser.add_argument("--dataset", type=str, default=None)
@@ -386,6 +402,7 @@ def main() -> None:
     parser.add_argument("--w", type=int, default=60)
     parser.add_argument("--timeframe", type=str, default="daily", choices=["daily", "weekly"])
     parser.add_argument("--calibrate", action="store_true")
+    parser.add_argument("--calibration-ratio", type=float, default=0.70)
     parser.add_argument("--k-grid", type=str, default="1,2,3")
     parser.add_argument("--w-grid", type=str, default="45,60,90")
     parser.add_argument("--q-expand-grid", type=str, default="0.55,0.60,0.65")
@@ -499,21 +516,62 @@ def main() -> None:
         w_grid = [args.w]
         q_grid = [0.60]
 
+    split_date: pd.Timestamp | None = None
+    cal_frame = base_working.copy()
+    eval_frame = base_working.copy()
+    events_cal = list(events)
+    events_eval = list(events)
+    if args.calibrate:
+        ratio = float(np.clip(args.calibration_ratio, 0.50, 0.90))
+        split_idx = int(len(base_working) * ratio)
+        split_idx = max(252, split_idx)
+        split_idx = min(split_idx, max(253, len(base_working) - 120))
+        if split_idx < len(base_working):
+            split_date = pd.Timestamp(base_working.iloc[split_idx]["date"])
+            cal_frame = base_working[base_working["date"] <= split_date].copy()
+            eval_frame = base_working[base_working["date"] > split_date].copy()
+            events_cal = [ev for ev in events if ev.date <= split_date]
+            events_eval = [ev for ev in events if ev.date > split_date]
+        # Fallback keeps the run deterministic and avoids empty holdout.
+        if cal_frame.shape[0] < 252 or eval_frame.shape[0] < 120 or len(events_cal) < 2 or len(events_eval) < 2:
+            if len(events) >= 4:
+                split_date = events[(len(events) // 2) - 1].date
+                cal_frame = base_working[base_working["date"] <= split_date].copy()
+                eval_frame = base_working[base_working["date"] > split_date].copy()
+                events_cal = [ev for ev in events if ev.date <= split_date]
+                events_eval = [ev for ev in events if ev.date > split_date]
+        if cal_frame.empty or eval_frame.empty:
+            split_date = None
+            cal_frame = base_working.copy()
+            eval_frame = base_working.copy()
+            events_cal = list(events)
+            events_eval = list(events)
+        _json_dump(
+            outdir / "calibration_split.json",
+            {
+                "status": "ok",
+                "calibrate_mode": True,
+                "split_date": split_date.strftime("%Y-%m-%d") if split_date is not None else "",
+                "calibration_rows": int(cal_frame.shape[0]),
+                "evaluation_rows": int(eval_frame.shape[0]),
+                "events_calibration": int(len(events_cal)),
+                "events_evaluation": int(len(events_eval)),
+            },
+        )
+
     sweep_rows: list[dict[str, Any]] = []
     best_payload: dict[str, Any] | None = None
     best_by_k: dict[int, dict[str, Any]] = {}
 
     for w in w_grid:
-        rolling_med = instability.rolling(window=w, min_periods=max(10, w // 4)).median().bfill().ffill()
-        delta = (instability - rolling_med).abs()
-        working = base_working.copy()
-        working["delta_instability"] = delta.to_numpy(dtype=float)
+        working_cal = _working_with_delta(cal_frame, w=w)
+        micro_switch_cal = _micro_switch_idx(working_cal)
 
         for k in k_grid:
             for q_expand in q_grid:
-                blocks = _build_macro_blocks(
-                    working,
-                    micro_switch_idx=micro_switch,
+                blocks_cal = _build_macro_blocks(
+                    working_cal,
+                    micro_switch_idx=micro_switch_cal,
                     k=k,
                     peak_min_gap_days=args.peak_min_gap_days,
                     merge_gap_days=args.merge_gap_days,
@@ -521,41 +579,35 @@ def main() -> None:
                     min_duration=args.min_duration,
                     max_duration=args.max_duration,
                 )
-                metrics, align = _metrics_for_blocks(working, blocks, events)
-                score = _score_candidate(metrics)
+                metrics_cal, _ = _metrics_for_blocks(working_cal, blocks_cal, events_cal)
+                score_cal = _score_candidate(metrics_cal)
                 row = {
                     "w": w,
                     "k": k,
                     "q_expand": q_expand,
-                    "score": score,
-                    "hit_rate_macro": metrics.get("hit_rate_macro"),
-                    "density_ratio_macro": metrics.get("density_ratio_macro"),
-                    "lead_rate_macro": metrics.get("lead_rate_macro"),
-                    "n_macro_events": metrics.get("n_macro_events"),
+                    "score": score_cal,
+                    "hit_rate_macro": metrics_cal.get("hit_rate_macro"),
+                    "density_ratio_macro": metrics_cal.get("density_ratio_macro"),
+                    "lead_rate_macro": metrics_cal.get("lead_rate_macro"),
+                    "n_macro_events": metrics_cal.get("n_macro_events"),
                 }
                 sweep_rows.append(row)
-                if best_payload is None or score > float(best_payload["score"]):
+                if best_payload is None or score_cal > float(best_payload["score"]):
                     best_payload = {
                         "w": w,
                         "k": k,
                         "q_expand": q_expand,
-                        "score": score,
-                        "working": working.copy(),
-                        "blocks": blocks.copy(),
-                        "align": align.copy(),
-                        "metrics": metrics.copy(),
+                        "score": score_cal,
+                        "metrics_cal": metrics_cal.copy(),
                     }
                 current = best_by_k.get(int(k))
-                if current is None or score > float(current["score"]):
+                if current is None or score_cal > float(current["score"]):
                     best_by_k[int(k)] = {
                         "w": w,
                         "k": k,
                         "q_expand": q_expand,
-                        "score": score,
-                        "working": working.copy(),
-                        "blocks": blocks.copy(),
-                        "align": align.copy(),
-                        "metrics": metrics.copy(),
+                        "score": score_cal,
+                        "metrics_cal": metrics_cal.copy(),
                     }
 
     if best_payload is None:
@@ -571,29 +623,57 @@ def main() -> None:
     selected_w = int(chosen["w"])
     selected_k = int(chosen["k"])
     selected_q = float(chosen["q_expand"])
-    working_best = chosen["working"]
-    blocks_best = chosen["blocks"]
-    align_best = chosen["align"]
-    metrics_best = chosen["metrics"]
 
-    regimes["delta_instability"] = working_best["delta_instability"].to_numpy(dtype=float)
+    working_full = _working_with_delta(base_working, w=selected_w)
+    regimes["delta_instability"] = working_full["delta_instability"].to_numpy(dtype=float)
     regimes.to_csv(outdir / "regimes.csv", index=False)
 
     micro_df["delta_instability"] = regimes.iloc[micro_switch]["delta_instability"].to_numpy(dtype=float)
     micro_df.to_csv(outdir / "micro_transitions.csv", index=False)
 
-    blocks_best.to_csv(outdir / "macro_blocks.csv", index=False)
-    align_best.to_csv(outdir / "alignment.csv", index=False)
+    working_cal_best = _working_with_delta(cal_frame, w=selected_w)
+    micro_switch_cal_best = _micro_switch_idx(working_cal_best)
+    blocks_cal_best = _build_macro_blocks(
+        working_cal_best,
+        micro_switch_idx=micro_switch_cal_best,
+        k=selected_k,
+        peak_min_gap_days=args.peak_min_gap_days,
+        merge_gap_days=args.merge_gap_days,
+        q_expand=selected_q,
+        min_duration=args.min_duration,
+        max_duration=args.max_duration,
+    )
+    metrics_cal_best_live, align_cal_best = _metrics_for_blocks(working_cal_best, blocks_cal_best, events_cal)
+
+    working_eval_best = _working_with_delta(eval_frame, w=selected_w)
+    micro_switch_eval = _micro_switch_idx(working_eval_best)
+    blocks_eval_best = _build_macro_blocks(
+        working_eval_best,
+        micro_switch_idx=micro_switch_eval,
+        k=selected_k,
+        peak_min_gap_days=args.peak_min_gap_days,
+        merge_gap_days=args.merge_gap_days,
+        q_expand=selected_q,
+        min_duration=args.min_duration,
+        max_duration=args.max_duration,
+    )
+    metrics_eval_best, align_eval_best = _metrics_for_blocks(working_eval_best, blocks_eval_best, events_eval)
+    eval_score = _score_candidate(metrics_eval_best)
+
+    blocks_cal_best.to_csv(outdir / "macro_blocks_calibration.csv", index=False)
+    align_cal_best.to_csv(outdir / "alignment_calibration.csv", index=False)
+    blocks_eval_best.to_csv(outdir / "macro_blocks.csv", index=False)
+    align_eval_best.to_csv(outdir / "alignment.csv", index=False)
 
     metrics_by_k: dict[str, Any] = {}
     for k in sorted(set(k_grid)):
         b = best_by_k.get(int(k))
         if b is not None:
-            mk = b["metrics"]
+            mk = b.get("metrics_cal", {})
             metrics_by_k[f"K{k}"] = {
                 "best_w": int(b["w"]),
                 "best_q_expand": float(b["q_expand"]),
-                "score": float(b["score"]),
+                "score_calibration": float(b["score"]),
                 "hit_rate_macro": float(mk.get("hit_rate_macro", 0.0)),
                 "density_ratio_macro": float(mk.get("density_ratio_macro", 0.0)),
                 "lead_rate_macro": float(mk.get("lead_rate_macro")) if mk.get("lead_rate_macro") is not None else None,
@@ -601,39 +681,52 @@ def main() -> None:
             }
     _json_dump(outdir / "metrics_by_K.json", metrics_by_k)
 
-    micro_years = max(1e-9, (pd.Timestamp(regimes["date"].max()) - pd.Timestamp(regimes["date"].min())).days / 365.25)
-    micro_switch_rate = float(len(micro_switch) / micro_years)
+    micro_years = max(
+        1e-9,
+        (
+            pd.Timestamp(working_eval_best["date"].max())
+            - pd.Timestamp(working_eval_best["date"].min())
+        ).days
+        / 365.25,
+    )
+    micro_switch_rate = float(len(micro_switch_eval) / micro_years) if micro_years > 0 else 0.0
 
-    event_windows = [(e.date - pd.Timedelta(days=90), e.date + pd.Timedelta(days=90)) for e in events]
+    event_windows = [(e.date - pd.Timedelta(days=90), e.date + pd.Timedelta(days=90)) for e in events_eval]
     micro_hits = 0
-    for idx in micro_switch.tolist():
-        dt = pd.Timestamp(working_best.iloc[idx]["date"])
+    for idx in micro_switch_eval.tolist():
+        dt = pd.Timestamp(working_eval_best.iloc[idx]["date"])
         if any((dt >= w0) and (dt <= w1) for w0, w1 in event_windows):
             micro_hits += 1
-    total_micro = max(1, len(micro_switch))
+    total_micro = max(1, len(micro_switch_eval))
     density_ratio_micro = float((micro_hits / total_micro) / max(1e-9, (1 - micro_hits / total_micro))) if micro_hits < total_micro else float("inf")
 
     metrics = {
         "asset": dataset.stem,
         "dataset": str(dataset),
         "n_points": int(n),
+        "n_points_calibration": int(working_cal_best.shape[0]),
+        "n_points_evaluation": int(working_eval_best.shape[0]),
         "n_regimes_total": int(np.unique(labels).shape[0]),
-        "n_micro_transitions": int(len(micro_switch)),
+        "n_micro_transitions": int(len(micro_switch_eval)),
         "micro_switch_rate": micro_switch_rate,
         "density_ratio_micro": density_ratio_micro,
-        "hit_rate_micro": float(min(1.0, micro_hits / max(1, len(events)))),
-        **metrics_best,
+        "hit_rate_micro": float(min(1.0, micro_hits / max(1, len(events_eval)))),
+        **metrics_eval_best,
         "selected_w": selected_w,
         "selected_k": selected_k,
         "selected_q_expand": selected_q,
+        "score_calibration": float(chosen["score"]),
+        "score_evaluation": float(eval_score),
+        "calibration_split_date": split_date.strftime("%Y-%m-%d") if split_date is not None else "",
+        "metrics_calibration_selected": metrics_cal_best_live,
     }
 
     # Pseudo-bifurcation: instability spikes without consistent structural regime change.
-    ds = regimes["delta_instability"].astype(float)
+    ds = working_eval_best["delta_instability"].astype(float)
     high_delta = ds >= float(ds.quantile(0.90))
     high_ratio = float(high_delta.mean())
-    switch_ratio = float(len(micro_switch) / max(1, n))
-    macro_event_count = int(metrics_best.get("n_macro_events", 0) or 0)
+    switch_ratio = float(len(micro_switch_eval) / max(1, len(working_eval_best)))
+    macro_event_count = int(metrics_eval_best.get("n_macro_events", 0) or 0)
     pseudo_flag = bool(high_ratio >= 0.20 and switch_ratio <= 0.04 and macro_event_count <= 2)
     pseudo_payload = {
         "status": "ok",
@@ -650,7 +743,9 @@ def main() -> None:
 
     _json_dump(outdir / "metrics.json", metrics)
 
-    verdict = _verdict(metrics_best, used_k=selected_k)
+    verdict_source = dict(metrics_eval_best)
+    verdict_source["pseudo_bifurcation_flag"] = pseudo_flag
+    verdict = _verdict(verdict_source, used_k=selected_k)
     verdict.update(
         {
             "notes": [
@@ -658,7 +753,7 @@ def main() -> None:
                 "Blocos >365 dias sao classificados como macro_long_regime e excluidos do score.",
                 "Hit usa janela historica de +-90 dias por evento.",
                 "Density ratio compara concentracao de macro_event em janelas historicas vs fundo.",
-                "Calibracao busca melhor combinacao de hit/density/lead na grade.",
+                "Quando --calibrate esta ativo, a grade e escolhida no bloco de calibracao e avaliada em holdout temporal.",
             ]
         }
     )
@@ -683,6 +778,8 @@ def main() -> None:
             "min_duration": int(args.min_duration),
             "max_duration": int(args.max_duration),
             "calibrate_mode": bool(args.calibrate),
+            "calibration_ratio": float(args.calibration_ratio),
+            "calibration_split_date": split_date.strftime("%Y-%m-%d") if split_date is not None else "",
         },
     }
     _json_dump(outdir / "data_profile.json", profile)

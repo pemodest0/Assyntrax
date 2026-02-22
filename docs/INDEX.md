@@ -15,6 +15,8 @@ Mapa unico dos guias ativos do projeto.
 ## Operacao e pipelines
 - `docs/OPS_EXECUTION_FLOW.md`: fluxo oficial motor -> validacao -> publicacao.
 - `docs/DAILY_PIPELINE.md`: rotina diaria e artefatos.
+- `docs/COPILOT_CORE_INSTRUCTIONS.md`: nucleo de instrucoes e gate do copiloto.
+- `results/platform/latest_db_snapshot.json`: snapshot consolidado do banco para API/site.
 - `docs/ops_playbook.md`: runbook operacional e incidente.
 
 ## Engine, contratos e frontend

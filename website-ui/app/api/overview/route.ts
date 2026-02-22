@@ -4,7 +4,7 @@ import { findLatestApiRecords, readJsonlWithValidationGate } from "@/lib/server/
 export async function GET() {
   const apiPath = await findLatestApiRecords();
   if (!apiPath) {
-    return NextResponse.json({ error: "no api_records found" }, { status: 404 });
+    return NextResponse.json({ error: "no_valid_run" }, { status: 503 });
   }
   const records = await readJsonlWithValidationGate(apiPath);
   const total = records.length || 1;

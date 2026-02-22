@@ -14,7 +14,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.diagnostics.auto_regime_model import (
-    build_training_dataset,
     build_training_dataset_with_meta,
     load_auto_regime_model,
     train_auto_regime_model,
@@ -48,17 +47,23 @@ def main() -> None:
     parser.add_argument("--kfold", type=int, default=5)
     parser.add_argument("--group-kfold", action="store_true", help="K-fold por sÃ©rie (GroupKFold).")
     parser.add_argument("--group-holdout", action="store_true", help="Holdout por sÃ©rie (GroupShuffleSplit).")
+    parser.add_argument(
+        "--force-random-split",
+        action="store_true",
+        help="Forca holdout aleatorio (desabilita GroupShuffleSplit automatico).",
+    )
+    parser.add_argument(
+        "--force-random-cv",
+        action="store_true",
+        help="Forca CV estratificada aleatoria (desabilita GroupKFold automatico).",
+    )
     args = parser.parse_args()
 
     results_root = Path(args.results)
     out_dir = Path(args.outdir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    if args.group_kfold or args.group_holdout:
-        X, y, groups = build_training_dataset_with_meta(results_root)
-    else:
-        X, y = build_training_dataset(results_root)
-        groups = None
+    X, y, groups = build_training_dataset_with_meta(results_root)
     if args.min_count > 1:
         unique, counts = np.unique(y, return_counts=True)
         keep_labels = {label for label, count in zip(unique, counts) if count >= args.min_count}
@@ -87,7 +92,8 @@ def main() -> None:
     unique, counts = np.unique(y, return_counts=True)
     min_count = int(counts.min()) if counts.size else 0
     stratify = y if min_count >= 2 else None
-    if args.group_holdout and groups is not None:
+    use_group_holdout = bool(groups is not None) and (args.group_holdout or not args.force_random_split)
+    if use_group_holdout:
         from sklearn.model_selection import GroupShuffleSplit
 
         splitter = GroupShuffleSplit(test_size=args.test_size, n_splits=1, random_state=42)
@@ -114,7 +120,8 @@ def main() -> None:
     cv_scores: dict[str, float] | None = None
     if args.kfold >= 2 and min_count >= args.kfold:
         from sklearn.metrics import f1_score
-        if args.group_kfold and groups is not None:
+        use_group_kfold = bool(groups is not None) and (args.group_kfold or not args.force_random_cv)
+        if use_group_kfold:
             from sklearn.model_selection import GroupKFold
 
             gkf = GroupKFold(n_splits=args.kfold)
@@ -139,7 +146,7 @@ def main() -> None:
             "weighted_f1_mean": float(np.mean(scores)),
             "weighted_f1_std": float(np.std(scores)),
             "folds": args.kfold,
-            "group_kfold": bool(args.group_kfold),
+            "group_kfold": bool(use_group_kfold),
         }
 
     (out_dir / "classification_report_in_sample.json").write_text(
@@ -160,8 +167,10 @@ def main() -> None:
         "",
         f"- Min count usado: {args.min_count}",
         f"- K-fold: {args.kfold}",
-        f"- Group K-fold: {args.group_kfold}",
-        f"- Group holdout: {args.group_holdout}",
+        f"- Group K-fold: {bool(use_group_kfold) if args.kfold >= 2 and min_count >= args.kfold else 'n/a'}",
+        f"- Group holdout: {use_group_holdout}",
+        f"- Force random split: {args.force_random_split}",
+        f"- Force random cv: {args.force_random_cv}",
         "",
         "## In-sample",
         "```json",

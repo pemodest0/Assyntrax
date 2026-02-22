@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   const limit = parseInt(searchParams.get("limit") || "500", 10);
   const apiPath = await findLatestApiRecords();
   if (!apiPath) {
-    return NextResponse.json({ error: "no api_records found" }, { status: 404 });
+    return NextResponse.json({ error: "no_valid_run" }, { status: 503 });
   }
   const records = await readJsonlWithValidationGate(apiPath);
   let filtered = records;

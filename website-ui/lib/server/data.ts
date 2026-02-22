@@ -41,46 +41,8 @@ export async function readLatestFile(file: string) {
 }
 
 export async function findLatestApiRecords() {
-  const { results } = dataDirs();
-  const snapshotsRoot = path.join(results, "ops", "snapshots");
-  try {
-    const runDirs = await fs.readdir(snapshotsRoot, { withFileTypes: true });
-    const snapCandidates: { path: string; mtime: number }[] = [];
-    for (const ent of runDirs) {
-      if (!ent.isDirectory()) continue;
-      const p = path.join(snapshotsRoot, ent.name, "api_snapshot.jsonl");
-      try {
-        const stat = await fs.stat(p);
-        snapCandidates.push({ path: p, mtime: stat.mtimeMs });
-      } catch {
-        // ignore
-      }
-    }
-    snapCandidates.sort((a, b) => b.mtime - a.mtime);
-    if (snapCandidates.length) return snapCandidates[0].path;
-  } catch {
-    // ignore and fallback to legacy search
-  }
-
-  try {
-    const entries = await fs.readdir(results, { withFileTypes: true });
-    const candidates: { path: string; mtime: number }[] = [];
-    for (const ent of entries) {
-      if (!ent.isDirectory()) continue;
-      const p = path.join(results, ent.name, "api_records.jsonl");
-      try {
-        const stat = await fs.stat(p);
-        candidates.push({ path: p, mtime: stat.mtimeMs });
-      } catch {
-        // ignore
-      }
-    }
-    candidates.sort((a, b) => b.mtime - a.mtime);
-    if (candidates.length) return candidates[0].path;
-  } catch {
-    // no fallback
-  }
-  return null;
+  const run = await findLatestValidRun();
+  return run?.snapshotPath || null;
 }
 
 function sanitizeJsonLine(line: string) {
@@ -641,6 +603,61 @@ export async function readLatestLabCorrBacktestSummary(window = 120) {
     return JSON.parse(raw) as Record<string, unknown>;
   } catch {
     return null;
+  }
+}
+
+export async function readPlatformDbSnapshot() {
+  const { results } = dataDirs();
+  const target = path.join(results, "platform", "latest_db_snapshot.json");
+  try {
+    const raw = await fs.readFile(target, "utf-8");
+    return sanitizeEncoding(JSON.parse(raw));
+  } catch {
+    return {
+      status: "missing",
+      run_id: "",
+      generated_at_utc: "",
+      db_path: path.join(results, "platform", "assyntrax_platform.db"),
+      counts: {
+        runs_total: 0,
+        asset_rows_total: 0,
+        asset_rows_for_run: 0,
+      },
+      run: {
+        status: "unknown",
+        gate_blocked: true,
+        n_assets: 0,
+        validated_signals: 0,
+        watch_signals: 0,
+        inconclusive_signals: 0,
+        validated_ratio: 0,
+      },
+      domains: [],
+      signal_status: [],
+      copilot: {
+        row_exists: false,
+        publishable: false,
+        risk_structural: null,
+        confidence: null,
+        risk_level: "indefinido",
+      },
+    };
+  }
+}
+
+export async function readPlatformDbRelease() {
+  const { results } = dataDirs();
+  const target = path.join(results, "platform", "latest_release.json");
+  try {
+    const raw = await fs.readFile(target, "utf-8");
+    return sanitizeEncoding(JSON.parse(raw));
+  } catch {
+    return {
+      updated_at_utc: "",
+      run_id: "",
+      db_path: path.join(results, "platform", "assyntrax_platform.db"),
+      latest_db_snapshot: "",
+    };
   }
 }
 

@@ -23,7 +23,13 @@ Este e o fluxo unico para motor + validacao + publicacao.
    - Gera monitor de drift por z-score (`drift_monitor.json`, `drift/latest_drift.json`).
    - Gera alerta de saida de verde (`results/event_study_sectors/alerts/latest_alert.json`).
    - Gera health report e trilha de auditoria (`health/latest_health.json`, `audit_trail.jsonl`).
-7. Revalidacao mensal (`run_monthly_revalidation.py`).
+7. Copiloto shadow B+C (`build_copilot_shadow.py`).
+   - Gera risco estrutural agregado B+C com gate de publicacao.
+   - Registra `publishable=true/false` e bloqueadores.
+8. Banco da plataforma (`build_platform_db.py`).
+   - Indexa snapshot + copiloto por `run_id` em SQLite.
+   - Publica snapshot consolidado do banco para consumo do site/API.
+9. Revalidacao mensal (`run_monthly_revalidation.py`).
    - Roda hiper simulacao de parametros.
    - Compara baseline atual contra candidata em walkforward anual com gate fixo ou adaptativo (`--walkforward-gate-mode`).
    - Em gate adaptativo: janela sem eventos de drawdown e avaliada por disciplina de alerta (falso alerta), nao por recall.
@@ -34,6 +40,11 @@ Este e o fluxo unico para motor + validacao + publicacao.
 - `results/ops/snapshots/<run_id>/summary.json`
 - `results/ops/snapshots/<run_id>/audit_pack.json`
 - `results/ops/diff/summary.json`
+- `results/ops/copilot/<run_id>/shadow_summary.json`
+- `results/ops/copilot/latest_release.json`
+- `results/platform/assyntrax_platform.db`
+- `results/platform/latest_db_snapshot.json`
+- `results/platform/latest_release.json`
 - `results/event_study_sectors/latest_run.json`
 - `results/event_study_sectors/<run_id_setorial>/sector_alert_levels_latest.csv`
 - `results/event_study_sectors/sector_alerts.db`

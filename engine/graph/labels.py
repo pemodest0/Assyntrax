@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict, deque
 
 import numpy as np
+import pandas as pd
 
 
 def compute_confidence(p_matrix: np.ndarray, micro_regime: np.ndarray, micro_labels: np.ndarray) -> np.ndarray:
@@ -192,6 +193,19 @@ def compute_thresholds(
     }
 
 
+def _causal_quantile(
+    values: np.ndarray,
+    q: float,
+    window: int,
+    min_periods: int,
+) -> np.ndarray:
+    """Causal rolling quantile (uses only current/past points)."""
+    series = pd.Series(np.asarray(values, dtype=float))
+    rolling_q = series.rolling(window=window, min_periods=max(1, min_periods)).quantile(q)
+    expanding_q = series.expanding(min_periods=1).quantile(q)
+    return rolling_q.fillna(expanding_q).to_numpy(dtype=float)
+
+
 def label_state(conf: float, stretch_mu: float, escape: float, frac_pos: float, thresholds: dict[str, float]) -> str:
     if escape >= thresholds["escape_hi"] and (frac_pos >= thresholds["frac_hi"] or stretch_mu >= thresholds["stretch_hi"]):
         return "UNSTABLE"
@@ -212,21 +226,59 @@ def labels_for_series(
 ) -> tuple[np.ndarray, dict[str, float]]:
     conf_smoothed = _median_filter(conf, window=5)
     escape = 1.0 - conf_smoothed
-    thresholds = compute_thresholds(escape, stretch_mu, stretch_frac_pos, conf_smoothed, timeframe=timeframe)
+    if timeframe == "daily":
+        escape_lo_q = 0.50
+        stretch_lo_q = 0.40
+        conf_hi_q = 0.60
+        window = 252
+    else:
+        escape_lo_q = 0.45
+        stretch_lo_q = 0.35
+        conf_hi_q = 0.70
+        window = 104
+    min_periods = max(20, window // 8)
+
+    thr_escape_lo = _causal_quantile(escape, escape_lo_q, window=window, min_periods=min_periods)
+    thr_escape_hi = _causal_quantile(escape, 0.80, window=window, min_periods=min_periods)
+    thr_stretch_lo = _causal_quantile(stretch_mu, stretch_lo_q, window=window, min_periods=min_periods)
+    thr_stretch_hi = _causal_quantile(stretch_mu, 0.75, window=window, min_periods=min_periods)
+    thr_frac_hi = _causal_quantile(stretch_frac_pos, 0.75, window=window, min_periods=min_periods)
+    thr_conf_lo = _causal_quantile(conf_smoothed, 0.35, window=window, min_periods=min_periods)
+    thr_conf_hi = _causal_quantile(conf_smoothed, conf_hi_q, window=window, min_periods=min_periods)
+
     labels = []
-    for c, s, f in zip(conf_smoothed, stretch_mu, stretch_frac_pos):
+    for i, (c, s, f) in enumerate(zip(conf_smoothed, stretch_mu, stretch_frac_pos)):
+        thresholds_i = {
+            "escape_lo": float(thr_escape_lo[i]),
+            "escape_hi": float(thr_escape_hi[i]),
+            "stretch_lo": float(thr_stretch_lo[i]),
+            "stretch_hi": float(thr_stretch_hi[i]),
+            "frac_hi": float(thr_frac_hi[i]),
+            "conf_lo": float(thr_conf_lo[i]),
+            "conf_hi": float(thr_conf_hi[i]),
+        }
         if quality_score < noisy_threshold:
             labels.append("NOISY")
         else:
             c_val = float(c)
-            if c_val < thresholds["conf_lo"]:
+            if c_val < thresholds_i["conf_lo"]:
                 # Low confidence -> avoid STABLE classification.
-                if (1.0 - c_val) >= thresholds["escape_hi"]:
+                if (1.0 - c_val) >= thresholds_i["escape_hi"]:
                     labels.append("UNSTABLE")
                 else:
                     labels.append("TRANSITION")
             else:
-                labels.append(label_state(c_val, float(s), float(1.0 - c_val), float(f), thresholds))
+                labels.append(label_state(c_val, float(s), float(1.0 - c_val), float(f), thresholds_i))
+
+    thresholds = {
+        "escape_lo": float(thr_escape_lo[-1]) if thr_escape_lo.size else 0.0,
+        "escape_hi": float(thr_escape_hi[-1]) if thr_escape_hi.size else 0.0,
+        "stretch_lo": float(thr_stretch_lo[-1]) if thr_stretch_lo.size else 0.0,
+        "stretch_hi": float(thr_stretch_hi[-1]) if thr_stretch_hi.size else 0.0,
+        "frac_hi": float(thr_frac_hi[-1]) if thr_frac_hi.size else 0.0,
+        "conf_lo": float(thr_conf_lo[-1]) if thr_conf_lo.size else 0.0,
+        "conf_hi": float(thr_conf_hi[-1]) if thr_conf_hi.size else 0.0,
+    }
     if smooth_method == "hmm":
         labels = _hmm_smooth_labels(labels, noise=smooth_noise)
     return np.asarray(labels), thresholds

@@ -1,6 +1,4 @@
 import { NextResponse } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
 import { listLatestFiles, readLatestFile, readLatestSnapshot, readRiskTruthPanel } from "@/lib/server/data";
 import { readAssetStatusMap } from "@/lib/server/validated";
 
@@ -69,55 +67,6 @@ function normalizeRecord(record: Record<string, unknown>, riskTruthStatus?: stri
   };
 }
 
-function parseJsonl(text: string): Record<string, unknown>[] {
-  const out: Record<string, unknown>[] = [];
-  for (const line of text.split(/\r?\n/)) {
-    const raw = line.trim();
-    if (!raw) continue;
-    try {
-      out.push(JSON.parse(raw));
-    } catch {
-      // ignore malformed lines
-    }
-  }
-  return out;
-}
-
-async function readPublicLatestRecords() {
-  const candidates = [
-    path.join(process.cwd(), "public", "data", "latest", "api_records.jsonl"),
-    path.join(process.cwd(), "public", "data", "latest", "api_records.csv"),
-  ];
-
-  for (const filePath of candidates) {
-    try {
-      const text = await fs.readFile(filePath, "utf-8");
-      if (filePath.endsWith(".jsonl")) {
-        const rows = parseJsonl(text);
-        if (rows.length) return rows;
-      } else {
-        const lines = text.split(/\r?\n/).filter(Boolean);
-        if (lines.length < 2) continue;
-        const header = lines[0].split(",").map((h) => h.trim());
-        const rows: Record<string, unknown>[] = [];
-        for (const line of lines.slice(1)) {
-          const cols = line.split(",");
-          const row: Record<string, unknown> = {};
-          header.forEach((h, idx) => {
-            row[h] = (cols[idx] || "").trim();
-          });
-          if (String(row.asset || "").trim()) rows.push(row);
-        }
-        if (rows.length) return rows;
-      }
-    } catch {
-      // try next file candidate
-    }
-  }
-
-  return [] as Record<string, unknown>[];
-}
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const file = searchParams.get("file");
@@ -160,35 +109,7 @@ export async function GET(request: Request) {
 
   const [snap, riskTruth] = await Promise.all([readLatestSnapshot(), readRiskTruthPanel()]);
   if (!snap) {
-    const fallbackRows = await readPublicLatestRecords();
-    if (!fallbackRows.length) {
-      return NextResponse.json({ error: "no_valid_run" }, { status: 503 });
-    }
-
-    const normalizedFallback = fallbackRows
-      .map((r: Record<string, unknown>) => normalizeRecord(r))
-      .filter((r) => (domain ? r.domain === domain : true))
-      .filter((r) => {
-        const rt = String(r.risk_truth_status || "unknown").toLowerCase();
-        if (rt === "unknown") return includeInconclusive || allowed.has("watch");
-        if (rt === "inconclusive") return includeInconclusive;
-        return allowed.has(rt);
-      });
-
-    const dedupFallback = new Map<string, (typeof normalizedFallback)[number]>();
-    for (const row of normalizedFallback) {
-      const key = `${row.asset}__${row.domain}`;
-      const prev = dedupFallback.get(key);
-      if (!prev || String(row.timestamp || "") >= String(prev.timestamp || "")) {
-        dedupFallback.set(key, row);
-      }
-    }
-    const records = Array.from(dedupFallback.values()).sort((a, b) => a.asset.localeCompare(b.asset));
-    return NextResponse.json({
-      run_id: "public_latest",
-      summary: { source: "public_latest" },
-      records,
-    });
+    return NextResponse.json({ error: "no_valid_run" }, { status: 503 });
   }
   const truthMap = new Map<string, string>(
     Array.isArray(riskTruth?.entries) ? riskTruth.entries.map((e: Record<string, unknown>) => [String(e.asset_id || ""), String(e.risk_truth_status || "unknown")]) : []
